@@ -6,6 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { AssetType } from "@/app/generated/prisma/client"
+
+function assetHref(assetType: AssetType, assetId: string) {
+  return assetType === "PROPERTY" ? `/assets/properties/${assetId}` : `/assets/vehicles/${assetId}`
+}
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -82,13 +87,13 @@ export default async function DashboardPage() {
               <EmptyPanel icon={Clock} message="Nothing due in the next 30 days." />
             ) : urgentMaintenance.map((s) => {
               const assetName = s.assetType === "PROPERTY" ? propMap[s.assetId] : vehMap[s.assetId]
-              const assetHref = s.assetType === "PROPERTY" ? `/assets/properties/${s.assetId}` : `/assets/vehicles/${s.assetId}`
+              const href = assetHref(s.assetType, s.assetId)
               const daysLeft = s.nextDueDate ? Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) : null
               const overdue = daysLeft !== null && daysLeft < 0
               return (
                 <Link
                   key={s.id}
-                  href={assetHref}
+                  href={href}
                   className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
                 >
                   {overdue ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" /> : <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
@@ -121,12 +126,12 @@ export default async function DashboardPage() {
               <EmptyPanel icon={ShieldCheck} message="No warranties expiring in the next 60 days." />
             ) : expiringWarranties.map((w) => {
               const assetName = w.assetType === "PROPERTY" ? propMap[w.assetId] : vehMap[w.assetId]
-              const assetHref = w.assetType === "PROPERTY" ? `/assets/properties/${w.assetId}` : `/assets/vehicles/${w.assetId}`
+              const href = assetHref(w.assetType, w.assetId)
               const daysLeft = w.expirationDate ? Math.ceil((new Date(w.expirationDate).getTime() - now.getTime()) / 86400000) : null
               return (
                 <Link
                   key={w.id}
-                  href={assetHref}
+                  href={href}
                   className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
                 >
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -157,11 +162,11 @@ export default async function DashboardPage() {
               <EmptyPanel icon={Wrench} message="No service records yet." />
             ) : recentRecords.map((r) => {
               const assetName = r.assetType === "PROPERTY" ? propMap[r.assetId] : vehMap[r.assetId]
-              const assetHref = r.assetType === "PROPERTY" ? `/assets/properties/${r.assetId}` : `/assets/vehicles/${r.assetId}`
+              const href = assetHref(r.assetType, r.assetId)
               return (
                 <Link
                   key={r.id}
-                  href={assetHref}
+                  href={href}
                   className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
                 >
                   <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
