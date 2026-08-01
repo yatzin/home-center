@@ -1,0 +1,12 @@
+.env
+.env.local
+node_modules
+.next
+.git
+uploads
+prisma/dev.db
+prisma/dev.db-journal
+*.log
+README.md
+PLANNING.md
+vision.md

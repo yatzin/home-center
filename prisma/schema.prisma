@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  USER
+  READONLY
+}
+
+enum PropertyType {
+  HOUSE
+  CONDO
+  TOWNHOUSE
+  LOT
+  OTHER
+}
+
+enum AssetType {
+  PROPERTY
+  VEHICLE
+}
+
+enum AttachmentRecordType {
+  SERVICE
+  WARRANTY
+  MAINTENANCE
+}
+
+enum NotificationType {
+  MAINTENANCE_DUE
+  WARRANTY_EXPIRING
+  CUSTOM
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id                String   @id @default(cuid())
+  name              String
+  email             String   @unique
+  passwordHash      String
+  role              Role     @default(USER)
+  mustResetPassword Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  notifications  Notification[]
+  serviceRecords ServiceRecord[]
+  attachments    Attachment[]
+}
+
+// ─── Assets ───────────────────────────────────────────────────────────────────
+
+model Property {
+  id            String       @id @default(cuid())
+  name          String
+  type          PropertyType @default(HOUSE)
+  address       String
+  purchaseDate  DateTime?
+  purchasePrice Float?
+  yearBuilt     Int?
+  sqFt          Int?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Vehicle {
+  id             String    @id @default(cuid())
+  name           String
+  make           String
+  model          String
+  year           Int
+  vin            String?
+  color          String?
+  purchaseDate   DateTime?
+  currentMileage Int?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── Service Records ──────────────────────────────────────────────────────────
+
+model ServiceRecord {
+  id               String    @id @default(cuid())
+  assetId          String
+  assetType        AssetType
+  date             DateTime
+  title            String
+  description      String?
+  vendor           String?
+  cost             Float?
+  mileageAtService Int?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  attachments Attachment[]
+}
+
+// ─── Warranties ───────────────────────────────────────────────────────────────
+
+model Warranty {
+  id             String    @id @default(cuid())
+  assetId        String
+  assetType      AssetType
+  productName    String
+  purchaseDate   DateTime?
+  expirationDate DateTime?
+  vendor         String?
+  vendorPhone    String?
+  vendorEmail    String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  attachments Attachment[]
+}
+
+// ─── Maintenance ──────────────────────────────────────────────────────────────
+
+model MaintenanceSchedule {
+  id                   String    @id @default(cuid())
+  assetId              String
+  assetType            AssetType
+  title                String
+  description          String?
+  intervalDays         Int?
+  intervalMiles        Int?
+  lastCompletedDate    DateTime?
+  lastCompletedMileage Int?
+  nextDueDate          DateTime?
+  nextDueMileage       Int?
+  reminderDaysBefore   Int       @default(14)
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  attachments Attachment[]
+}
+
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+model Attachment {
+  id           String               @id @default(cuid())
+  recordType   AttachmentRecordType
+  filename     String               // UUID-based name stored on disk
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedAt   DateTime             @default(now())
+
+  uploadedById String
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  serviceRecordId       String?
+  serviceRecord         ServiceRecord?       @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
+
+  warrantyId            String?
+  warranty              Warranty?            @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+
+  maintenanceScheduleId String?
+  maintenanceSchedule   MaintenanceSchedule? @relation(fields: [maintenanceScheduleId], references: [id], onDelete: Cascade)
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id                String           @id @default(cuid())
+  type              NotificationType
+  title             String
+  message           String
+  isRead            Boolean          @default(false)
+  relatedEntityId   String?
+  relatedEntityType String?
+  createdAt         DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
