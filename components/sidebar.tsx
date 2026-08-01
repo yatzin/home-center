@@ -30,11 +30,20 @@ function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: st
       href={href}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-primary transition-opacity duration-150",
+          active ? "opacity-100" : "opacity-0"
+        )}
+      />
+      <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.5} />
       {label}
     </Link>
   )
@@ -44,8 +53,8 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   return (
     <div className="flex flex-col h-full px-3 py-4">
       <div className="mb-6 flex items-center gap-2 px-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">HC</div>
-        <span className="font-semibold">HomeCenter</span>
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">HC</div>
+        <span className="font-semibold tracking-tight">HomeCenter</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
         {navItems.map((item) => <NavLink key={item.href} {...item} onClick={onNavClick} />)}

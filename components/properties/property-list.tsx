@@ -56,7 +56,7 @@ export function PropertyList({ properties }: Props) {
           {properties.map((p) => (
             <Card
               key={p.id}
-              className="cursor-pointer hover:border-primary/50 transition-colors"
+              className="cursor-pointer transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md"
               onClick={() => router.push(`/assets/properties/${p.id}`)}
             >
               <CardHeader className="pb-2">
