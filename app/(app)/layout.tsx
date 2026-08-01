@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { Sidebar, MobileSidebarTrigger } from "@/components/sidebar"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b bg-card px-4">
           <MobileSidebarTrigger />
           <div className="flex items-center gap-2 ml-auto">
+            <ThemeToggle />
             <NotificationBell unreadCount={unreadCount} />
             <UserMenu name={session.user.name ?? "User"} email={session.user.email ?? ""} />
           </div>
