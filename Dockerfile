@@ -2,6 +2,8 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 RUN npm install
 
 # ── builder: generate Prisma client and build Next.js ────────────────────────
