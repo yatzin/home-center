@@ -24,9 +24,9 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted transition-colors outline-none">
+      <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors duration-150 hover:bg-muted outline-none">
         <Avatar className="h-7 w-7">
-          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+          <AvatarFallback className="bg-primary/15 text-xs font-medium text-primary">{initials}</AvatarFallback>
         </Avatar>
         <div className="text-left">
           <div className="font-medium leading-none">{name}</div>
