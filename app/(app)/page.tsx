@@ -65,80 +65,110 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Upcoming maintenance */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
+        <Card className="py-5">
+          <CardHeader className="px-5 pb-1">
+            <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
               Upcoming Maintenance
-              <Link href="/maintenance" className="text-xs text-muted-foreground hover:text-foreground font-normal">View all →</Link>
+              <Link
+                href="/maintenance"
+                className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
+              >
+                View all →
+              </Link>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1 px-5">
             {urgentMaintenance.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing due in the next 30 days.</p>
+              <EmptyPanel icon={Clock} message="Nothing due in the next 30 days." />
             ) : urgentMaintenance.map((s) => {
               const assetName = s.assetType === "PROPERTY" ? propMap[s.assetId] : vehMap[s.assetId]
+              const assetHref = s.assetType === "PROPERTY" ? `/assets/properties/${s.assetId}` : `/assets/vehicles/${s.assetId}`
               const daysLeft = s.nextDueDate ? Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) : null
               const overdue = daysLeft !== null && daysLeft < 0
               return (
-                <div key={s.id} className="flex items-center gap-2 text-sm">
+                <Link
+                  key={s.id}
+                  href={assetHref}
+                  className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
+                >
                   {overdue ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" /> : <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
                   <span className="flex-1 truncate">{s.title}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
                   <Badge variant={overdue ? "destructive" : "secondary"} className="shrink-0 text-xs">
                     {daysLeft === null ? "—" : daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
                   </Badge>
-                </div>
+                </Link>
               )
             })}
           </CardContent>
         </Card>
 
         {/* Expiring warranties */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
+        <Card className="py-5">
+          <CardHeader className="px-5 pb-1">
+            <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
               Expiring Warranties
-              <Link href="/warranties" className="text-xs text-muted-foreground hover:text-foreground font-normal">View all →</Link>
+              <Link
+                href="/warranties"
+                className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
+              >
+                View all →
+              </Link>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1 px-5">
             {expiringWarranties.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No warranties expiring in the next 60 days.</p>
+              <EmptyPanel icon={ShieldCheck} message="No warranties expiring in the next 60 days." />
             ) : expiringWarranties.map((w) => {
               const assetName = w.assetType === "PROPERTY" ? propMap[w.assetId] : vehMap[w.assetId]
+              const assetHref = w.assetType === "PROPERTY" ? `/assets/properties/${w.assetId}` : `/assets/vehicles/${w.assetId}`
               const daysLeft = w.expirationDate ? Math.ceil((new Date(w.expirationDate).getTime() - now.getTime()) / 86400000) : null
               return (
-                <div key={w.id} className="flex items-center gap-2 text-sm">
+                <Link
+                  key={w.id}
+                  href={assetHref}
+                  className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
+                >
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">{w.productName}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
                   <Badge variant="secondary" className="shrink-0 text-xs">{daysLeft}d</Badge>
-                </div>
+                </Link>
               )
             })}
           </CardContent>
         </Card>
 
         {/* Recent service */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center justify-between">
+        <Card className="py-5">
+          <CardHeader className="px-5 pb-1">
+            <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
               Recent Service
-              <Link href="/records" className="text-xs text-muted-foreground hover:text-foreground font-normal">View all →</Link>
+              <Link
+                href="/records"
+                className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
+              >
+                View all →
+              </Link>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-1 px-5">
             {recentRecords.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No service records yet.</p>
+              <EmptyPanel icon={Wrench} message="No service records yet." />
             ) : recentRecords.map((r) => {
               const assetName = r.assetType === "PROPERTY" ? propMap[r.assetId] : vehMap[r.assetId]
+              const assetHref = r.assetType === "PROPERTY" ? `/assets/properties/${r.assetId}` : `/assets/vehicles/${r.assetId}`
               return (
-                <div key={r.id} className="flex items-center gap-2 text-sm">
+                <Link
+                  key={r.id}
+                  href={assetHref}
+                  className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
+                >
                   <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">{r.title}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{new Date(r.date).toLocaleDateString()}</span>
-                </div>
+                </Link>
               )
             })}
           </CardContent>
@@ -174,6 +204,15 @@ function SummaryCard({ icon: Icon, label, value, href, urgent }: {
         </CardContent>
       </Card>
     </Link>
+  )
+}
+
+function EmptyPanel({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-6 text-center">
+      <Icon className="h-5 w-5 text-muted-foreground/40" strokeWidth={1.5} />
+      <p className="text-sm text-muted-foreground">{message}</p>
+    </div>
   )
 }
 
