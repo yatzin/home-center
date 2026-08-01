@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -48,13 +49,13 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-xl font-semibold tracking-tight">
           Welcome back{session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Here&apos;s an overview of your homes and vehicles.</p>
+        <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes and vehicles.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <SummaryCard icon={Building2} label="Properties" value={propertyCount} href="/assets/properties" />
         <SummaryCard icon={Car} label="Vehicles" value={vehicleCount} href="/assets/vehicles" />
         <SummaryCard icon={Wrench} label="Service Records" value={recordCount} href="/records" />
@@ -151,14 +152,25 @@ function SummaryCard({ icon: Icon, label, value, href, urgent }: {
   icon: React.ElementType; label: string; value: number; href: string; urgent?: boolean
 }) {
   return (
-    <Link href={href}>
-      <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-        <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
-          <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
-          <Icon className={`h-3.5 w-3.5 ${urgent ? "text-destructive" : "text-muted-foreground"}`} />
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div className={`text-2xl font-bold ${urgent ? "text-destructive" : ""}`}>{value}</div>
+    <Link href={href} className="block">
+      <Card className="py-5 transition-all duration-150 hover:-translate-y-px hover:shadow-md">
+        <CardContent className="flex flex-col gap-3 px-5">
+          <div
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-lg",
+              urgent ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+            )}
+          >
+            <Icon className="h-4 w-4" strokeWidth={1.75} />
+          </div>
+          <div>
+            <div className={cn("text-[28px] font-semibold leading-none tabular-nums", urgent && "text-destructive")}>
+              {value}
+            </div>
+            <div className="mt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {label}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </Link>
