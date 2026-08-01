@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
+import { rm } from "fs/promises"
+import path from "path"
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -60,6 +62,10 @@ export async function deleteProperty(id: string) {
   if (!session) redirect("/login")
 
   await prisma.property.delete({ where: { id } })
+
+  const uploadDir = process.env.UPLOAD_DIR ?? "./uploads"
+  await rm(path.join(uploadDir, "properties", id), { recursive: true, force: true })
+
   revalidatePath("/assets/properties")
   return { success: true }
 }

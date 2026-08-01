@@ -4,8 +4,8 @@ import { checkAndNotify } from "@/lib/notifications/checker"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator } from "lucide-react"
+import { SummaryCard } from "@/components/dashboard/summary-card"
 import type { AssetType } from "@/app/generated/prisma/client"
 
 function assetHref(assetType: AssetType, assetId: string) {
@@ -44,12 +44,21 @@ export default async function DashboardPage() {
       orderBy: { expirationDate: "asc" },
       take: 6,
     }),
-    prisma.property.findMany({ select: { id: true, name: true } }),
-    prisma.vehicle.findMany({ select: { id: true, name: true } }),
+    prisma.property.findMany({ select: { id: true, name: true, imageFilename: true } }),
+    prisma.vehicle.findMany({ select: { id: true, name: true, imageFilename: true } }),
   ])
 
   const propMap = Object.fromEntries(properties.map((p) => [p.id, p.name]))
   const vehMap = Object.fromEntries(vehicles.map((v) => [v.id, v.name]))
+
+  const propertyThumbnails = properties
+    .filter((p): p is typeof p & { imageFilename: string } => !!p.imageFilename)
+    .slice(0, 3)
+    .map((p) => ({ assetType: "PROPERTY" as const, assetId: p.id, imageFilename: p.imageFilename, name: p.name }))
+  const vehicleThumbnails = vehicles
+    .filter((v): v is typeof v & { imageFilename: string } => !!v.imageFilename)
+    .slice(0, 3)
+    .map((v) => ({ assetType: "VEHICLE" as const, assetId: v.id, imageFilename: v.imageFilename, name: v.name }))
 
   return (
     <div className="space-y-6">
@@ -60,12 +69,17 @@ export default async function DashboardPage() {
         <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes and vehicles.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <SummaryCard icon={Building2} label="Properties" value={propertyCount} href="/assets/properties" />
-        <SummaryCard icon={Car} label="Vehicles" value={vehicleCount} href="/assets/vehicles" />
-        <SummaryCard icon={Wrench} label="Service Records" value={recordCount} href="/records" />
-        <SummaryCard icon={ShieldCheck} label="Active Warranties" value={warrantyCount} href="/warranties" />
-        <SummaryCard icon={Calendar} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.3fr_1.3fr_1fr_1fr]">
+        <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} />
+        <SummaryCard icon={<Car />} label="Vehicles" value={vehicleCount} href="/assets/vehicles" thumbnails={vehicleThumbnails} />
+        <div className="flex flex-col gap-4">
+          <SummaryCard icon={<Wrench />} label="Service Records" value={recordCount} href="/records" compact />
+          <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
+        </div>
+        <div className="flex flex-col gap-4">
+          <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
+          <SummaryCard icon={<Refrigerator />} label="Appliances" value="—" compact />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -180,35 +194,6 @@ export default async function DashboardPage() {
         </Card>
       </div>
     </div>
-  )
-}
-
-function SummaryCard({ icon: Icon, label, value, href, urgent }: {
-  icon: React.ElementType; label: string; value: number; href: string; urgent?: boolean
-}) {
-  return (
-    <Link href={href} className="block">
-      <Card className="border-t-2 border-t-primary py-5 transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md">
-        <CardContent className="flex flex-col gap-3 px-5">
-          <div
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-lg",
-              urgent ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" strokeWidth={1.75} />
-          </div>
-          <div>
-            <div className={cn("text-[28px] font-semibold leading-none tabular-nums", urgent && "text-destructive")}>
-              {value}
-            </div>
-            <div className="mt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {label}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
   )
 }
 

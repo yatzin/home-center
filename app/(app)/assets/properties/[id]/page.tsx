@@ -6,6 +6,7 @@ import { MapPin, Calendar, DollarSign, Maximize, Download } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
+import { AssetImageUploader } from "@/components/asset-image-uploader"
 
 const typeLabel: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
@@ -24,6 +25,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="space-y-6">
+      <AssetImageUploader assetType="PROPERTY" assetId={id} imageFilename={property.imageFilename} alt={property.name} />
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

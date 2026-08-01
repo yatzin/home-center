@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, MapPin, Pencil, Trash2 } from "lucide-react"
 import { deleteProperty } from "@/lib/actions/properties"
 import { PropertyFormDialog } from "./property-form-dialog"
+import { AssetImage } from "@/components/asset-image"
 import type { Property } from "@/app/generated/prisma/client"
 
 const typeLabel: Record<string, string> = {
@@ -59,6 +60,7 @@ export function PropertyList({ properties }: Props) {
               className="cursor-pointer transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md"
               onClick={() => router.push(`/assets/properties/${p.id}`)}
             >
+              <AssetImage assetType="PROPERTY" assetId={p.id} imageFilename={p.imageFilename} alt={p.name} className="h-36 w-full" />
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base leading-snug">{p.name}</CardTitle>

@@ -6,6 +6,7 @@ import { Calendar, Gauge, Palette, Download } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
+import { AssetImageUploader } from "@/components/asset-image-uploader"
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,6 +21,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="space-y-6">
+      <AssetImageUploader assetType="VEHICLE" assetId={id} imageFilename={vehicle.imageFilename} alt={vehicle.name} />
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">

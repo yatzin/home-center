@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, Gauge, Pencil, Trash2 } from "lucide-react"
 import { deleteVehicle } from "@/lib/actions/vehicles"
 import { VehicleFormDialog } from "./vehicle-form-dialog"
+import { AssetImage } from "@/components/asset-image"
 import type { Vehicle } from "@/app/generated/prisma/client"
 
 interface Props {
@@ -52,6 +53,7 @@ export function VehicleList({ vehicles }: Props) {
               className="cursor-pointer transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md"
               onClick={() => router.push(`/assets/vehicles/${v.id}`)}
             >
+              <AssetImage assetType="VEHICLE" assetId={v.id} imageFilename={v.imageFilename} alt={v.name} className="h-36 w-full" />
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="text-base leading-snug">{v.name}</CardTitle>
