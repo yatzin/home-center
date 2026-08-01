@@ -12,6 +12,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
+# Build-time only placeholder — lib/prisma.ts constructs a client at module
+# load (needed while Next statically collects route/page data), but nothing
+# actually queries it during the build. Real DATABASE_URL is set at runtime.
+ENV DATABASE_URL="file:./build-placeholder.db"
 RUN npm run build
 
 # ── runner: minimal production image ─────────────────────────────────────────
