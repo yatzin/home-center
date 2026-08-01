@@ -39,7 +39,9 @@ export function PropertyList({ properties }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Properties</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{properties.length} property{properties.length !== 1 ? "ies" : ""}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {properties.length} {properties.length === 1 ? "property" : "properties"}
+          </p>
         </div>
         <Button onClick={openNew}>Add Property</Button>
       </div>
