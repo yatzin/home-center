@@ -188,7 +188,7 @@ function SummaryCard({ icon: Icon, label, value, href, urgent }: {
 }) {
   return (
     <Link href={href} className="block">
-      <Card className="py-5 transition-all duration-150 hover:-translate-y-px hover:shadow-md">
+      <Card className="border-t-2 border-t-primary py-5 transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md">
         <CardContent className="flex flex-col gap-3 px-5">
           <div
             className={cn(
