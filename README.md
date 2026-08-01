@@ -51,7 +51,7 @@ services:
       ADMIN_PASSWORD: "changeme"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -66,7 +66,7 @@ Update the volume path to the folder you created in step 1.
 |---|---|---|
 | `AUTH_SECRET` | **Yes** | A random secret: `openssl rand -base64 32`. Without it, logins won't work. |
 | `AUTH_URL` | No | The address you'll browse to, e.g. `http://192.168.1.50:3000`. Leave blank — it's auto-detected. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login. Leave as-is and use `admin@localhost` / `changeme` instead (you'll be forced to change it on first login). |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login. Leave as-is and use `admin@localhost` / `changeme` instead (you'll be forced to change it on first login).  Once the app has your password, this field is ignored in the future. |
 
 Everything else can stay at its default.
 
