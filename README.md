@@ -14,7 +14,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 
 ## Screenshot
 
-![HomeCenter dashboard](docs/screenshots/dashboard.jpg)
+![HomeCenter dashboard](docs/screenshots/dashboard.JPG)
 
 ## Requirements
 
