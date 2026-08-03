@@ -417,3 +417,21 @@ CMD ["node", "server.js"]
 - **Backup strategy**: `homecenter_data` Docker volume — user is responsible for host-level backups. Could add a `/settings/backup` page that exports a ZIP of the DB + uploads.
 - **HTTPS/TLS**: Assumed to be handled by a reverse proxy (Nginx, Traefik, Caddy) in front of the container. Document this in the README.
 - **Recurring service auto-schedule**: When a service record is saved, optionally auto-advance the related maintenance schedule's `lastCompletedDate`.
+
+
+
+
+
+
+
+
+
+
+
+Things to add?
+Do we make odometer reads more official?
+if, when adding or updating service, and odemeter reading it shared, add it to odemeter reading entry? Maybe not add it perse, but have it pick up and show...
+Service Records should have a spend total and even a graph of spend over each month?
+Have Service records have each data point aligned almost like a table
+Expenses pie chart?  expenses vs distance by month?  
+total cost on vehical/property item.

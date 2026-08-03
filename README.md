@@ -12,6 +12,10 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Multiple users** — admin, standard, and read-only accounts
 - **Local login** — no third-party account required, your data stays on your hardware
 
+## Screenshot
+
+![HomeCenter dashboard](docs/screenshots/dashboard.jpg)
+
 ## Requirements
 
 | Requirement | Why |
