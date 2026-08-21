@@ -63,7 +63,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">
+        <h1 className="font-heading text-xl font-semibold tracking-tight">
           Welcome back{session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes and vehicles.</p>
@@ -110,7 +110,7 @@ export default async function DashboardPage() {
                   href={href}
                   className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
                 >
-                  {overdue ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" /> : <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                  {overdue ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" /> : <Clock className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />}
                   <span className="flex-1 truncate">{s.title}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
                   <Badge variant={overdue ? "destructive" : "secondary"} className="shrink-0 text-xs">

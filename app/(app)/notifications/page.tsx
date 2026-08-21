@@ -29,7 +29,7 @@ export default async function NotificationsPage() {
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Notifications</h1>
+          <h1 className="font-heading text-2xl font-semibold">Notifications</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {unread > 0 ? `${unread} unread` : "All caught up"}
           </p>

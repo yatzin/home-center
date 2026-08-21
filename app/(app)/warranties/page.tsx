@@ -46,11 +46,11 @@ export default async function WarrantiesPage({ searchParams }: { searchParams: P
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Warranties</h1>
+        <h1 className="font-heading text-2xl font-semibold">Warranties</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {warranties.length} warrant{warranties.length !== 1 ? "ies" : "y"}
           {expiringSoon > 0 && (
-            <span className="ml-2 text-amber-600 font-medium">· {expiringSoon} expiring soon</span>
+            <span className="ml-2 text-amber-700 dark:text-amber-400 font-medium">· {expiringSoon} expiring soon</span>
           )}
         </p>
       </div>
@@ -68,7 +68,7 @@ export default async function WarrantiesPage({ searchParams }: { searchParams: P
           <p className="text-sm mt-1">Add warranties from a property or vehicle detail page.</p>
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>

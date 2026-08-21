@@ -37,7 +37,7 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Service Records</h1>
+          <h1 className="font-heading text-2xl font-semibold">Service Records</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {records.length} record{records.length !== 1 ? "s" : ""}
             {totalCost > 0 && ` · $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total`}
@@ -58,7 +58,7 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
           <p className="text-sm mt-1">Add records from a property or vehicle detail page.</p>
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>

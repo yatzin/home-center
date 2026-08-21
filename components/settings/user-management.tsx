@@ -48,7 +48,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
         <Button onClick={() => setCreateOpen(true)}>Add User</Button>
       </div>
 
-      <div className="rounded-lg border overflow-hidden">
+      <div className="rounded-lg border overflow-hidden bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>

@@ -34,11 +34,11 @@ export default async function MaintenancePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Maintenance</h1>
+        <h1 className="font-heading text-2xl font-semibold">Maintenance</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {schedules.length} active schedule{schedules.length !== 1 ? "s" : ""}
           {overdue > 0 && <span className="ml-2 text-destructive font-medium">· {overdue} overdue</span>}
-          {dueSoon > 0 && <span className="ml-2 text-amber-600 font-medium">· {dueSoon} due soon</span>}
+          {dueSoon > 0 && <span className="ml-2 text-amber-700 dark:text-amber-400 font-medium">· {dueSoon} due soon</span>}
         </p>
       </div>
 
@@ -48,7 +48,7 @@ export default async function MaintenancePage() {
           <p className="text-sm mt-1">Add schedules from a property or vehicle detail page.</p>
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>

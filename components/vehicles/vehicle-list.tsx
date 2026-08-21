@@ -34,7 +34,7 @@ export function VehicleList({ vehicles }: Props) {
     <>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Vehicles</h1>
+          <h1 className="font-heading text-2xl font-semibold">Vehicles</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{vehicles.length} vehicle{vehicles.length !== 1 ? "s" : ""}</p>
         </div>
         <Button onClick={openNew}>Add Vehicle</Button>
@@ -59,6 +59,7 @@ export function VehicleList({ vehicles }: Props) {
                   <CardTitle className="text-base leading-snug">{v.name}</CardTitle>
                   <DropdownMenu>
                     <DropdownMenuTrigger
+                      aria-label={`More actions for "${v.name}"`}
                       className="inline-flex h-7 w-7 shrink-0 -mt-1 -mr-2 items-center justify-center rounded-md hover:bg-muted transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >

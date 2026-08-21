@@ -54,7 +54,7 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
           No warranties yet.
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -110,15 +110,15 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit warranty for "${w.productName}"`}
                             onClick={() => { setEditing(w); setDialogOpen(true) }}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" aria-label={`Delete warranty for "${w.productName}"`}
                             onClick={() => handleDelete(w)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={expanded ? "Hide details" : "Show details"} aria-expanded={expanded}
                             onClick={() => setExpandedId(expanded ? null : w.id)}>
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
                           </Button>
