@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown, Pencil, Trash2, ShieldCheck } from "lucide-react"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ChevronDown, Pencil, Trash2 } from "lucide-react"
 import { deleteWarranty } from "@/lib/actions/warranties"
 import { WarrantyFormDialog } from "./warranty-form-dialog"
 import { AttachmentList } from "@/components/attachments/attachment-list"
+import { AttachmentCount } from "@/components/attachments/attachment-count"
 import type { Attachment, Warranty } from "@/app/generated/prisma/client"
 
 type WarrantyWithAttachments = Warranty & { attachments: Attachment[] }
@@ -25,13 +27,14 @@ function warrantyStatus(expirationDate: Date | null) {
   const exp = new Date(expirationDate)
   const daysLeft = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
   if (daysLeft < 0) return { label: "Expired", variant: "destructive" as const }
-  if (daysLeft <= 60) return { label: `Expires in ${daysLeft}d`, variant: "secondary" as const }
-  return { label: `Expires ${exp.toLocaleDateString()}`, variant: "outline" as const }
+  if (daysLeft <= 60) return { label: `${daysLeft}d left`, variant: "secondary" as const }
+  return { label: "Active", variant: "outline" as const }
 }
 
 export function WarrantyList({ warranties, assetId, assetType }: Props) {
   const [editing, setEditing] = useState<Warranty | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   async function handleDelete(w: Warranty) {
     if (!confirm(`Delete warranty for "${w.productName}"?`)) return
@@ -51,55 +54,97 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
           No warranties yet.
         </div>
       ) : (
-        <div className="space-y-2">
-          {warranties.map((w) => {
-            const status = warrantyStatus(w.expirationDate)
-            return (
-              <Collapsible key={w.id}>
-                <div className="rounded-lg border bg-card">
-                  <div className="flex items-start gap-3 p-3">
-                    <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm">{w.productName}</span>
-                        {status && <Badge variant={status.variant}>{status.label}</Badge>}
-                        {w.attachments.length > 0 && (
-                          <Badge variant="outline">{w.attachments.length} file{w.attachments.length !== 1 ? "s" : ""}</Badge>
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead>Purchased</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Files</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {warranties.map((w) => {
+                const status = warrantyStatus(w.expirationDate)
+                const expanded = expandedId === w.id
+                return (
+                  <Fragment key={w.id}>
+                    <TableRow
+                      className="cursor-pointer"
+                      onClick={() => { setEditing(w); setDialogOpen(true) }}
+                    >
+                      <TableCell>
+                        <div className="font-medium">{w.productName}</div>
+                        {w.vendor && <div className="text-xs text-muted-foreground">{w.vendor}</div>}
+                      </TableCell>
+                      <TableCell className="max-w-[220px]">
+                        {w.notes ? (
+                          <Tooltip>
+                            <TooltipTrigger className="block w-full truncate border-0 bg-transparent p-0 text-left text-muted-foreground">
+                              {w.notes}
+                            </TooltipTrigger>
+                            <TooltipContent align="start" className="whitespace-pre-wrap">{w.notes}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
-                      </div>
-                      {w.vendor && <p className="text-xs text-muted-foreground mt-0.5">{w.vendor}</p>}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="icon" className="h-7 w-7"
-                        onClick={() => { setEditing(w); setDialogOpen(true) }}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDelete(w)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <CollapsibleTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted transition-colors">
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-
-                  <CollapsibleContent>
-                    <div className="border-t px-3 py-3 space-y-3 text-sm text-muted-foreground">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {w.purchaseDate && <span>Purchased: {new Date(w.purchaseDate).toLocaleDateString()}</span>}
-                        {w.expirationDate && <span>Expires: {new Date(w.expirationDate).toLocaleDateString()}</span>}
-                        {w.vendorPhone && <span>Phone: {w.vendorPhone}</span>}
-                        {w.vendorEmail && <span>Email: {w.vendorEmail}</span>}
-                      </div>
-                      {w.notes && <p className="whitespace-pre-wrap">{w.notes}</p>}
-                      <AttachmentList recordId={w.id} recordType="WARRANTY" attachments={w.attachments} />
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
-            )
-          })}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {w.purchaseDate ? new Date(w.purchaseDate).toLocaleDateString() : <span>—</span>}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {w.expirationDate ? new Date(w.expirationDate).toLocaleDateString() : <span>—</span>}
+                      </TableCell>
+                      <TableCell>
+                        {status && <Badge variant={status.variant}>{status.label}</Badge>}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <AttachmentCount
+                          attachments={w.attachments}
+                          onClick={() => setExpandedId(expanded ? null : w.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                            onClick={() => { setEditing(w); setDialogOpen(true) }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDelete(w)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                            onClick={() => setExpandedId(expanded ? null : w.id)}>
+                            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {expanded && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={7} className="bg-muted/30 whitespace-normal">
+                          <div className="space-y-3">
+                            {(w.vendorPhone || w.vendorEmail) && (
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                {w.vendorPhone && <span>Phone: {w.vendorPhone}</span>}
+                                {w.vendorEmail && <span>Email: {w.vendorEmail}</span>}
+                              </div>
+                            )}
+                            <AttachmentList recordId={w.id} recordType="WARRANTY" attachments={w.attachments} />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 

@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Pencil, Trash2, CheckCircle2, Calendar, Gauge, AlertTriangle, Clock } from "lucide-react"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Pencil, Trash2, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
 import { deleteMaintenanceSchedule, completeMaintenanceSchedule } from "@/lib/actions/maintenance"
 import { MaintenanceFormDialog } from "./maintenance-form-dialog"
 import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
@@ -23,13 +25,13 @@ function getStatus(s: MaintenanceSchedule, currentMileage?: number | null) {
   const now = new Date()
   const overdueByDate = s.nextDueDate && new Date(s.nextDueDate) < now
   const overdueByMiles = s.nextDueMileage != null && currentMileage != null && currentMileage >= s.nextDueMileage
-  if (overdueByDate || overdueByMiles) return { label: "Overdue", variant: "destructive" as const }
+  if (overdueByDate || overdueByMiles) return { label: "Overdue", variant: "destructive" as const, icon: AlertTriangle }
 
   const soonByDate = s.nextDueDate && Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) <= s.reminderDaysBefore
   const soonByMiles = s.nextDueMileage != null && currentMileage != null && (s.nextDueMileage - currentMileage) <= 500
-  if (soonByDate || soonByMiles) return { label: "Due soon", variant: "secondary" as const }
+  if (soonByDate || soonByMiles) return { label: "Due soon", variant: "secondary" as const, icon: Clock }
 
-  if (s.nextDueDate || s.nextDueMileage) return { label: "OK", variant: "outline" as const }
+  if (s.nextDueDate || s.nextDueMileage) return { label: "OK", variant: "outline" as const, icon: CheckCircle2 }
   return null
 }
 
@@ -56,62 +58,84 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
           No maintenance schedules yet.
         </div>
       ) : (
-        <div className="space-y-2">
-          {schedules.map((s) => {
-            const status = getStatus(s, currentMileage)
-            return (
-              <div key={s.id} className="rounded-lg border bg-card p-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5">
-                    {status?.variant === "destructive"
-                      ? <AlertTriangle className="h-4 w-4 text-destructive" />
-                      : status?.variant === "secondary"
-                        ? <Clock className="h-4 w-4 text-amber-500" />
-                        : <CheckCircle2 className="h-4 w-4 text-muted-foreground" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{s.title}</span>
-                      {status && <Badge variant={status.variant}>{status.label}</Badge>}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-muted-foreground">
-                      {s.nextDueDate && (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          Due {new Date(s.nextDueDate).toLocaleDateString()}
-                        </span>
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Next Due</TableHead>
+                <TableHead>Interval</TableHead>
+                <TableHead>Last Completed</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {schedules.map((s) => {
+                const status = getStatus(s, currentMileage)
+                const StatusIcon = status?.icon
+                return (
+                  <TableRow
+                    key={s.id}
+                    className="cursor-pointer"
+                    onClick={() => { setEditing(s); setFormOpen(true) }}
+                  >
+                    <TableCell className="font-medium">{s.title}</TableCell>
+                    <TableCell className="max-w-[220px]">
+                      {s.description ? (
+                        <Tooltip>
+                          <TooltipTrigger className="block w-full truncate border-0 bg-transparent p-0 text-left text-muted-foreground">
+                            {s.description}
+                          </TooltipTrigger>
+                          <TooltipContent align="start" className="whitespace-pre-wrap">{s.description}</TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
-                      {s.nextDueMileage != null && (
-                        <span className="flex items-center gap-1">
-                          <Gauge className="h-3 w-3" />
-                          Due at {s.nextDueMileage.toLocaleString()} mi
-                        </span>
+                    </TableCell>
+                    <TableCell>
+                      {status && (
+                        <Badge variant={status.variant} className="gap-1">
+                          {StatusIcon && <StatusIcon className="h-3 w-3" />}
+                          {status.label}
+                        </Badge>
                       )}
-                      {s.intervalDays && <span>Every {s.intervalDays}d</span>}
-                      {s.intervalMiles && <span>Every {s.intervalMiles.toLocaleString()} mi</span>}
-                      {s.lastCompletedDate && (
-                        <span>Last done {new Date(s.lastCompletedDate).toLocaleDateString()}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button variant="outline" size="sm" className="h-7 text-xs px-2"
-                      onClick={() => setCompleting(s)}>
-                      Complete
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7"
-                      onClick={() => { setEditing(s); setFormOpen(true) }}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(s)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {s.nextDueDate && <div>{new Date(s.nextDueDate).toLocaleDateString()}</div>}
+                      {s.nextDueMileage != null && <div>{s.nextDueMileage.toLocaleString()} mi</div>}
+                      {!s.nextDueDate && s.nextDueMileage == null && "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {s.intervalDays && <div>Every {s.intervalDays}d</div>}
+                      {s.intervalMiles && <div>Every {s.intervalMiles.toLocaleString()} mi</div>}
+                      {!s.intervalDays && !s.intervalMiles && "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {s.lastCompletedDate ? new Date(s.lastCompletedDate).toLocaleDateString() : "—"}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="outline" size="sm" className="h-7 text-xs px-2"
+                          onClick={() => setCompleting(s)}>
+                          Complete
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7"
+                          onClick={() => { setEditing(s); setFormOpen(true) }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDelete(s)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
