@@ -62,7 +62,7 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
           No service records yet.
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -119,15 +119,15 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
                       </TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit "${record.title}"`}
                             onClick={() => { setEditingId(record.id); setDialogOpen(true) }}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" aria-label={`Delete "${record.title}"`}
                             onClick={() => handleDelete(record)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7"
+                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={expanded ? "Hide attachments" : "Show attachments"} aria-expanded={expanded}
                             onClick={() => setExpandedId(expanded ? null : record.id)}>
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
                           </Button>

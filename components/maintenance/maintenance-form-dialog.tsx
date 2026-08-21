@@ -68,7 +68,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{schedule ? "Edit Schedule" : "Add Maintenance Schedule"}</DialogTitle>
         </DialogHeader>

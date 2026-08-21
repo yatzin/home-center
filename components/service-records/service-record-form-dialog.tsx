@@ -169,7 +169,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()} disablePointerDismissal={filePickerOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{record ? "Edit Service Record" : "Add Service Record"}</DialogTitle>
         </DialogHeader>
@@ -274,6 +274,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                         <button
                           type="button"
                           onClick={() => handleDeleteExisting(a)}
+                          aria-label={`Remove "${a.originalName}"`}
                           className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -296,6 +297,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                         <button
                           type="button"
                           onClick={() => removeStagedFile(index)}
+                          aria-label={`Remove "${file.name}"`}
                           className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
                         >
                           <X className="h-3.5 w-3.5" />

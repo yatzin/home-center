@@ -112,6 +112,7 @@ export function AttachmentList({ recordId, recordType, attachments: initial }: P
                   type="button"
                   onClick={() => handleDelete(a.id, a.originalName)}
                   disabled={isPending}
+                  aria-label={`Remove "${a.originalName}"`}
                   className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

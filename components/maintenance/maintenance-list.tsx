@@ -58,7 +58,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
           No maintenance schedules yet.
         </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
+        <div className="rounded-lg border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -121,11 +121,11 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
                           onClick={() => setCompleting(s)}>
                           Complete
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7"
+                        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit "${s.title}"`}
                           onClick={() => { setEditing(s); setFormOpen(true) }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" aria-label={`Delete "${s.title}"`}
                           onClick={() => handleDelete(s)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

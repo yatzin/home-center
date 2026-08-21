@@ -10,9 +10,10 @@ export function AttachmentCount({ attachments, onClick }: { attachments: Attachm
     <Tooltip>
       <TooltipTrigger
         onClick={onClick}
+        aria-label={`${attachments.length} attachment${attachments.length !== 1 ? "s" : ""}${onClick ? ", toggle attachment list" : ""}`}
         className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-muted-foreground hover:text-foreground transition-colors"
       >
-        <Paperclip className="h-3.5 w-3.5" />
+        <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
         <span className="text-xs">{attachments.length}</span>
       </TooltipTrigger>
       <TooltipContent align="end">
