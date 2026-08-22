@@ -15,7 +15,7 @@ import type { Warranty } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   productName: z.string().min(1, "Product name is required"),
   purchaseDate: z.string().optional(),
   expirationDate: z.string().optional(),
@@ -31,7 +31,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   warranty?: Warranty | null
 }
 

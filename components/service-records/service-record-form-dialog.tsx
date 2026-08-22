@@ -18,7 +18,7 @@ import type { Attachment, ServiceRecord } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   date: z.string().min(1, "Date is required"),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
@@ -33,7 +33,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   record?: ServiceRecord | null
   attachments?: Attachment[]
   onAttachmentDeleted?: (recordId: string, attachmentId: string) => void

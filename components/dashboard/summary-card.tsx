@@ -6,11 +6,8 @@ import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { assetImageSrc } from "@/components/asset-image"
 import { cn } from "@/lib/utils"
+import { assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
-
-function assetHref(assetType: AssetType, assetId: string) {
-  return assetType === "PROPERTY" ? `/assets/properties/${assetId}` : `/assets/vehicles/${assetId}`
-}
 
 type Thumbnail = { assetType: AssetType; assetId: string; imageFilename: string; name: string }
 

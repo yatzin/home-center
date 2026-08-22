@@ -1,13 +1,9 @@
-import { Building2, Car } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-type AssetType = "PROPERTY" | "VEHICLE"
-
-const subdir: Record<AssetType, string> = { PROPERTY: "properties", VEHICLE: "vehicles" }
-const placeholderIcon: Record<AssetType, React.ElementType> = { PROPERTY: Building2, VEHICLE: Car }
+import { assetSegment, assetIcon } from "@/lib/assets"
+import type { AssetType } from "@/app/generated/prisma/client"
 
 export function assetImageSrc(assetType: AssetType, assetId: string, imageFilename: string) {
-  return `/api/files/${subdir[assetType]}/${assetId}/${imageFilename}`
+  return `/api/files/${assetSegment[assetType]}/${assetId}/${imageFilename}`
 }
 
 export function AssetImage({
@@ -28,7 +24,7 @@ export function AssetImage({
     return <img src={assetImageSrc(assetType, assetId, imageFilename)} alt={alt} className={cn("object-cover", className)} />
   }
 
-  const Icon = placeholderIcon[assetType]
+  const Icon = assetIcon[assetType]
   return (
     <div className={cn("flex items-center justify-center bg-muted text-muted-foreground/40", className)}>
       <Icon className="h-8 w-8" strokeWidth={1.5} />

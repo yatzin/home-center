@@ -6,7 +6,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
-  LayoutDashboard, Building2, Car, Wrench, ShieldCheck,
+  LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
   Calendar, Bell, Settings, Menu,
 } from "lucide-react"
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assets/properties", label: "Properties", icon: Building2 },
   { href: "/assets/vehicles", label: "Vehicles", icon: Car },
+  { href: "/assets/equipment", label: "Equipment", icon: Refrigerator },
   { href: "/records", label: "Service Records", icon: Wrench },
   { href: "/warranties", label: "Warranties", icon: ShieldCheck },
   { href: "/maintenance", label: "Maintenance", icon: Calendar },

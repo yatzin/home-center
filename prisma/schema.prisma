@@ -26,6 +26,18 @@ enum PropertyType {
 enum AssetType {
   PROPERTY
   VEHICLE
+  EQUIPMENT
+}
+
+enum EquipmentCategory {
+  APPLIANCE
+  HVAC
+  WATER
+  ELECTRONICS
+  TOOL
+  OUTDOOR
+  SECURITY
+  OTHER
 }
 
 enum AttachmentRecordType {
@@ -71,6 +83,8 @@ model Property {
   imageFilename String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  equipment Equipment[]
 }
 
 model Vehicle {
@@ -87,6 +101,26 @@ model Vehicle {
   imageFilename  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+model Equipment {
+  id            String            @id @default(cuid())
+  name          String
+  category      EquipmentCategory @default(APPLIANCE)
+  manufacturer  String?
+  modelNumber   String?
+  serialNumber  String?
+  location      String?
+  purchaseDate  DateTime?
+  purchasePrice Float?
+  installDate   DateTime?
+  notes         String?
+  imageFilename String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 }
 
 // ─── Service Records ──────────────────────────────────────────────────────────

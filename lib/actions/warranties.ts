@@ -3,6 +3,8 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { assetHref } from "@/lib/assets"
+import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
 import { rm } from "fs/promises"
 import path from "path"
@@ -10,7 +12,7 @@ import { z } from "zod"
 
 const schema = z.object({
   assetId: z.string().min(1),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   productName: z.string().min(1, "Product name is required"),
   purchaseDate: z.string().optional(),
   expirationDate: z.string().optional(),
@@ -42,7 +44,7 @@ export async function createWarranty(data: z.infer<typeof schema>) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   await prisma.warranty.create({ data: clean(parsed.data) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/warranties")
   return { success: true }
 }
@@ -55,12 +57,12 @@ export async function updateWarranty(id: string, data: z.infer<typeof schema>) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   await prisma.warranty.update({ where: { id }, data: clean(parsed.data) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/warranties")
   return { success: true }
 }
 
-export async function deleteWarranty(id: string, assetType: string, assetId: string) {
+export async function deleteWarranty(id: string, assetType: AssetType, assetId: string) {
   const session = await auth()
   if (!session) redirect("/login")
 
@@ -72,7 +74,7 @@ export async function deleteWarranty(id: string, assetType: string, assetId: str
   await rm(path.join(uploadDir, "warranty", id), { recursive: true, force: true })
 
   await prisma.warranty.delete({ where: { id } })
-  revalidatePath(`/assets/${assetType.toLowerCase()}s/${assetId}`)
+  revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/warranties")
   return { success: true }
 }

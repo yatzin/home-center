@@ -3,6 +3,8 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { assetHref } from "@/lib/assets"
+import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
 import { rm } from "fs/promises"
 import path from "path"
@@ -10,7 +12,7 @@ import { z } from "zod"
 
 const schema = z.object({
   assetId: z.string().min(1),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   date: z.string().min(1, "Date is required"),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
@@ -41,7 +43,7 @@ export async function createServiceRecord(data: z.infer<typeof schema>) {
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   const record = await prisma.serviceRecord.create({ data: clean(parsed.data, session.user.id) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/records")
   return { success: true, id: record.id }
 }
@@ -54,12 +56,12 @@ export async function updateServiceRecord(id: string, data: z.infer<typeof schem
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   await prisma.serviceRecord.update({ where: { id }, data: clean(parsed.data, session.user.id) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/records")
   return { success: true }
 }
 
-export async function deleteServiceRecord(id: string, assetType: string, assetId: string) {
+export async function deleteServiceRecord(id: string, assetType: AssetType, assetId: string) {
   const session = await auth()
   if (!session) redirect("/login")
 
@@ -74,7 +76,7 @@ export async function deleteServiceRecord(id: string, assetType: string, assetId
   await rm(dirPath, { recursive: true, force: true })
 
   await prisma.serviceRecord.delete({ where: { id } })
-  revalidatePath(`/assets/${assetType.toLowerCase()}s/${assetId}`)
+  revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/records")
   return { success: true }
 }

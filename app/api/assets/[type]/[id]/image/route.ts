@@ -7,15 +7,23 @@ import { randomUUID } from "crypto"
 
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"])
 
-async function findAsset(type: string, id: string) {
-  if (type === "properties") return { subdir: "properties", record: await prisma.property.findUnique({ where: { id } }) } as const
-  if (type === "vehicles") return { subdir: "vehicles", record: await prisma.vehicle.findUnique({ where: { id } }) } as const
-  return null
+const VALID_TYPES = ["properties", "vehicles", "equipment"] as const
+type ValidType = (typeof VALID_TYPES)[number]
+
+function isValidType(type: string): type is ValidType {
+  return (VALID_TYPES as readonly string[]).includes(type)
 }
 
-async function setImage(type: string, id: string, filename: string | null) {
+async function findAsset(type: ValidType, id: string) {
+  if (type === "properties") return { subdir: "properties", record: await prisma.property.findUnique({ where: { id } }) } as const
+  if (type === "vehicles") return { subdir: "vehicles", record: await prisma.vehicle.findUnique({ where: { id } }) } as const
+  return { subdir: "equipment", record: await prisma.equipment.findUnique({ where: { id } }) } as const
+}
+
+async function setImage(type: ValidType, id: string, filename: string | null) {
   if (type === "properties") return prisma.property.update({ where: { id }, data: { imageFilename: filename } })
-  return prisma.vehicle.update({ where: { id }, data: { imageFilename: filename } })
+  if (type === "vehicles") return prisma.vehicle.update({ where: { id }, data: { imageFilename: filename } })
+  return prisma.equipment.update({ where: { id }, data: { imageFilename: filename } })
 }
 
 export async function POST(
@@ -26,7 +34,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type, id } = await params
-  if (type !== "properties" && type !== "vehicles") {
+  if (!isValidType(type)) {
     return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
   }
 
@@ -70,7 +78,7 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type, id } = await params
-  if (type !== "properties" && type !== "vehicles") {
+  if (!isValidType(type)) {
     return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
   }
 

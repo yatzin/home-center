@@ -3,12 +3,14 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { assetHref } from "@/lib/assets"
+import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
 const schema = z.object({
   assetId: z.string().min(1),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   intervalDays: z.coerce.number().int().min(1).optional().or(z.literal("")),
@@ -39,7 +41,7 @@ export async function createMaintenanceSchedule(data: z.infer<typeof schema>) {
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
   await prisma.maintenanceSchedule.create({ data: clean(parsed.data) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/maintenance")
   return { success: true }
 }
@@ -50,16 +52,16 @@ export async function updateMaintenanceSchedule(id: string, data: z.infer<typeof
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
   await prisma.maintenanceSchedule.update({ where: { id }, data: clean(parsed.data) })
-  revalidatePath(`/assets/${parsed.data.assetType.toLowerCase()}s/${parsed.data.assetId}`)
+  revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/maintenance")
   return { success: true }
 }
 
-export async function deleteMaintenanceSchedule(id: string, assetType: string, assetId: string) {
+export async function deleteMaintenanceSchedule(id: string, assetType: AssetType, assetId: string) {
   const session = await auth()
   if (!session) redirect("/login")
   await prisma.maintenanceSchedule.delete({ where: { id } })
-  revalidatePath(`/assets/${assetType.toLowerCase()}s/${assetId}`)
+  revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/maintenance")
   return { success: true }
 }
@@ -106,7 +108,7 @@ export async function completeMaintenanceSchedule(id: string, data: z.infer<type
     })
   }
 
-  revalidatePath(`/assets/${schedule.assetType.toLowerCase()}s/${schedule.assetId}`)
+  revalidatePath(assetHref(schedule.assetType, schedule.assetId))
   revalidatePath("/maintenance")
   return { success: true }
 }

@@ -3,26 +3,64 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, MapPin, Pencil, Trash2 } from "lucide-react"
 import { deleteProperty } from "@/lib/actions/properties"
 import { PropertyFormDialog } from "./property-form-dialog"
-import { AssetImage } from "@/components/asset-image"
+import { AssetCollection, type AssetColumn } from "@/components/assets/asset-collection"
+import { AssetViewToggle } from "@/components/assets/asset-view-toggle"
+import { useAssetView } from "@/components/assets/use-asset-view"
+import type { Accessor } from "@/lib/use-client-table"
+import type { AssetView } from "@/lib/asset-view"
 import type { Property } from "@/app/generated/prisma/client"
 
 const typeLabel: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
 }
 
-interface Props {
-  properties: Property[]
+const ACCESSORS: Record<string, Accessor<Property>> = {
+  name: (p) => p.name,
+  type: (p) => typeLabel[p.type],
+  address: (p) => p.address,
+  sqFt: (p) => p.sqFt,
+  yearBuilt: (p) => p.yearBuilt,
+  purchasePrice: (p) => p.purchasePrice,
 }
 
-export function PropertyList({ properties }: Props) {
+const COLUMNS: AssetColumn<Property>[] = [
+  { key: "name", label: "Name", cell: (p) => <span className="font-medium">{p.name}</span> },
+  { key: "type", label: "Type", cell: (p) => <Badge variant="secondary" className="text-xs">{typeLabel[p.type]}</Badge> },
+  { key: "address", label: "Address", className: "text-muted-foreground max-w-[280px] truncate", cell: (p) => p.address },
+  { key: "sqFt", label: "Sq Ft", className: "text-muted-foreground whitespace-nowrap", cell: (p) => (p.sqFt ? p.sqFt.toLocaleString() : "—") },
+  { key: "yearBuilt", label: "Built", className: "text-muted-foreground whitespace-nowrap", cell: (p) => p.yearBuilt ?? "—" },
+  { key: "purchasePrice", label: "Price", className: "text-muted-foreground whitespace-nowrap tabular-nums", cell: (p) => (p.purchasePrice ? `$${p.purchasePrice.toLocaleString()}` : "—") },
+]
+
+const INITIAL_DIRS = { sqFt: "desc" as const, yearBuilt: "desc" as const, purchasePrice: "desc" as const }
+
+function toCard(p: Property) {
+  return {
+    name: p.name,
+    badge: typeLabel[p.type],
+    meta: [
+      { icon: MapPin, text: p.address, clamp: true },
+      ...(p.sqFt ? [{ text: `${p.sqFt.toLocaleString()} sq ft` }] : []),
+      ...(p.yearBuilt ? [{ text: `Built ${p.yearBuilt}` }] : []),
+      ...(p.purchasePrice ? [{ text: `$${p.purchasePrice.toLocaleString()}` }] : []),
+    ],
+  }
+}
+
+interface Props {
+  properties: Property[]
+  initialView: AssetView
+}
+
+export function PropertyList({ properties, initialView }: Props) {
   const router = useRouter()
+  const [view, setView] = useAssetView("properties", initialView)
   const [editing, setEditing] = useState<Property | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -35,16 +73,41 @@ export function PropertyList({ properties }: Props) {
   function openNew() { setEditing(null); setDialogOpen(true) }
   function openEdit(p: Property) { setEditing(p); setDialogOpen(true) }
 
+  function renderActions(p: Property) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`More actions for "${p.name}"`}
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-muted transition-colors"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem onClick={() => openEdit(p)}>
+            <Pencil className="h-4 w-4 mr-2" /> Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(p.id, p.name)}>
+            <Trash2 className="h-4 w-4 mr-2" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-semibold">Properties</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {properties.length} {properties.length === 1 ? "property" : "properties"}
           </p>
         </div>
-        <Button onClick={openNew}>Add Property</Button>
+        <div className="flex items-center gap-2">
+          {properties.length > 0 && <AssetViewToggle value={view} onChange={setView} />}
+          <Button onClick={openNew}>Add Property</Button>
+        </div>
       </div>
 
       {properties.length === 0 ? (
@@ -53,52 +116,21 @@ export function PropertyList({ properties }: Props) {
           <p className="text-sm mt-1">Add your first property to get started.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {properties.map((p) => (
-            <Card
-              key={p.id}
-              className="cursor-pointer transition-all duration-150 hover:-translate-y-1 hover:bg-muted hover:shadow-md"
-              onClick={() => router.push(`/assets/properties/${p.id}`)}
-            >
-              <AssetImage assetType="PROPERTY" assetId={p.id} imageFilename={p.imageFilename} alt={p.name} className="h-36 w-full" />
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-base leading-snug">{p.name}</CardTitle>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      aria-label={`More actions for "${p.name}"`}
-                      className="inline-flex h-7 w-7 shrink-0 -mt-1 -mr-2 items-center justify-center rounded-md hover:bg-muted transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuItem onClick={() => openEdit(p)}>
-                        <Pencil className="h-4 w-4 mr-2" /> Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => handleDelete(p.id, p.name)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <Badge variant="secondary" className="w-fit text-xs">{typeLabel[p.type]}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm text-muted-foreground">
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{p.address}</span>
-                </div>
-                {p.sqFt && <p>{p.sqFt.toLocaleString()} sq ft</p>}
-                {p.yearBuilt && <p>Built {p.yearBuilt}</p>}
-                {p.purchasePrice && <p>${p.purchasePrice.toLocaleString()}</p>}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <AssetCollection
+          items={properties}
+          view={view}
+          assetType="PROPERTY"
+          imageFilenameOf={(p) => p.imageFilename}
+          toCard={toCard}
+          columns={COLUMNS}
+          accessors={ACCESSORS}
+          defaultSort="name"
+          defaultDir="asc"
+          initialDirs={INITIAL_DIRS}
+          renderActions={renderActions}
+          onOpen={(p) => router.push(`/assets/properties/${p.id}`)}
+          label="properties"
+        />
       )}
 
       <PropertyFormDialog

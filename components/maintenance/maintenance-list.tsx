@@ -12,12 +12,25 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Pencil, Trash2, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
 import { deleteMaintenanceSchedule, completeMaintenanceSchedule } from "@/lib/actions/maintenance"
 import { MaintenanceFormDialog } from "./maintenance-form-dialog"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+import { useClientTable, type Accessor } from "@/lib/use-client-table"
+import type { SortDir } from "@/lib/table-params"
 import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
+
+const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
+  title: (s) => s.title,
+  status: (s) => (s.nextDueDate ? new Date(s.nextDueDate).getTime() : null),
+  nextDue: (s) => (s.nextDueDate ? new Date(s.nextDueDate).getTime() : null),
+  lastCompleted: (s) => (s.lastCompletedDate ? new Date(s.lastCompletedDate).getTime() : null),
+}
+
+const INITIAL_DIRS: Record<string, SortDir> = { lastCompleted: "desc" }
 
 interface Props {
   schedules: MaintenanceSchedule[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   currentMileage?: number | null
 }
 
@@ -39,6 +52,14 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
   const [editing, setEditing] = useState<MaintenanceSchedule | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [completing, setCompleting] = useState<MaintenanceSchedule | null>(null)
+
+  const table = useClientTable({
+    rows: schedules,
+    accessors: ACCESSORS,
+    defaultSort: "nextDue",
+    defaultDir: "asc",
+    initialDirs: INITIAL_DIRS,
+  })
 
   async function handleDelete(s: MaintenanceSchedule) {
     if (!confirm(`Delete "${s.title}"?`)) return
@@ -62,17 +83,17 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
+                <SortableTableHead column="title" label="Title" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Next Due</TableHead>
+                <SortableTableHead column="status" label="Status" sortState={table.sortState} onToggle={table.toggleSort} />
+                <SortableTableHead column="nextDue" label="Next Due" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Interval</TableHead>
-                <TableHead>Last Completed</TableHead>
+                <SortableTableHead column="lastCompleted" label="Last Completed" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {schedules.map((s) => {
+              {table.rows.map((s) => {
                 const status = getStatus(s, currentMileage)
                 const StatusIcon = status?.icon
                 return (
@@ -136,6 +157,16 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
               })}
             </TableBody>
           </Table>
+
+          <PaginationBar
+            page={table.page}
+            pageCount={table.pageCount}
+            total={table.total}
+            per={table.per}
+            onPage={table.setPage}
+            onPer={table.setPer}
+            label="schedules"
+          />
         </div>
       )}
 
@@ -161,7 +192,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
 
 function CompleteDialog({ schedule, assetType, currentMileage, onClose }: {
   schedule: MaintenanceSchedule
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   currentMileage?: number | null
   onClose: () => void
 }) {

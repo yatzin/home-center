@@ -10,14 +10,28 @@ import { deleteServiceRecord } from "@/lib/actions/service-records"
 import { ServiceRecordFormDialog } from "./service-record-form-dialog"
 import { AttachmentList } from "@/components/attachments/attachment-list"
 import { AttachmentCount } from "@/components/attachments/attachment-count"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+import { useClientTable, type Accessor } from "@/lib/use-client-table"
+import type { SortDir } from "@/lib/table-params"
 import type { Attachment, ServiceRecord } from "@/app/generated/prisma/client"
 
 type RecordWithAttachments = ServiceRecord & { attachments: Attachment[] }
 
+// Module scope on purpose — a new object each render would re-sort every render.
+const ACCESSORS: Record<string, Accessor<RecordWithAttachments>> = {
+  date: (r) => new Date(r.date).getTime(),
+  title: (r) => r.title,
+  cost: (r) => r.cost,
+  mileage: (r) => r.mileageAtService,
+}
+
+const INITIAL_DIRS: Record<string, SortDir> = { date: "desc", cost: "desc", mileage: "desc" }
+
 interface Props {
   records: RecordWithAttachments[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
 }
 
 export function ServiceRecordList({ records: initialRecords, assetId, assetType }: Props) {
@@ -31,6 +45,14 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
     setPrevInitialRecords(initialRecords)
     setRecords(initialRecords)
   }
+
+  const table = useClientTable({
+    rows: records,
+    accessors: ACCESSORS,
+    defaultSort: "date",
+    defaultDir: "desc",
+    initialDirs: INITIAL_DIRS,
+  })
 
   const editing = editingId ? records.find((r) => r.id === editingId) ?? null : null
 
@@ -66,17 +88,19 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Title</TableHead>
+                <SortableTableHead column="date" label="Date" sortState={table.sortState} onToggle={table.toggleSort} />
+                <SortableTableHead column="title" label="Title" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
-                <TableHead>Cost</TableHead>
-                {assetType === "VEHICLE" && <TableHead>Mileage</TableHead>}
+                <SortableTableHead column="cost" label="Cost" sortState={table.sortState} onToggle={table.toggleSort} />
+                {assetType === "VEHICLE" && (
+                  <SortableTableHead column="mileage" label="Mileage" sortState={table.sortState} onToggle={table.toggleSort} />
+                )}
                 <TableHead>Files</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map((record) => {
+              {table.rows.map((record) => {
                 const expanded = expandedId === record.id
                 return (
                   <Fragment key={record.id}>
@@ -150,6 +174,16 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
               })}
             </TableBody>
           </Table>
+
+          <PaginationBar
+            page={table.page}
+            pageCount={table.pageCount}
+            total={table.total}
+            per={table.per}
+            onPage={table.setPage}
+            onPer={table.setPer}
+            label="records"
+          />
         </div>
       )}
 

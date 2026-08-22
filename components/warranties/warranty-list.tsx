@@ -11,22 +11,39 @@ import { deleteWarranty } from "@/lib/actions/warranties"
 import { WarrantyFormDialog } from "./warranty-form-dialog"
 import { AttachmentList } from "@/components/attachments/attachment-list"
 import { AttachmentCount } from "@/components/attachments/attachment-count"
+import { SortableTableHead } from "@/components/ui/sortable-table-head"
+import { PaginationBar } from "@/components/ui/pagination-bar"
+import { useClientTable, type Accessor } from "@/lib/use-client-table"
+import type { SortDir } from "@/lib/table-params"
 import type { Attachment, Warranty } from "@/app/generated/prisma/client"
 
 type WarrantyWithAttachments = Warranty & { attachments: Attachment[] }
 
+// Status is derived from expirationDate and shares its ordering, so both tokens
+// read the same value.
+const ACCESSORS: Record<string, Accessor<WarrantyWithAttachments>> = {
+  product: (w) => w.productName,
+  purchased: (w) => (w.purchaseDate ? new Date(w.purchaseDate).getTime() : null),
+  expires: (w) => (w.expirationDate ? new Date(w.expirationDate).getTime() : null),
+  status: (w) => (w.expirationDate ? new Date(w.expirationDate).getTime() : null),
+}
+
+const INITIAL_DIRS: Record<string, SortDir> = { purchased: "desc" }
+
 interface Props {
   warranties: WarrantyWithAttachments[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
 }
 
 function warrantyStatus(expirationDate: Date | null) {
   if (!expirationDate) return null
-  const now = new Date()
-  const exp = new Date(expirationDate)
-  const daysLeft = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-  if (daysLeft < 0) return { label: "Expired", variant: "destructive" as const }
+  // Same -0 guard as the global warranties page: Math.ceil of a small negative
+  // is -0, which is not < 0, so a warranty that lapsed hours ago would show
+  // "0d left" instead of "Expired".
+  const ms = new Date(expirationDate).getTime() - Date.now()
+  if (ms < 0) return { label: "Expired", variant: "destructive" as const }
+  const daysLeft = Math.ceil(ms / 86400000)
   if (daysLeft <= 60) return { label: `${daysLeft}d left`, variant: "secondary" as const }
   return { label: "Active", variant: "outline" as const }
 }
@@ -35,6 +52,14 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
   const [editing, setEditing] = useState<Warranty | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const table = useClientTable({
+    rows: warranties,
+    accessors: ACCESSORS,
+    defaultSort: "expires",
+    defaultDir: "asc",
+    initialDirs: INITIAL_DIRS,
+  })
 
   async function handleDelete(w: Warranty) {
     if (!confirm(`Delete warranty for "${w.productName}"?`)) return
@@ -58,17 +83,17 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Product</TableHead>
+                <SortableTableHead column="product" label="Product" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
-                <TableHead>Purchased</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableTableHead column="purchased" label="Purchased" sortState={table.sortState} onToggle={table.toggleSort} />
+                <SortableTableHead column="expires" label="Expires" sortState={table.sortState} onToggle={table.toggleSort} />
+                <SortableTableHead column="status" label="Status" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Files</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {warranties.map((w) => {
+              {table.rows.map((w) => {
                 const status = warrantyStatus(w.expirationDate)
                 const expanded = expandedId === w.id
                 return (
@@ -145,6 +170,16 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
               })}
             </TableBody>
           </Table>
+
+          <PaginationBar
+            page={table.page}
+            pageCount={table.pageCount}
+            total={table.total}
+            per={table.per}
+            onPage={table.setPage}
+            onPer={table.setPer}
+            label="warranties"
+          />
         </div>
       )}
 

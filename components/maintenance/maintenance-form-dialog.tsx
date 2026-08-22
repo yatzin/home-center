@@ -15,7 +15,7 @@ import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE"]),
+  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   intervalDays: z.string().optional(),
@@ -31,7 +31,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE"
+  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   schedule?: MaintenanceSchedule | null
 }
 

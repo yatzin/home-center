@@ -6,10 +6,8 @@ import { toast } from "sonner"
 import { Camera, X, Loader2 } from "lucide-react"
 import { AssetImage } from "./asset-image"
 import { cn } from "@/lib/utils"
-
-type AssetType = "PROPERTY" | "VEHICLE"
-
-const urlSegment: Record<AssetType, string> = { PROPERTY: "properties", VEHICLE: "vehicles" }
+import { assetSegment } from "@/lib/assets"
+import type { AssetType } from "@/app/generated/prisma/client"
 
 export function AssetImageUploader({
   assetType,
@@ -31,7 +29,7 @@ export function AssetImageUploader({
     const formData = new FormData()
     formData.append("file", file)
     try {
-      const res = await fetch(`/api/assets/${urlSegment[assetType]}/${assetId}/image`, {
+      const res = await fetch(`/api/assets/${assetSegment[assetType]}/${assetId}/image`, {
         method: "POST",
         body: formData,
       })
@@ -51,7 +49,7 @@ export function AssetImageUploader({
   async function handleRemove() {
     setBusy(true)
     try {
-      const res = await fetch(`/api/assets/${urlSegment[assetType]}/${assetId}/image`, { method: "DELETE" })
+      const res = await fetch(`/api/assets/${assetSegment[assetType]}/${assetId}/image`, { method: "DELETE" })
       if (!res.ok) {
         toast.error("Couldn't remove photo.")
         return

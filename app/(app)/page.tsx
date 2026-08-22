@@ -6,11 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator } from "lucide-react"
 import { SummaryCard } from "@/components/dashboard/summary-card"
-import type { AssetType } from "@/app/generated/prisma/client"
-
-function assetHref(assetType: AssetType, assetId: string) {
-  return assetType === "PROPERTY" ? `/assets/properties/${assetId}` : `/assets/vehicles/${assetId}`
-}
+import { loadAssetIndex } from "@/lib/assets-server"
+import { assetHref } from "@/lib/assets"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -23,13 +20,14 @@ export default async function DashboardPage() {
   const in60 = new Date(Date.now() + 60 * 86400000)
 
   const [
-    propertyCount, vehicleCount, recordCount,
+    propertyCount, vehicleCount, equipmentCount, recordCount,
     warrantyCount, maintenanceCount,
     recentRecords, urgentMaintenance, expiringWarranties,
-    properties, vehicles,
+    properties, vehicles, equipment, assets,
   ] = await Promise.all([
     prisma.property.count(),
     prisma.vehicle.count(),
+    prisma.equipment.count(),
     prisma.serviceRecord.count(),
     prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
     prisma.maintenanceSchedule.count({ where: { isActive: true, nextDueDate: { lte: in30 } } }),
@@ -46,10 +44,9 @@ export default async function DashboardPage() {
     }),
     prisma.property.findMany({ select: { id: true, name: true, imageFilename: true } }),
     prisma.vehicle.findMany({ select: { id: true, name: true, imageFilename: true } }),
+    prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true } }),
+    loadAssetIndex(),
   ])
-
-  const propMap = Object.fromEntries(properties.map((p) => [p.id, p.name]))
-  const vehMap = Object.fromEntries(vehicles.map((v) => [v.id, v.name]))
 
   const propertyThumbnails = properties
     .filter((p): p is typeof p & { imageFilename: string } => !!p.imageFilename)
@@ -59,6 +56,10 @@ export default async function DashboardPage() {
     .filter((v): v is typeof v & { imageFilename: string } => !!v.imageFilename)
     .slice(0, 3)
     .map((v) => ({ assetType: "VEHICLE" as const, assetId: v.id, imageFilename: v.imageFilename, name: v.name }))
+  const equipmentThumbnails = equipment
+    .filter((e): e is typeof e & { imageFilename: string } => !!e.imageFilename)
+    .slice(0, 3)
+    .map((e) => ({ assetType: "EQUIPMENT" as const, assetId: e.id, imageFilename: e.imageFilename, name: e.name }))
 
   return (
     <div className="space-y-6">
@@ -66,19 +67,17 @@ export default async function DashboardPage() {
         <h1 className="font-heading text-xl font-semibold tracking-tight">
           Welcome back{session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}
         </h1>
-        <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes and vehicles.</p>
+        <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes, vehicles, and equipment.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.3fr_1.3fr_1fr_1fr]">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.2fr_1.2fr_1.2fr_1fr]">
         <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} />
         <SummaryCard icon={<Car />} label="Vehicles" value={vehicleCount} href="/assets/vehicles" thumbnails={vehicleThumbnails} />
+        <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} />
         <div className="flex flex-col gap-4">
           <SummaryCard icon={<Wrench />} label="Service Records" value={recordCount} href="/records" compact />
           <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
-        </div>
-        <div className="flex flex-col gap-4">
           <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
-          <SummaryCard icon={<Refrigerator />} label="Appliances" value="—" compact />
         </div>
       </div>
 
@@ -100,7 +99,7 @@ export default async function DashboardPage() {
             {urgentMaintenance.length === 0 ? (
               <EmptyPanel icon={Clock} message="Nothing due in the next 30 days." />
             ) : urgentMaintenance.map((s) => {
-              const assetName = s.assetType === "PROPERTY" ? propMap[s.assetId] : vehMap[s.assetId]
+              const assetName = assets.assetName(s.assetType, s.assetId)
               const href = assetHref(s.assetType, s.assetId)
               const daysLeft = s.nextDueDate ? Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) : null
               const overdue = daysLeft !== null && daysLeft < 0
@@ -139,7 +138,7 @@ export default async function DashboardPage() {
             {expiringWarranties.length === 0 ? (
               <EmptyPanel icon={ShieldCheck} message="No warranties expiring in the next 60 days." />
             ) : expiringWarranties.map((w) => {
-              const assetName = w.assetType === "PROPERTY" ? propMap[w.assetId] : vehMap[w.assetId]
+              const assetName = assets.assetName(w.assetType, w.assetId)
               const href = assetHref(w.assetType, w.assetId)
               const daysLeft = w.expirationDate ? Math.ceil((new Date(w.expirationDate).getTime() - now.getTime()) / 86400000) : null
               return (
@@ -175,7 +174,7 @@ export default async function DashboardPage() {
             {recentRecords.length === 0 ? (
               <EmptyPanel icon={Wrench} message="No service records yet." />
             ) : recentRecords.map((r) => {
-              const assetName = r.assetType === "PROPERTY" ? propMap[r.assetId] : vehMap[r.assetId]
+              const assetName = assets.assetName(r.assetType, r.assetId)
               const href = assetHref(r.assetType, r.assetId)
               return (
                 <Link

@@ -1,37 +1,75 @@
 import { prisma } from "@/lib/prisma"
+import { redirect } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { SearchBar } from "@/components/search-bar"
 import Link from "next/link"
-import { Building2, Car, Wrench } from "lucide-react"
+import { Wrench } from "lucide-react"
 import { Suspense } from "react"
+import { loadAssetIndex } from "@/lib/assets-server"
+import { assetHref, assetIcon } from "@/lib/assets"
+import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
+import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
+import type { Prisma } from "@/app/generated/prisma/client"
 
-export default async function RecordsPage({ searchParams }: { searchParams: Promise<{ q?: string; assetId?: string }> }) {
-  const { q, assetId } = await searchParams
+const DEFAULT_SORT = "date"
+const DEFAULT_DIR = "desc"
 
-  const [records, properties, vehicles] = await Promise.all([
+// Asset is deliberately absent: the name lives in one of three sibling tables
+// reached through a polymorphic assetId/assetType pair with no foreign key, so
+// SQL can't order by it. The asset filter covers that need instead.
+const SORTABLE: SortMap<Prisma.ServiceRecordOrderByWithRelationInput> = {
+  date: (dir) => [{ date: dir }],
+  title: (dir) => [{ title: dir }],
+  vendor: (dir) => [{ vendor: { sort: dir, nulls: "last" } }],
+  cost: (dir) => [{ cost: { sort: dir, nulls: "last" } }],
+}
+
+export default async function RecordsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const q = typeof params.q === "string" ? params.q : undefined
+  const assetId = typeof params.assetId === "string" ? params.assetId : undefined
+
+  const { page, per, skip, take, orderBy } = parseTableParams({
+    searchParams: params,
+    sortable: SORTABLE,
+    defaultSort: DEFAULT_SORT,
+    defaultDir: DEFAULT_DIR,
+    tiebreaker: { id: "asc" },
+  })
+
+  const where: Prisma.ServiceRecordWhereInput = {
+    AND: [
+      assetId ? { assetId } : {},
+      q ? { OR: [{ title: { contains: q } }, { vendor: { contains: q } }, { description: { contains: q } }] } : {},
+    ],
+  }
+
+  const [records, total, costTotal, assets] = await Promise.all([
     prisma.serviceRecord.findMany({
-      where: {
-        AND: [
-          assetId ? { assetId } : {},
-          q ? { OR: [{ title: { contains: q } }, { vendor: { contains: q } }, { description: { contains: q } }] } : {},
-        ],
-      },
-      include: { attachments: true },
-      orderBy: { date: "desc" },
+      where,
+      // Only the count is rendered, so the attachment rows themselves never need
+      // to cross the wire.
+      include: { _count: { select: { attachments: true } } },
+      orderBy,
+      skip,
+      take,
     }),
-    prisma.property.findMany({ select: { id: true, name: true } }),
-    prisma.vehicle.findMany({ select: { id: true, name: true } }),
+    prisma.serviceRecord.count({ where }),
+    // Aggregated over the whole filtered set — summing the current page would
+    // silently turn this into "total cost of these 25 rows".
+    prisma.serviceRecord.aggregate({ where, _sum: { cost: true } }),
+    loadAssetIndex(),
   ])
 
-  const propMap = Object.fromEntries(properties.map((p) => [p.id, p.name]))
-  const vehMap = Object.fromEntries(vehicles.map((v) => [v.id, v.name]))
+  const pageCount = pageCountOf(total, per)
+  // Keeps the URL honest when a filter shrinks the result below the current page.
+  if (page > pageCount) redirect(`/records${withParams(params, { page: pageCount === 1 ? undefined : pageCount })}`)
 
-  const assetOptions = [
-    ...properties.map((p) => ({ value: p.id, label: p.name })),
-    ...vehicles.map((v) => ({ value: v.id, label: v.name })),
-  ]
-
-  const totalCost = records.reduce((sum, r) => sum + (r.cost ?? 0), 0)
+  const totalCost = costTotal._sum.cost ?? 0
 
   return (
     <div className="space-y-6">
@@ -39,7 +77,7 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
         <div>
           <h1 className="font-heading text-2xl font-semibold">Service Records</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {records.length} record{records.length !== 1 ? "s" : ""}
+            {total} record{total !== 1 ? "s" : ""}
             {totalCost > 0 && ` · $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total`}
           </p>
         </div>
@@ -48,64 +86,77 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
       <Suspense>
         <SearchBar
           placeholder="Search title, vendor, notes…"
-          filters={[{ key: "assetId", placeholder: "All assets", options: assetOptions }]}
+          filters={[{ key: "assetId", placeholder: "All assets", options: assets.options }]}
         />
       </Suspense>
 
-      {records.length === 0 ? (
+      {total === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          <p className="font-medium">No service records yet</p>
-          <p className="text-sm mt-1">Add records from a property or vehicle detail page.</p>
+          <p className="font-medium">No service records {q || assetId ? "match those filters" : "yet"}</p>
+          <p className="text-sm mt-1">
+            {q || assetId ? "Try clearing the search or filter." : "Add records from a property, vehicle, or equipment detail page."}
+          </p>
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">Date</th>
-                <th className="text-left font-medium px-4 py-2.5">Asset</th>
-                <th className="text-left font-medium px-4 py-2.5">Service</th>
-                <th className="text-left font-medium px-4 py-2.5 hidden sm:table-cell">Vendor</th>
-                <th className="text-right font-medium px-4 py-2.5">Cost</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {records.map((r) => {
-                const assetName = r.assetType === "PROPERTY" ? propMap[r.assetId] : vehMap[r.assetId]
-                const assetHref = r.assetType === "PROPERTY"
-                  ? `/assets/properties/${r.assetId}`
-                  : `/assets/vehicles/${r.assetId}`
-                const AssetIcon = r.assetType === "PROPERTY" ? Building2 : Car
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <Suspense>
+                    <UrlSortHead column="date" label="Date" initialDir="desc" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
+                  </Suspense>
+                  <th scope="col" className="text-left font-medium px-4 py-2.5">Asset</th>
+                  <Suspense>
+                    <UrlSortHead column="title" label="Service" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
+                  </Suspense>
+                  <Suspense>
+                    <UrlSortHead column="vendor" label="Vendor" className="hidden sm:table-cell" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
+                  </Suspense>
+                  <Suspense>
+                    <UrlSortHead column="cost" label="Cost" align="right" initialDir="desc" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
+                  </Suspense>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {records.map((r) => {
+                  const assetName = assets.assetName(r.assetType, r.assetId)
+                  const AssetIcon = assetIcon[r.assetType]
 
-                return (
-                  <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                      {new Date(r.date).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={assetHref} className="flex items-center gap-1.5 hover:underline">
-                        <AssetIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        {assetName ?? <span className="text-muted-foreground italic">Unknown</span>}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        {r.title}
-                        {r.attachments.length > 0 && (
-                          <Badge variant="outline" className="h-4 px-1.5 text-xs">{r.attachments.length}</Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{r.vendor}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {r.cost != null ? `$${r.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={r.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {new Date(r.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link href={assetHref(r.assetType, r.assetId)} className="flex items-center gap-1.5 hover:underline">
+                          <AssetIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          {assetName ?? <span className="text-muted-foreground italic">Unknown</span>}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          {r.title}
+                          {r._count.attachments > 0 && (
+                            <Badge variant="outline" className="h-4 px-1.5 text-xs">{r._count.attachments}</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{r.vendor}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {r.cost != null ? `$${r.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : "—"}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <Suspense>
+            <UrlPaginationBar page={page} pageCount={pageCount} total={total} per={per} label="records" />
+          </Suspense>
         </div>
       )}
     </div>

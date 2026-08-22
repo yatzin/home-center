@@ -13,7 +13,11 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { type, id } = await params
-  const assetType = type === "properties" ? "PROPERTY" : type === "vehicles" ? "VEHICLE" : null
+  const assetType =
+    type === "properties" ? "PROPERTY"
+    : type === "vehicles" ? "VEHICLE"
+    : type === "equipment" ? "EQUIPMENT"
+    : null
   if (!assetType) return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
 
   const [serviceAttachments, warrantyAttachments] = await Promise.all([
