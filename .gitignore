@@ -54,3 +54,6 @@ next-env.d.ts
 
 # installed agent skill packages (see skills-lock.json)
 /.agents/skills
+
+# demo seed photo cache (see DEMO-DATA.md)
+/prisma/.demo-photos
