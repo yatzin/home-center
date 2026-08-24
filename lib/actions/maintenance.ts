@@ -18,6 +18,7 @@ const schema = z.object({
   nextDueDate: z.string().optional(),
   nextDueMileage: z.coerce.number().int().min(0).optional().or(z.literal("")),
   reminderDaysBefore: z.coerce.number().int().min(1).default(14),
+  reminderMilesBefore: z.coerce.number().int().min(1).default(500),
 })
 
 function clean(v: z.infer<typeof schema>) {
@@ -31,6 +32,7 @@ function clean(v: z.infer<typeof schema>) {
     nextDueDate: v.nextDueDate ? new Date(v.nextDueDate) : null,
     nextDueMileage: v.nextDueMileage === "" || !v.nextDueMileage ? null : Number(v.nextDueMileage),
     reminderDaysBefore: Number(v.reminderDaysBefore) || 14,
+    reminderMilesBefore: Number(v.reminderMilesBefore) || 500,
     isActive: true,
   }
 }

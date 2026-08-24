@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { createUser, updateUserRole, resetUserPassword, deleteUser, updateSelf } from "@/lib/actions/users"
 import type { User } from "@/app/generated/prisma/client"
 
-const roleLabel: Record<string, string> = { ADMIN: "Admin", USER: "User", READONLY: "Read-only" }
+const roleLabel: Record<string, string> = { ADMIN: "Admin", USER: "User" }
 
 export function UserManagement({ users, currentUserId }: { users: User[]; currentUserId: string }) {
   const [createOpen, setCreateOpen] = useState(false)
@@ -78,7 +78,6 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
                       <SelectContent>
                         <SelectItem value="ADMIN">Admin</SelectItem>
                         <SelectItem value="USER">User</SelectItem>
-                        <SelectItem value="READONLY">Read-only</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -139,7 +138,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
 const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().min(1, "Email is required"),
-  role: z.enum(["ADMIN", "USER", "READONLY"]),
+  role: z.enum(["ADMIN", "USER"]),
 })
 
 function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?: { name: string; password: string }) => void }) {
@@ -178,7 +177,6 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?:
                   <SelectContent>
                     <SelectItem value="ADMIN">Admin — full access + user management</SelectItem>
                     <SelectItem value="USER">User — create/edit records</SelectItem>
-                    <SelectItem value="READONLY">Read-only — view only</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

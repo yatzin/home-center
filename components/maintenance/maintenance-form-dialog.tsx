@@ -23,6 +23,7 @@ const schema = z.object({
   nextDueDate: z.string().optional(),
   nextDueMileage: z.string().optional(),
   reminderDaysBefore: z.string().optional(),
+  reminderMilesBefore: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -38,7 +39,7 @@ interface Props {
 export function MaintenanceFormDialog({ open, onClose, assetId, assetType, schedule }: Props) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { assetId, assetType, title: "", description: "", intervalDays: "", intervalMiles: "", nextDueDate: "", nextDueMileage: "", reminderDaysBefore: "14" },
+    defaultValues: { assetId, assetType, title: "", description: "", intervalDays: "", intervalMiles: "", nextDueDate: "", nextDueMileage: "", reminderDaysBefore: "14", reminderMilesBefore: "500" },
   })
 
   useEffect(() => {
@@ -51,8 +52,9 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
       nextDueDate: schedule.nextDueDate ? new Date(schedule.nextDueDate).toISOString().split("T")[0] : "",
       nextDueMileage: schedule.nextDueMileage?.toString() ?? "",
       reminderDaysBefore: schedule.reminderDaysBefore.toString(),
+      reminderMilesBefore: schedule.reminderMilesBefore.toString(),
     } : {
-      assetId, assetType, title: "", description: "", intervalDays: "", intervalMiles: "", nextDueDate: "", nextDueMileage: "", reminderDaysBefore: "14",
+      assetId, assetType, title: "", description: "", intervalDays: "", intervalMiles: "", nextDueDate: "", nextDueMileage: "", reminderDaysBefore: "14", reminderMilesBefore: "500",
     })
   }, [schedule, open, form, assetId, assetType])
 
@@ -128,6 +130,17 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {assetType === "VEHICLE" && (
+                <FormField control={form.control} name="reminderMilesBefore" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Remind (miles before)</FormLabel>
+                    <FormControl><Input type="number" placeholder="500" {...field} /></FormControl>
+                    <FormDescription className="text-xs">How close to the due mileage to start warning</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
 
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem className="col-span-2">

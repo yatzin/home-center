@@ -8,13 +8,17 @@ import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
+import { scheduleDue, dueBadge, type Due } from "@/lib/maintenance-due"
+import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { Prisma } from "@/app/generated/prisma/client"
 
 const DEFAULT_SORT = "nextDue"
 const DEFAULT_DIR = "asc"
 
-// As on the warranties page, "status" is derived from the due date and orders
-// identically, so the token maps onto nextDueDate.
+// "status" still sorts by nextDueDate. That orders date-driven rows correctly,
+// but a row that is overdue only on mileage sorts by its date, so it won't lead
+// the list. Fixing that means ordering in JS across the whole table rather than
+// in SQL per page — deliberately left alone here.
 const SORTABLE: SortMap<Prisma.MaintenanceScheduleOrderByWithRelationInput> = {
   task: (dir) => [{ title: dir }],
   nextDue: (dir) => [{ nextDueDate: { sort: dir, nulls: "last" } }],
@@ -22,16 +26,10 @@ const SORTABLE: SortMap<Prisma.MaintenanceScheduleOrderByWithRelationInput> = {
   status: (dir) => [{ nextDueDate: { sort: dir, nulls: "last" } }],
 }
 
-function getStatus(nextDueDate: Date | null, reminderDaysBefore: number) {
-  const now = Date.now()
-  if (nextDueDate && new Date(nextDueDate).getTime() < now) {
-    return { label: "Overdue", variant: "destructive" as const, icon: AlertTriangle }
-  }
-  if (nextDueDate) {
-    const days = Math.ceil((new Date(nextDueDate).getTime() - now) / 86400000)
-    if (days <= reminderDaysBefore) return { label: `${days}d`, variant: "secondary" as const, icon: Clock }
-  }
-  return { label: "Active", variant: "outline" as const, icon: CheckCircle2 }
+function statusOf(due: Due) {
+  const badge = dueBadge(due, true)!
+  const icon = due.overdue ? AlertTriangle : due.dueSoon ? Clock : CheckCircle2
+  return { ...badge, label: badge.label === "OK" ? "Active" : badge.label, icon }
 }
 
 export default async function MaintenancePage({
@@ -52,25 +50,32 @@ export default async function MaintenancePage({
 
   const where: Prisma.MaintenanceScheduleWhereInput = { isActive: true }
 
-  const [schedules, total, overdue, dueSoonCandidates, assets] = await Promise.all([
+  const [schedules, total, statusRows, mileage, assets] = await Promise.all([
     prisma.maintenanceSchedule.findMany({ where, orderBy, skip, take }),
     prisma.maintenanceSchedule.count({ where }),
-    prisma.maintenanceSchedule.count({ where: { ...where, nextDueDate: { lt: now } } }),
-    // "Due soon" compares nextDueDate against each row's own reminderDaysBefore,
-    // which is a column-to-column date comparison SQL can't express here. Pull
-    // just those two columns for anything due within a year and finish in JS —
-    // the headline count has to reflect every row, not the current page.
+    // Both headline counts compare a column against another column on the same
+    // row — nextDueDate against reminderDaysBefore, nextDueMileage against the
+    // vehicle's odometer — which SQL can't express here. Pull the six small
+    // columns for every active row and finish in JS; the counts have to reflect
+    // all of them, not just the page being shown.
     prisma.maintenanceSchedule.findMany({
-      where: { ...where, nextDueDate: { gte: now, lte: new Date(now.getTime() + 365 * 86400000) } },
-      select: { nextDueDate: true, reminderDaysBefore: true },
+      where,
+      select: {
+        assetType: true, assetId: true, nextDueDate: true, nextDueMileage: true,
+        reminderDaysBefore: true, reminderMilesBefore: true,
+      },
     }),
+    loadVehicleMileage(),
     loadAssetIndex(),
   ])
 
-  const dueSoon = dueSoonCandidates.filter((s) => {
-    const days = Math.ceil((new Date(s.nextDueDate!).getTime() - now.getTime()) / 86400000)
-    return days >= 0 && days <= s.reminderDaysBefore
-  }).length
+  let overdue = 0
+  let dueSoon = 0
+  for (const row of statusRows) {
+    const due = scheduleDue(row, mileage, now)
+    if (due.overdue) overdue++
+    else if (due.dueSoon) dueSoon++
+  }
 
   const pageCount = pageCountOf(total, per)
   if (page > pageCount) redirect(`/maintenance${withParams(params, { page: pageCount === 1 ? undefined : pageCount })}`)
@@ -116,7 +121,7 @@ export default async function MaintenancePage({
                 {schedules.map((s) => {
                   const assetName = assets.assetName(s.assetType, s.assetId)
                   const AssetIcon = assetIcon[s.assetType]
-                  const status = getStatus(s.nextDueDate, s.reminderDaysBefore)
+                  const status = statusOf(scheduleDue(s, mileage, now))
                   const StatusIcon = status.icon
 
                   return (

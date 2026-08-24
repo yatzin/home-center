@@ -59,7 +59,7 @@ A containerized web application for households to track houses and vehicles: ser
 | name | string | |
 | email | string | unique |
 | passwordHash | string | bcrypt |
-| role | enum | `ADMIN`, `USER`, `READONLY` |
+| role | enum | `ADMIN`, `USER` |
 | createdAt | DateTime | |
 
 ### Properties (Houses, Condos, etc.)
@@ -238,7 +238,6 @@ A containerized web application for households to track houses and vehicles: ser
 |---|---|
 | `ADMIN` | Full access, user management, delete records |
 | `USER` | Create/edit all records, cannot manage users |
-| `READONLY` | View everything, no writes |
 
 - No self-registration — an admin creates accounts
 - Password change on first login for new accounts

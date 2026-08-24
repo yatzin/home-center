@@ -9,7 +9,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Warranties** — track coverage so you know what's still protected
 - **Maintenance reminders** — get notified before something's due
 - **Receipts & photos** — attach files to any record
-- **Multiple users** — admin, standard, and read-only accounts
+- **Multiple users** — admin and standard accounts
 - **Local login** — no third-party account required, your data stays on your hardware
 
 ## Screenshot
@@ -71,8 +71,54 @@ Update the volume path to the folder you created in step 1.
 | `AUTH_SECRET` | **Yes** | A random secret: `openssl rand -base64 32`. Without it, logins won't work. |
 | `AUTH_URL` | No | The address you'll browse to, e.g. `http://192.168.1.50:3000`. Leave blank — it's auto-detected. |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login. Leave as-is and use `admin@localhost` / `changeme` instead (you'll be forced to change it on first login).  Once the app has your password, this field is ignored in the future. |
+| `NOTIFY_INTERVAL_MINUTES` | No | How often to check for due maintenance and expiring warranties. Defaults to `360` (6 hours). Set `0` to turn reminders off. |
+| `SMTP_HOST` | No | Your mail server, e.g. `smtp.gmail.com`. **Leave blank and no email is ever sent** — the in-app bell still works. |
 
 Everything else can stay at its default.
+
+### Email notifications (optional)
+
+Until a mail server is set up, reminders only appear in the app. There are two
+ways to configure one.
+
+**In the app** (easiest): sign in as an admin and go to **Settings → Mail
+server**. Fill in the server, port, and login, save, then use **Send test
+email** to confirm it works. No restart needed, and the password is stored
+encrypted with your `AUTH_SECRET`.
+
+**Or by environment variable**, if you'd rather bake it into the container:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SMTP_HOST` | — | Mail server hostname. Nothing sends until this is set. |
+| `SMTP_PORT` | `587` | `465` for implicit TLS, `587` for STARTTLS. |
+| `SMTP_USER` / `SMTP_PASS` | — | Login for the mail server. With Gmail or iCloud, use an **app password**, not your account password. Omit both for an unauthenticated LAN relay. |
+| `SMTP_SECURE` | auto | `true` forces TLS. Defaults to on for port 465, off otherwise. |
+| `MAIL_FROM` | `HomeCenter <no-reply@homecenter.local>` | The From address. Many providers require this to match the authenticated account. |
+| `DIGEST_HOUR` | `8` | Hour of day (0–23) for daily and weekly digests. |
+| `MAIL_DRY_RUN` | — | `1` logs each message instead of sending it, so you can check the setup safely. |
+
+**Anything set in Settings wins over the environment variable**, and clearing a
+field in Settings falls back to it. The form labels which values came from the
+environment, so it's clear what's in effect.
+
+Because the stored password is encrypted with `AUTH_SECRET`, **changing
+`AUTH_SECRET` makes it unreadable**. The app detects this, stops sending rather
+than failing silently, and Settings prompts you to enter the password again.
+
+Each user picks their own cadence under **Settings → Email notifications**: off,
+as soon as possible, daily, or weekly. New accounts default to daily.
+
+Two caveats worth knowing:
+
+- Delivery is driven by the same timer as the reminder check, so a digest goes
+  out on the first pass **at or after** `DIGEST_HOUR`, not exactly at it. With
+  the default 6-hour interval it can be up to 6 hours late. Lower
+  `NOTIFY_INTERVAL_MINUTES` if you want tighter timing.
+- "As soon as possible" likewise means the next pass, not instantly.
+
+Emails are only sent for items you haven't already been emailed about, so
+lowering the interval doesn't mean repeat messages.
 
 **4. Start it:**
 

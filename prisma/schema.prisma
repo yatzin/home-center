@@ -12,7 +12,15 @@ datasource db {
 enum Role {
   ADMIN
   USER
-  READONLY
+}
+
+/// How often a user wants due items emailed to them. ASAP means the next
+/// scheduler pass, not instantly — delivery is bounded by NOTIFY_INTERVAL_MINUTES.
+enum EmailDigest {
+  OFF
+  ASAP
+  DAILY
+  WEEKLY
 }
 
 enum PropertyType {
@@ -62,6 +70,10 @@ model User {
   role              Role     @default(USER)
   mustResetPassword Boolean  @default(false)
   createdAt         DateTime @default(now())
+
+  emailDigest   EmailDigest @default(DAILY)
+  /// When this user was last emailed, so a cadence can be measured from it.
+  lastDigestAt  DateTime?
 
   notifications  Notification[]
   serviceRecords ServiceRecord[]
@@ -178,6 +190,7 @@ model MaintenanceSchedule {
   nextDueDate          DateTime?
   nextDueMileage       Int?
   reminderDaysBefore   Int       @default(14)
+  reminderMilesBefore  Int       @default(500)
   isActive             Boolean   @default(true)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -209,6 +222,26 @@ model Attachment {
   maintenanceSchedule   MaintenanceSchedule? @relation(fields: [maintenanceScheduleId], references: [id], onDelete: Cascade)
 }
 
+// ─── Mail settings ────────────────────────────────────────────────────────────
+
+/// Single row (id is always "singleton"). Anything set here overrides the
+/// matching SMTP_* environment variable, so an existing compose file keeps
+/// working and the UI can override it without a container restart.
+model MailSettings {
+  id          String   @id @default("singleton")
+  host        String?
+  port        Int?
+  username    String?
+  /// AES-256-GCM, keyed from AUTH_SECRET — see lib/secret-box.ts. Never leaves
+  /// the server; the UI is only told whether one is stored.
+  passwordEnc String?
+  /// null means "decide from the port", matching the env behaviour.
+  secure      Boolean?
+  fromAddress String?
+  digestHour  Int?
+  updatedAt   DateTime @updatedAt
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 model Notification {
@@ -220,6 +253,9 @@ model Notification {
   relatedEntityId   String?
   relatedEntityType String?
   createdAt         DateTime         @default(now())
+  /// Set once this notification has gone out in a digest email. Null means it
+  /// is still pending delivery, so a failed send is simply retried next pass.
+  emailedAt         DateTime?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

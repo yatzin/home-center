@@ -1,6 +1,6 @@
 "use client"
 
-import { cloneElement, isValidElement, useCallback, useState } from "react"
+import { cloneElement, isValidElement } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -51,20 +51,40 @@ const LARGE_FIT: ThumbFit = {
   // Fraction of each thumbnail left visible before the next one overlaps it.
   fraction: 0.7,
 }
-// Compact thumbnails cap at the 48px the equipment card already used, so a
-// small count still looks the way it did before the card got wider.
-const COMPACT_FIT: ThumbFit = { min: 24, max: 48, fraction: 0.625 }
-// Used for the server render, before the real width is known.
-const ASSUMED_WIDTH = 240
+// Compact thumbnails run ~20% larger than the 48px/0.625 pair the equipment
+// card used before it got wider: a smaller visible fraction buys the extra
+// size out of overlap, and the cap keeps the stack inside the card's height.
+const COMPACT_FIT: ThumbFit = { min: 24, max: 58, fraction: 0.48 }
 // Gap between the end of the thumbnail stack and the text beside it.
 const COMPACT_TEXT_GAP = 16
+// Everything the strip does NOT get: the icon and its gutter on a large card,
+// the reserved text column and the right inset on a compact one.
+const LARGE_RESERVE = 44
+const COMPACT_RESERVE = 92
 
-function thumbnailMetrics(count: number, available: number, fit: ThumbFit) {
-  const raw = available / (1 + (count - 1) * fit.fraction)
-  const size = Math.max(fit.min, Math.min(fit.max, Math.floor(raw)))
-  // Derive the step from the clamped size so the row still ends flush right.
-  const step = count > 1 ? Math.max(0, Math.min(size, Math.floor((available - size) / (count - 1)))) : 0
-  return { size, step, width: size + (count - 1) * step }
+// The sizes are expressed in CSS rather than measured in JS on purpose. A
+// measured layout can only be right after hydration, so the first paint uses a
+// guessed width and the thumbnails visibly snap when the real one arrives.
+// 100cqw is the card content's own width, known to the very first paint, and it
+// keeps tracking the card through resizes for free.
+function thumbnailVars(count: number, fit: ThumbFit, reserve: number) {
+  const divisor = 1 + (count - 1) * fit.fraction
+  const available = `(100cqw - ${reserve}px)`
+  return {
+    "--thumb-size": `clamp(${fit.min}px, calc(${available} / ${divisor}), ${fit.max}px)`,
+    // Derive the step from the clamped size so the row still ends flush right.
+    "--thumb-step":
+      count > 1
+        ? `min(var(--thumb-size), calc((${available} - var(--thumb-size)) / ${count - 1}))`
+        : "0px",
+    "--thumb-stack": `calc(var(--thumb-size) + ${count - 1} * var(--thumb-step))`,
+  } as React.CSSProperties
+}
+
+const THUMB_STYLE: React.CSSProperties = { width: "var(--thumb-size)", aspectRatio: "1" }
+const THUMB_OVERLAP_STYLE: React.CSSProperties = {
+  ...THUMB_STYLE,
+  marginLeft: "calc(var(--thumb-step) - var(--thumb-size))",
 }
 
 export function SummaryCard({ icon, label, value, href, urgent, thumbnails, compact }: {
@@ -75,21 +95,10 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
 }) {
   const router = useRouter()
 
-  // Measured rather than assumed: the card's width changes with the breakpoint,
-  // so a fixed size would only be right at one of them. The observer callback
-  // fires after layout, so this doesn't set state during render.
-  const [available, setAvailable] = useState<number | null>(null)
-  const measureRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return
-    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.width))
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [])
-
-  const metrics = thumbnailMetrics(
+  const thumbVars = thumbnailVars(
     thumbnails?.length ?? 1,
-    available ?? ASSUMED_WIDTH,
-    compact ? COMPACT_FIT : LARGE_FIT
+    compact ? COMPACT_FIT : LARGE_FIT,
+    compact ? COMPACT_RESERVE : LARGE_RESERVE
   )
 
   const cardClassName = cn(
@@ -98,8 +107,10 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
     compact ? "py-2.5" : "py-5"
   )
 
+  // @container makes CardContent the reference for the 100cqw in the thumbnail
+  // sizes, so the strip and the text padding both measure the same width.
   const content = (
-    <CardContent className={cn("relative flex h-full flex-1 flex-col justify-between", compact ? "gap-1.5 px-4" : "gap-3 px-5")}>
+    <CardContent className={cn("@container relative flex h-full flex-1 flex-col justify-between", compact ? "gap-1.5 px-4" : "gap-3 px-5")}>
       <div className="flex items-center justify-between">
         <div
           className={cn(
@@ -113,17 +124,13 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
         {/* Large cards keep their thumbnails in the flow, beside the icon, and
             size themselves to whatever width is left over. */}
         {!compact && thumbnails && thumbnails.length > 0 && (
-          <div ref={measureRef} className="flex min-w-0 flex-1 justify-end pl-3">
+          <div className="flex min-w-0 flex-1 justify-end pl-3" style={thumbVars}>
             {thumbnails.map((t, i) => (
               <ThumbnailLink
                 key={t.assetId}
                 thumbnail={t}
                 className="rounded-xl border-2"
-                style={{
-                  width: metrics.size,
-                  height: metrics.size,
-                  marginLeft: i === 0 ? 0 : metrics.step - metrics.size,
-                }}
+                style={i === 0 ? THUMB_STYLE : THUMB_OVERLAP_STYLE}
               />
             ))}
           </div>
@@ -134,22 +141,20 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
           right edge, vertically centred. In the flow they'd set the row height
           and the card would grow; taken out of it, they can be far larger than
           the 24px icon beside them while the card's height is unchanged. The
-          left-24 leaves 96px clear for the value and label. */}
+          left-28 leaves 112px clear for the value and label. */}
       {compact && thumbnails && thumbnails.length > 0 && (
         <div
-          ref={measureRef}
-          className="pointer-events-none absolute inset-y-0 left-24 right-3 flex items-center justify-end"
+          // Centred vertically, so a larger thumbnail takes evenly from the
+          // space above and below rather than riding up against the top edge.
+          className="pointer-events-none absolute inset-y-0 left-28 right-3 flex items-center justify-end"
+          style={thumbVars}
         >
           {thumbnails.map((t, i) => (
             <ThumbnailLink
               key={t.assetId}
               thumbnail={t}
               className="pointer-events-auto rounded-xl border-2 shadow-sm"
-              style={{
-                width: metrics.size,
-                height: metrics.size,
-                marginLeft: i === 0 ? 0 : metrics.step - metrics.size,
-              }}
+              style={i === 0 ? THUMB_STYLE : THUMB_OVERLAP_STYLE}
             />
           ))}
         </div>
@@ -161,7 +166,7 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
         className="whitespace-nowrap"
         style={
           compact && thumbnails && thumbnails.length > 0
-            ? { paddingRight: metrics.width + COMPACT_TEXT_GAP }
+            ? { ...thumbVars, paddingRight: `calc(var(--thumb-stack) + ${COMPACT_TEXT_GAP}px)` }
             : undefined
         }
       >

@@ -16,6 +16,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
+import { scheduleDue, dueBadge, type MileageIndex } from "@/lib/maintenance-due"
 import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
 
 const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
@@ -35,17 +36,16 @@ interface Props {
 }
 
 function getStatus(s: MaintenanceSchedule, currentMileage?: number | null) {
-  const now = new Date()
-  const overdueByDate = s.nextDueDate && new Date(s.nextDueDate) < now
-  const overdueByMiles = s.nextDueMileage != null && currentMileage != null && currentMileage >= s.nextDueMileage
-  if (overdueByDate || overdueByMiles) return { label: "Overdue", variant: "destructive" as const, icon: AlertTriangle }
-
-  const soonByDate = s.nextDueDate && Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) <= s.reminderDaysBefore
-  const soonByMiles = s.nextDueMileage != null && currentMileage != null && (s.nextDueMileage - currentMileage) <= 500
-  if (soonByDate || soonByMiles) return { label: "Due soon", variant: "secondary" as const, icon: Clock }
-
-  if (s.nextDueDate || s.nextDueMileage) return { label: "OK", variant: "outline" as const, icon: CheckCircle2 }
-  return null
+  // One-entry index: this list only ever shows a single asset's schedules, and
+  // the odometer is already on the page.
+  const mileage: MileageIndex = new Map(
+    currentMileage != null ? [[s.assetId, currentMileage] as const] : []
+  )
+  const due = scheduleDue(s, mileage)
+  const badge = dueBadge(due, s.nextDueDate != null || s.nextDueMileage != null)
+  if (!badge) return null
+  const icon = due.overdue ? AlertTriangle : due.dueSoon ? Clock : CheckCircle2
+  return { ...badge, label: due.dueSoon ? "Due soon" : badge.label, icon }
 }
 
 export function MaintenanceList({ schedules, assetId, assetType, currentMileage }: Props) {

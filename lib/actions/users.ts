@@ -41,13 +41,29 @@ export async function updateSelf(data: { name: string; email: string }) {
   return { success: true }
 }
 
+export async function updateEmailDigest(digest: string) {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  // Anyone can set their own cadence — it only ever affects their own mail.
+  const parsed = z.enum(["OFF", "ASAP", "DAILY", "WEEKLY"]).safeParse(digest)
+  if (!parsed.success) return { error: "Invalid option." }
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { emailDigest: parsed.data },
+  })
+  revalidatePath("/settings")
+  return { success: true }
+}
+
 export async function createUser(data: { name: string; email: string; role: string }) {
   await requireAdmin()
 
   const parsed = z.object({
     name: z.string().min(1),
     email: z.string().min(1),
-    role: z.enum(["ADMIN", "USER", "READONLY"]),
+    role: z.enum(["ADMIN", "USER"]),
   }).safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
@@ -68,7 +84,7 @@ export async function updateUserRole(id: string, role: string) {
   const session = await requireAdmin()
   if (id === session.user.id) return { error: "Cannot change your own role." }
 
-  const parsed = z.enum(["ADMIN", "USER", "READONLY"]).safeParse(role)
+  const parsed = z.enum(["ADMIN", "USER"]).safeParse(role)
   if (!parsed.success) return { error: "Invalid role." }
 
   await prisma.user.update({ where: { id }, data: { role: parsed.data } })

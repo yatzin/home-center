@@ -20,13 +20,10 @@ export class InAppChannel implements NotificationChannel {
   }
 }
 
-// Stub — wire up nodemailer or similar here when ready
-export class EmailChannel implements NotificationChannel {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async send(_payload: NotificationPayload) {
-    // TODO: implement email delivery
-  }
-}
+// Email deliberately isn't a channel. This interface is per-notification, so an
+// email channel would send one message per due item; a check that finds six
+// would send six. Email is a digest instead — see ./digest.ts, which reads what
+// InAppChannel wrote and sends one message covering all of it.
 
 export class NotificationService {
   constructor(private channels: NotificationChannel[]) {}
@@ -36,7 +33,4 @@ export class NotificationService {
   }
 }
 
-export const notificationService = new NotificationService([
-  new InAppChannel(),
-  // new EmailChannel(),  // uncomment to enable email
-])
+export const notificationService = new NotificationService([new InAppChannel()])

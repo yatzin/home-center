@@ -1,81 +1,111 @@
 import { prisma } from "@/lib/prisma"
-import { notificationService } from "./channels"
+import { notificationService, type NotificationPayload } from "./channels"
+import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
+import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 
 const WARRANTY_WARN_DAYS = 60
+const MAINTENANCE_WINDOW_DAYS = 30
 
-// Checks for due maintenance and expiring warranties, creating in-app notifications where needed.
-// Safe to call on every dashboard load — deduplication prevents duplicate notifications.
-export async function checkAndNotify() {
-  const users = await prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "USER"] } },
-    select: { id: true },
-  })
-  if (users.length === 0) return
+const plural = (n: number, unit: string) => `${n.toLocaleString()} ${unit}${n !== 1 ? "s" : ""}`
+
+// Says which of the two clocks ran out, so "due soon" on an oil change reads
+// "in 300 miles" rather than a date the owner may be nowhere near.
+function dueMessage(title: string, due: Due) {
+  if (due.reason === "mileage" && due.milesLeft != null) {
+    return due.milesLeft < 0
+      ? `"${title}" was due ${plural(Math.abs(due.milesLeft), "mile")} ago.`
+      : `"${title}" is due in ${plural(due.milesLeft, "mile")}.`
+  }
+  if (due.daysLeft == null) return `"${title}" is due.`
+  return due.daysLeft < 0
+    ? `"${title}" was due ${plural(Math.abs(due.daysLeft), "day")} ago.`
+    : `"${title}" is due in ${plural(due.daysLeft, "day")}.`
+}
+
+const dedupKey = (userId: string, type: string, entityId: string) => `${userId}:${type}:${entityId}`
+
+/**
+ * Creates in-app notifications for due maintenance and expiring warranties.
+ *
+ * Called by the scheduler in ./scheduler.ts, which is the only caller — it
+ * serialises runs, so the dedup read below can't race another pass writing the
+ * same notification between the read and the write.
+ *
+ * Returns how many notifications it created, for the scheduler's log line.
+ */
+export async function checkAndNotify(): Promise<number> {
+  const users = await prisma.user.findMany({ select: { id: true } })
+  if (users.length === 0) return 0
 
   const now = new Date()
 
-  // ── Maintenance due ───────────────────────────────────────────────────────
-  const schedules = await prisma.maintenanceSchedule.findMany({
-    where: {
-      isActive: true,
-      nextDueDate: { lte: new Date(now.getTime() + 30 * 86400000) }, // within 30 days
-    },
-  })
+  const [schedules, mileage, warranties] = await Promise.all([
+    prisma.maintenanceSchedule.findMany({ where: dueCandidateFilter(MAINTENANCE_WINDOW_DAYS, now) }),
+    loadVehicleMileage(),
+    prisma.warranty.findMany({
+      where: {
+        expirationDate: {
+          gte: now,
+          lte: new Date(now.getTime() + WARRANTY_WARN_DAYS * 86400000),
+        },
+      },
+    }),
+  ])
+
+  // Build every notification this run would want to send, then filter against
+  // what already exists. Asking the database per row per user instead cost one
+  // sequential round-trip each, which grew with both counts.
+  const wanted: NotificationPayload[] = []
 
   for (const s of schedules) {
-    const daysLeft = s.nextDueDate
-      ? Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000)
-      : null
-
-    if (daysLeft === null || daysLeft > s.reminderDaysBefore) continue
+    const due = scheduleDue(s, mileage, now)
+    if (!due.overdue && !due.dueSoon) continue
 
     for (const user of users) {
-      const exists = await prisma.notification.findFirst({
-        where: { userId: user.id, relatedEntityId: s.id, type: "MAINTENANCE_DUE", isRead: false },
-      })
-      if (exists) continue
-
-      const isOverdue = daysLeft < 0
-      await notificationService.send({
+      wanted.push({
         userId: user.id,
         type: "MAINTENANCE_DUE",
-        title: isOverdue ? `Overdue: ${s.title}` : `Due soon: ${s.title}`,
-        message: isOverdue
-          ? `"${s.title}" was due ${Math.abs(daysLeft)} day${Math.abs(daysLeft) !== 1 ? "s" : ""} ago.`
-          : `"${s.title}" is due in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
+        title: due.overdue ? `Overdue: ${s.title}` : `Due soon: ${s.title}`,
+        message: dueMessage(s.title, due),
         relatedEntityId: s.id,
         relatedEntityType: "MaintenanceSchedule",
       })
     }
   }
 
-  // ── Warranties expiring ───────────────────────────────────────────────────
-  const warranties = await prisma.warranty.findMany({
-    where: {
-      expirationDate: {
-        gte: now,
-        lte: new Date(now.getTime() + WARRANTY_WARN_DAYS * 86400000),
-      },
-    },
-  })
-
   for (const w of warranties) {
     const daysLeft = Math.ceil((new Date(w.expirationDate!).getTime() - now.getTime()) / 86400000)
 
     for (const user of users) {
-      const exists = await prisma.notification.findFirst({
-        where: { userId: user.id, relatedEntityId: w.id, type: "WARRANTY_EXPIRING", isRead: false },
-      })
-      if (exists) continue
-
-      await notificationService.send({
+      wanted.push({
         userId: user.id,
         type: "WARRANTY_EXPIRING",
         title: `Warranty expiring: ${w.productName}`,
-        message: `Warranty for "${w.productName}" expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
+        message: `Warranty for "${w.productName}" expires in ${plural(daysLeft, "day")}.`,
         relatedEntityId: w.id,
         relatedEntityType: "Warranty",
       })
     }
   }
+
+  if (wanted.length === 0) return 0
+
+  // One read covers the whole run. An unread notification for the same entity
+  // means the user hasn't dealt with it yet, so don't pile on another.
+  const existing = await prisma.notification.findMany({
+    where: {
+      isRead: false,
+      relatedEntityId: { in: [...new Set(wanted.map((w) => w.relatedEntityId!))] },
+    },
+    select: { userId: true, type: true, relatedEntityId: true },
+  })
+  const seen = new Set(existing.map((e) => dedupKey(e.userId, e.type, e.relatedEntityId!)))
+
+  const fresh = wanted.filter((w) => !seen.has(dedupKey(w.userId, w.type, w.relatedEntityId!)))
+
+  // Sent through the channel service rather than a bulk insert so that adding
+  // an email or push channel still delivers these.
+  for (const payload of fresh) await notificationService.send(payload)
+
+  return fresh.length
 }

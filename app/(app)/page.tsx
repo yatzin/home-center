@@ -1,6 +1,5 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { checkAndNotify } from "@/lib/notifications/checker"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +8,8 @@ import { SummaryCard } from "@/components/dashboard/summary-card"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
 import { assetHref } from "@/lib/assets"
+import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
+import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 
 // Thumbnails per summary card.
 const THUMBNAILS_LARGE = 7
@@ -18,17 +19,13 @@ const THUMBNAILS_COMPACT = 18
 export default async function DashboardPage() {
   const session = await auth()
 
-  // Fire-and-forget: generate notifications for due items without blocking render
-  checkAndNotify().catch(() => {})
-
   const now = new Date()
-  const in30 = new Date(Date.now() + 30 * 86400000)
-  const in60 = new Date(Date.now() + 60 * 86400000)
+  const in60 = new Date(now.getTime() + 60 * 86400000)
 
   const [
     propertyCount, vehicleCount, equipmentCount, recordCount,
-    warrantyCount, maintenanceCount,
-    recentRecords, urgentMaintenance, expiringWarranties,
+    warrantyCount,
+    recentRecords, maintenanceCandidates, mileage, expiringWarranties,
     properties, vehicles, equipment, assets, activity,
   ] = await Promise.all([
     prisma.property.count(),
@@ -36,13 +33,14 @@ export default async function DashboardPage() {
     prisma.equipment.count(),
     prisma.serviceRecord.count(),
     prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
-    prisma.maintenanceSchedule.count({ where: { isActive: true, nextDueDate: { lte: in30 } } }),
     prisma.serviceRecord.findMany({ orderBy: { date: "desc" }, take: 5 }),
+    // Everything that could be due either way; narrowed to what actually is,
+    // and counted, below — mileage can't be filtered in SQL.
     prisma.maintenanceSchedule.findMany({
-      where: { isActive: true, nextDueDate: { lte: in30 } },
+      where: dueCandidateFilter(30, now),
       orderBy: { nextDueDate: "asc" },
-      take: 6,
     }),
+    loadVehicleMileage(),
     prisma.warranty.findMany({
       where: { expirationDate: { gte: now, lte: in60 } },
       orderBy: { expirationDate: "asc" },
@@ -54,6 +52,26 @@ export default async function DashboardPage() {
     loadAssetIndex(),
     loadActivityIndex(),
   ])
+
+  // A schedule counts as due when its own date window says so (the card's "30d"
+  // headline), or when the vehicle has reached its due mileage.
+  const dueMaintenance = maintenanceCandidates
+    .map((s) => ({ s, due: scheduleDue(s, mileage, now) }))
+    .filter(({ due }) => due.overdue || due.dueSoon || (due.daysLeft != null && due.daysLeft <= 30))
+
+  const maintenanceCount = dueMaintenance.length
+
+  // Rank by severity before taking the top few. Ordering by date alone would
+  // hide a truck that's 300 miles past an oil change but whose due date is two
+  // years out — it would be counted above and then never shown.
+  const severity = (d: Due) => (d.overdue ? 0 : d.dueSoon ? 1 : 2)
+  const urgentMaintenance = dueMaintenance
+    .sort((a, b) =>
+      severity(a.due) - severity(b.due) ||
+      (a.due.daysLeft ?? Infinity) - (b.due.daysLeft ?? Infinity) ||
+      a.s.id.localeCompare(b.s.id)
+    )
+    .slice(0, 6)
 
   const propertyThumbnails = mostRecentlyActive(properties, "PROPERTY", activity, THUMBNAILS_LARGE)
   const vehicleThumbnails = mostRecentlyActive(vehicles, "VEHICLE", activity, THUMBNAILS_LARGE)
@@ -104,11 +122,10 @@ export default async function DashboardPage() {
           <CardContent className="space-y-1 px-5">
             {urgentMaintenance.length === 0 ? (
               <EmptyPanel icon={Clock} message="Nothing due in the next 30 days." />
-            ) : urgentMaintenance.map((s) => {
+            ) : urgentMaintenance.map(({ s, due }) => {
               const assetName = assets.assetName(s.assetType, s.assetId)
               const href = assetHref(s.assetType, s.assetId)
-              const daysLeft = s.nextDueDate ? Math.ceil((new Date(s.nextDueDate).getTime() - now.getTime()) / 86400000) : null
-              const overdue = daysLeft !== null && daysLeft < 0
+              const overdue = due.overdue
               return (
                 <Link
                   key={s.id}
@@ -119,7 +136,7 @@ export default async function DashboardPage() {
                   <span className="flex-1 truncate">{s.title}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
                   <Badge variant={overdue ? "destructive" : "secondary"} className="shrink-0 text-xs">
-                    {daysLeft === null ? "—" : daysLeft < 0 ? `${Math.abs(daysLeft)}d late` : daysLeft === 0 ? "Today" : `${daysLeft}d`}
+                    {dueLabel(due)}
                   </Badge>
                 </Link>
               )
@@ -200,6 +217,18 @@ export default async function DashboardPage() {
       </div>
     </div>
   )
+}
+
+// Mileage-driven rows have no meaningful day count, so they report miles.
+function dueLabel(due: Due) {
+  if (due.reason === "mileage" && due.milesLeft != null) {
+    return due.milesLeft < 0
+      ? `${Math.abs(due.milesLeft).toLocaleString()} mi over`
+      : `${due.milesLeft.toLocaleString()} mi`
+  }
+  const d = due.daysLeft
+  if (d === null) return "—"
+  return d < 0 ? `${Math.abs(d)}d late` : d === 0 ? "Today" : `${d}d`
 }
 
 function EmptyPanel({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
