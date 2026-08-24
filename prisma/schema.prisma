@@ -45,6 +45,18 @@ enum MeterUnit {
   HOURS
 }
 
+/// What kind of spending a service record represents, as distinct from what it was
+/// spent on. Nullable on the record: anything logged before categories existed is
+/// genuinely uncategorized, and the reports say so rather than guessing.
+enum ServiceCategory {
+  ROUTINE
+  REPAIR
+  UPGRADE
+  INSPECTION
+  PARTS
+  OTHER
+}
+
 enum EquipmentCategory {
   APPLIANCE
   HVAC
@@ -116,6 +128,7 @@ model Vehicle {
   vin            String?
   color          String?
   purchaseDate   DateTime?
+  purchasePrice  Float?
   currentMileage Int?
   meterUnit      MeterUnit @default(MILES)
   notes          String?
@@ -155,6 +168,7 @@ model ServiceRecord {
   description      String?
   vendor           String?
   cost             Float?
+  category         ServiceCategory?
   mileageAtService Int?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
