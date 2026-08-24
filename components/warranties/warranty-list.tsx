@@ -1,6 +1,7 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useCallback, useState } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +35,9 @@ interface Props {
   warranties: WarrantyWithAttachments[]
   assetId: string
   assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
+  equipment?: { id: string; name: string }[]
+  propertyName?: string
 }
 
 function warrantyStatus(expirationDate: Date | null) {
@@ -48,10 +52,17 @@ function warrantyStatus(expirationDate: Date | null) {
   return { label: "Active", variant: "outline" as const }
 }
 
-export function WarrantyList({ warranties, assetId, assetType }: Props) {
-  const [editing, setEditing] = useState<Warranty | null>(null)
+export function WarrantyList({ warranties: initialWarranties, assetId, assetType, equipment, propertyName }: Props) {
+  const [warranties, setWarranties] = useState(initialWarranties)
+  const [prevInitialWarranties, setPrevInitialWarranties] = useState(initialWarranties)
+  const [editing, setEditing] = useState<WarrantyWithAttachments | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  if (initialWarranties !== prevInitialWarranties) {
+    setPrevInitialWarranties(initialWarranties)
+    setWarranties(initialWarranties)
+  }
 
   const table = useClientTable({
     rows: warranties,
@@ -60,6 +71,20 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
     defaultDir: "asc",
     initialDirs: INITIAL_DIRS,
   })
+
+  const showSource = !!equipment
+  const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
+  const columnCount = 7 + (showSource ? 1 : 0)
+
+  const handleAttachmentDeleted = useCallback((warrantyId: string, attachmentId: string) => {
+    setWarranties((prev) =>
+      prev.map((w) =>
+        w.id === warrantyId
+          ? { ...w, attachments: w.attachments.filter((a) => a.id !== attachmentId) }
+          : w
+      )
+    )
+  }, [])
 
   async function handleDelete(w: Warranty) {
     if (!confirm(`Delete warranty for "${w.productName}"?`)) return
@@ -85,6 +110,7 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
               <TableRow>
                 <SortableTableHead column="product" label="Product" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
+                {showSource && <TableHead>Source</TableHead>}
                 <SortableTableHead column="purchased" label="Purchased" sortState={table.sortState} onToggle={table.toggleSort} />
                 <SortableTableHead column="expires" label="Expires" sortState={table.sortState} onToggle={table.toggleSort} />
                 <SortableTableHead column="status" label="Status" sortState={table.sortState} onToggle={table.toggleSort} />
@@ -118,6 +144,17 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      {showSource && (
+                        <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {w.assetType === "EQUIPMENT" ? (
+                            <Link href={`/assets/equipment/${w.assetId}`} className="text-sm hover:underline">
+                              {equipmentNames?.[w.assetId] ?? "Equipment"}
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Property</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {w.purchaseDate ? new Date(w.purchaseDate).toLocaleDateString() : <span>—</span>}
                       </TableCell>
@@ -152,7 +189,7 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
                     </TableRow>
                     {expanded && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={7} className="bg-muted/30 whitespace-normal">
+                        <TableCell colSpan={columnCount} className="bg-muted/30 whitespace-normal">
                           <div className="space-y-3">
                             {(w.vendorPhone || w.vendorEmail) && (
                               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -189,6 +226,10 @@ export function WarrantyList({ warranties, assetId, assetType }: Props) {
         assetId={assetId}
         assetType={assetType}
         warranty={editing}
+        attachments={editing?.attachments ?? []}
+        onAttachmentDeleted={handleAttachmentDeleted}
+        equipmentOptions={equipment}
+        propertyName={propertyName}
       />
     </>
   )

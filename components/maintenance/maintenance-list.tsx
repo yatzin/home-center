@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -16,8 +17,8 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
-import { scheduleDue, dueBadge, type MileageIndex } from "@/lib/maintenance-due"
-import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
+import { scheduleDue, dueBadge, meterUnitShort, meterUnitNoun, type MileageIndex } from "@/lib/maintenance-due"
+import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
 
 const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
   title: (s) => s.title,
@@ -33,13 +34,18 @@ interface Props {
   assetId: string
   assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   currentMileage?: number | null
+  /** Vehicle's odometer unit. Defaults to miles. */
+  meterUnit?: MeterUnit
+  /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
+  equipment?: { id: string; name: string }[]
+  propertyName?: string
 }
 
-function getStatus(s: MaintenanceSchedule, currentMileage?: number | null) {
+function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undefined, meterUnit: MeterUnit) {
   // One-entry index: this list only ever shows a single asset's schedules, and
   // the odometer is already on the page.
   const mileage: MileageIndex = new Map(
-    currentMileage != null ? [[s.assetId, currentMileage] as const] : []
+    currentMileage != null ? [[s.assetId, { value: currentMileage, unit: meterUnit }] as const] : []
   )
   const due = scheduleDue(s, mileage)
   const badge = dueBadge(due, s.nextDueDate != null || s.nextDueMileage != null)
@@ -48,7 +54,7 @@ function getStatus(s: MaintenanceSchedule, currentMileage?: number | null) {
   return { ...badge, label: due.dueSoon ? "Due soon" : badge.label, icon }
 }
 
-export function MaintenanceList({ schedules, assetId, assetType, currentMileage }: Props) {
+export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName }: Props) {
   const [editing, setEditing] = useState<MaintenanceSchedule | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [completing, setCompleting] = useState<MaintenanceSchedule | null>(null)
@@ -60,6 +66,9 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
     defaultDir: "asc",
     initialDirs: INITIAL_DIRS,
   })
+
+  const showSource = !!equipment
+  const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
 
   async function handleDelete(s: MaintenanceSchedule) {
     if (!confirm(`Delete "${s.title}"?`)) return
@@ -85,6 +94,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
               <TableRow>
                 <SortableTableHead column="title" label="Title" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
+                {showSource && <TableHead>Source</TableHead>}
                 <SortableTableHead column="status" label="Status" sortState={table.sortState} onToggle={table.toggleSort} />
                 <SortableTableHead column="nextDue" label="Next Due" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Interval</TableHead>
@@ -94,7 +104,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
             </TableHeader>
             <TableBody>
               {table.rows.map((s) => {
-                const status = getStatus(s, currentMileage)
+                const status = getStatus(s, currentMileage, meterUnit)
                 const StatusIcon = status?.icon
                 return (
                   <TableRow
@@ -115,6 +125,17 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
+                    {showSource && (
+                      <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {s.assetType === "EQUIPMENT" ? (
+                          <Link href={`/assets/equipment/${s.assetId}`} className="text-sm hover:underline">
+                            {equipmentNames?.[s.assetId] ?? "Equipment"}
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">Property</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       {status && (
                         <Badge variant={status.variant} className="gap-1">
@@ -125,12 +146,12 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {s.nextDueDate && <div>{new Date(s.nextDueDate).toLocaleDateString()}</div>}
-                      {s.nextDueMileage != null && <div>{s.nextDueMileage.toLocaleString()} mi</div>}
+                      {s.nextDueMileage != null && <div>{s.nextDueMileage.toLocaleString()} {meterUnitShort(meterUnit)}</div>}
                       {!s.nextDueDate && s.nextDueMileage == null && "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {s.intervalDays && <div>Every {s.intervalDays}d</div>}
-                      {s.intervalMiles && <div>Every {s.intervalMiles.toLocaleString()} mi</div>}
+                      {s.intervalMiles && <div>Every {s.intervalMiles.toLocaleString()} {meterUnitShort(meterUnit)}</div>}
                       {!s.intervalDays && !s.intervalMiles && "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -176,6 +197,9 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
         assetId={assetId}
         assetType={assetType}
         schedule={editing}
+        equipmentOptions={equipment}
+        propertyName={propertyName}
+        meterUnit={meterUnit}
       />
 
       {completing && (
@@ -183,6 +207,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
           schedule={completing}
           assetType={assetType}
           currentMileage={currentMileage}
+          meterUnit={meterUnit}
           onClose={() => setCompleting(null)}
         />
       )}
@@ -190,10 +215,11 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage 
   )
 }
 
-function CompleteDialog({ schedule, assetType, currentMileage, onClose }: {
+function CompleteDialog({ schedule, assetType, currentMileage, meterUnit, onClose }: {
   schedule: MaintenanceSchedule
   assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
   currentMileage?: number | null
+  meterUnit: MeterUnit
   onClose: () => void
 }) {
   const { register, handleSubmit, formState: { isSubmitting } } = useForm({
@@ -223,8 +249,8 @@ function CompleteDialog({ schedule, assetType, currentMileage, onClose }: {
           </div>
           {assetType === "VEHICLE" && (
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Mileage at Completion</label>
-              <Input type="number" placeholder="45230" {...register("completedMileage")} />
+              <label className="text-sm font-medium">{meterUnitNoun(meterUnit)} at Completion</label>
+              <Input type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...register("completedMileage")} />
             </div>
           )}
           <DialogFooter>

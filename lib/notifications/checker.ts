@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { notificationService, type NotificationPayload } from "./channels"
-import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
+import { scheduleDue, dueCandidateFilter, meterUnitWord, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 
 const WARRANTY_WARN_DAYS = 60
@@ -12,9 +12,10 @@ const plural = (n: number, unit: string) => `${n.toLocaleString()} ${unit}${n !=
 // "in 300 miles" rather than a date the owner may be nowhere near.
 function dueMessage(title: string, due: Due) {
   if (due.reason === "mileage" && due.milesLeft != null) {
+    const word = meterUnitWord(due.meterUnit ?? "MILES")
     return due.milesLeft < 0
-      ? `"${title}" was due ${plural(Math.abs(due.milesLeft), "mile")} ago.`
-      : `"${title}" is due in ${plural(due.milesLeft, "mile")}.`
+      ? `"${title}" was due ${plural(Math.abs(due.milesLeft), word)} ago.`
+      : `"${title}" is due in ${plural(due.milesLeft, word)}.`
   }
   if (due.daysLeft == null) return `"${title}" is due.`
   return due.daysLeft < 0

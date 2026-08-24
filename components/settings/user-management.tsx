@@ -73,7 +73,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
                   ) : (
                     <Select value={u.role} onValueChange={(v) => handleRoleChange(u.id, v ?? u.role)}>
                       <SelectTrigger className="h-7 w-28 text-xs">
-                        <SelectValue />
+                        <SelectValue>{(v: keyof typeof roleLabel) => roleLabel[v]}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ADMIN">Admin</SelectItem>
@@ -173,7 +173,7 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?:
               <FormItem>
                 <FormLabel>Role *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <FormControl><SelectTrigger><SelectValue>{(v: keyof typeof roleLabel) => roleLabel[v]}</SelectValue></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value="ADMIN">Admin — full access + user management</SelectItem>
                     <SelectItem value="USER">User — create/edit records</SelectItem>

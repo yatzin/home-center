@@ -13,6 +13,7 @@ import { AssetViewToggle } from "@/components/assets/asset-view-toggle"
 import { useAssetView } from "@/components/assets/use-asset-view"
 import type { Accessor } from "@/lib/use-client-table"
 import type { AssetView } from "@/lib/asset-view"
+import { meterUnitShort } from "@/lib/maintenance-due"
 import type { Vehicle } from "@/app/generated/prisma/client"
 
 const ACCESSORS: Record<string, Accessor<Vehicle>> = {
@@ -28,7 +29,7 @@ const COLUMNS: AssetColumn<Vehicle>[] = [
   { key: "name", label: "Name", cell: (v) => <span className="font-medium">{v.name}</span> },
   { key: "year", label: "Year", className: "text-muted-foreground whitespace-nowrap", cell: (v) => v.year },
   { key: "make", label: "Make / Model", className: "text-muted-foreground", cell: (v) => `${v.make} ${v.model}` },
-  { key: "currentMileage", label: "Mileage", className: "text-muted-foreground whitespace-nowrap tabular-nums", cell: (v) => (v.currentMileage != null ? `${v.currentMileage.toLocaleString()} mi` : "—") },
+  { key: "currentMileage", label: "Mileage", className: "text-muted-foreground whitespace-nowrap tabular-nums", cell: (v) => (v.currentMileage != null ? `${v.currentMileage.toLocaleString()} ${meterUnitShort(v.meterUnit)}` : "—") },
   { key: "color", label: "Color", className: "text-muted-foreground", cell: (v) => v.color ?? "—" },
   { key: "vin", label: "VIN", className: "text-muted-foreground font-mono text-xs max-w-[180px] truncate", cell: (v) => v.vin ?? "—" },
 ]
@@ -40,7 +41,7 @@ function toCard(v: Vehicle) {
     name: v.name,
     subtitle: `${v.year} ${v.make} ${v.model}`,
     meta: [
-      ...(v.currentMileage != null ? [{ icon: Gauge, text: `${v.currentMileage.toLocaleString()} mi` }] : []),
+      ...(v.currentMileage != null ? [{ icon: Gauge, text: `${v.currentMileage.toLocaleString()} ${meterUnitShort(v.meterUnit)}` }] : []),
       ...(v.color ? [{ text: v.color }] : []),
     ],
     mono: v.vin ? `VIN: ${v.vin}` : null,

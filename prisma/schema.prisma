@@ -37,6 +37,14 @@ enum AssetType {
   EQUIPMENT
 }
 
+/// What a vehicle's odometer-style field on maintenance schedules and service
+/// records actually counts — miles for cars, hours for engines with an hour
+/// meter instead (mowers, generators, boats, tractors).
+enum MeterUnit {
+  MILES
+  HOURS
+}
+
 enum EquipmentCategory {
   APPLIANCE
   HVAC
@@ -109,6 +117,7 @@ model Vehicle {
   color          String?
   purchaseDate   DateTime?
   currentMileage Int?
+  meterUnit      MeterUnit @default(MILES)
   notes          String?
   imageFilename  String?
   createdAt      DateTime  @default(now())

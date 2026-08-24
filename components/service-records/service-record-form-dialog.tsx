@@ -11,10 +11,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createServiceRecord, updateServiceRecord } from "@/lib/actions/service-records"
 import { deleteAttachment } from "@/lib/actions/attachments"
+import { meterUnitNoun } from "@/lib/maintenance-due"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
-import type { Attachment, ServiceRecord } from "@/app/generated/prisma/client"
+import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
@@ -37,6 +39,15 @@ interface Props {
   record?: ServiceRecord | null
   attachments?: Attachment[]
   onAttachmentDeleted?: (recordId: string, attachmentId: string) => void
+  /** When set (property view), shows a target picker: this property or one of its equipment. */
+  equipmentOptions?: { id: string; name: string }[]
+  propertyName?: string
+  /** Vehicle's odometer unit, for the mileage field's label. Defaults to miles. */
+  meterUnit?: MeterUnit
+}
+
+function targetKey(assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT", assetId: string) {
+  return `${assetType}:${assetId}`
 }
 
 function fileIcon(mimeType: string) {
@@ -50,7 +61,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, record, attachments: initialAttachments = [], onAttachmentDeleted }: Props) {
+export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, record, attachments: initialAttachments = [], onAttachmentDeleted, equipmentOptions, propertyName = "This property", meterUnit = "MILES" }: Props) {
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
   const [createdRecordId, setCreatedRecordId] = useState<string | null>(null)
@@ -81,7 +92,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
   useEffect(() => {
     if (record) {
       form.reset({
-        assetId, assetType,
+        assetId: record.assetId, assetType: record.assetType,
         date: new Date(record.date).toISOString().split("T")[0],
         title: record.title,
         description: record.description ?? "",
@@ -175,6 +186,35 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {equipmentOptions && equipmentOptions.length > 0 && (
+              <FormItem>
+                <FormLabel>For</FormLabel>
+                <Select
+                  value={targetKey(form.watch("assetType"), form.watch("assetId"))}
+                  onValueChange={(value) => {
+                    if (!value) return
+                    const [type, ...rest] = value.split(":")
+                    form.setValue("assetType", type as FormValues["assetType"])
+                    form.setValue("assetId", rest.join(":"))
+                  }}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue>
+                        {(v: string) => v === targetKey("PROPERTY", assetId) ? propertyName : equipmentOptions.find((e) => targetKey("EQUIPMENT", e.id) === v)?.name ?? v}
+                      </SelectValue>
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={targetKey("PROPERTY", assetId)}>{propertyName}</SelectItem>
+                    {equipmentOptions.map((e) => (
+                      <SelectItem key={e.id} value={targetKey("EQUIPMENT", e.id)}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem>
@@ -211,8 +251,8 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               {assetType === "VEHICLE" && (
                 <FormField control={form.control} name="mileageAtService" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mileage at Service</FormLabel>
-                    <FormControl><Input type="number" placeholder="45230" {...field} /></FormControl>
+                    <FormLabel>{meterUnitNoun(meterUnit)} at Service</FormLabel>
+                    <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -238,7 +278,6 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                     ref={inputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
                     className="hidden"
                     onChange={handleFileSelect}
                   />

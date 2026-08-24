@@ -8,7 +8,7 @@ import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
-import { scheduleDue, dueBadge, type Due } from "@/lib/maintenance-due"
+import { scheduleDue, dueBadge, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { Prisma } from "@/app/generated/prisma/client"
 
@@ -141,7 +141,7 @@ export default async function MaintenancePage({
                       <td className="px-4 py-3 font-medium">{s.title}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
                         {s.nextDueDate ? new Date(s.nextDueDate).toLocaleDateString() : "—"}
-                        {s.nextDueMileage != null && <span className="block text-xs">{s.nextDueMileage.toLocaleString()} mi</span>}
+                        {s.nextDueMileage != null && <span className="block text-xs">{s.nextDueMileage.toLocaleString()} {meterUnitShort(mileage.get(s.assetId)?.unit ?? "MILES")}</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                         {s.lastCompletedDate ? new Date(s.lastCompletedDate).toLocaleDateString() : "Never"}

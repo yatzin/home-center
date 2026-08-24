@@ -17,6 +17,7 @@ const schema = z.object({
   color: z.string().optional(),
   purchaseDate: z.string().optional(),
   currentMileage: z.coerce.number().int().min(0).optional().or(z.literal("")),
+  meterUnit: z.enum(["MILES", "HOURS"]).default("MILES"),
   notes: z.string().optional(),
 })
 
@@ -30,6 +31,7 @@ function clean(v: z.infer<typeof schema>) {
     color: v.color || null,
     purchaseDate: v.purchaseDate ? new Date(v.purchaseDate) : null,
     currentMileage: v.currentMileage === "" || v.currentMileage === undefined ? null : Number(v.currentMileage),
+    meterUnit: v.meterUnit,
     notes: v.notes || null,
   }
 }

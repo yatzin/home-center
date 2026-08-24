@@ -8,7 +8,7 @@ import { SummaryCard } from "@/components/dashboard/summary-card"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
 import { assetHref } from "@/lib/assets"
-import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
+import { scheduleDue, dueCandidateFilter, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 
 // Thumbnails per summary card.
@@ -219,12 +219,13 @@ export default async function DashboardPage() {
   )
 }
 
-// Mileage-driven rows have no meaningful day count, so they report miles.
+// Mileage-driven rows have no meaningful day count, so they report the meter instead.
 function dueLabel(due: Due) {
   if (due.reason === "mileage" && due.milesLeft != null) {
+    const unit = meterUnitShort(due.meterUnit ?? "MILES")
     return due.milesLeft < 0
-      ? `${Math.abs(due.milesLeft).toLocaleString()} mi over`
-      : `${due.milesLeft.toLocaleString()} mi`
+      ? `${Math.abs(due.milesLeft).toLocaleString()} ${unit} over`
+      : `${due.milesLeft.toLocaleString()} ${unit}`
   }
   const d = due.daysLeft
   if (d === null) return "—"

@@ -17,11 +17,37 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await prisma.property.findUnique({ where: { id } })
   if (!property) notFound()
 
-  const [serviceRecords, warranties, maintenanceSchedules] = await Promise.all([
+  const [propertyServiceRecords, propertyWarranties, propertyMaintenanceSchedules, equipment] = await Promise.all([
     prisma.serviceRecord.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.warranty.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { expirationDate: "asc" } }),
     prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "PROPERTY", isActive: true }, orderBy: { nextDueDate: "asc" } }),
+    prisma.equipment.findMany({ where: { propertyId: id }, select: { id: true, name: true } }),
   ])
+
+  const equipmentIds = equipment.map((e) => e.id)
+
+  const [equipmentServiceRecords, equipmentWarranties, equipmentMaintenanceSchedules] = equipmentIds.length
+    ? await Promise.all([
+        prisma.serviceRecord.findMany({
+          where: { assetId: { in: equipmentIds }, assetType: "EQUIPMENT" },
+          include: { attachments: true },
+          orderBy: { date: "desc" },
+        }),
+        prisma.warranty.findMany({
+          where: { assetId: { in: equipmentIds }, assetType: "EQUIPMENT" },
+          include: { attachments: true },
+          orderBy: { expirationDate: "asc" },
+        }),
+        prisma.maintenanceSchedule.findMany({
+          where: { assetId: { in: equipmentIds }, assetType: "EQUIPMENT", isActive: true },
+          orderBy: { nextDueDate: "asc" },
+        }),
+      ])
+    : [[], [], []]
+
+  const serviceRecords = [...propertyServiceRecords, ...equipmentServiceRecords]
+  const warranties = [...propertyWarranties, ...equipmentWarranties]
+  const maintenanceSchedules = [...propertyMaintenanceSchedules, ...equipmentMaintenanceSchedules]
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -66,13 +92,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             <TabsTrigger value="maintenance">Maintenance Reminders ({maintenanceSchedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="service" className="mt-4">
-            <ServiceRecordList records={serviceRecords} assetId={id} assetType="PROPERTY" />
+            <ServiceRecordList records={serviceRecords} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
           </TabsContent>
           <TabsContent value="warranties" className="mt-4">
-            <WarrantyList warranties={warranties} assetId={id} assetType="PROPERTY" />
+            <WarrantyList warranties={warranties} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
           </TabsContent>
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" />
+            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
           </TabsContent>
         </Tabs>
       </div>

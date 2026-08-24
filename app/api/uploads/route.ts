@@ -5,15 +5,6 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { randomUUID } from "crypto"
 
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-])
-
 export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -26,9 +17,6 @@ export async function POST(request: NextRequest) {
 
   if (!file || !recordId || !recordType) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-  }
-  if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json({ error: "File type not allowed. Use PDF, JPG, PNG, or WEBP." }, { status: 400 })
   }
   if (file.size > maxBytes) {
     return NextResponse.json({ error: `File exceeds maximum size of ${Math.round(maxBytes / 1024 / 1024)} MB.` }, { status: 400 })

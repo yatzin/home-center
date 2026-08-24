@@ -17,7 +17,7 @@ const schema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   vendor: z.string().optional(),
-  cost: z.coerce.number().min(0).optional().or(z.literal("")),
+  cost: z.coerce.number().optional().or(z.literal("")),
   mileageAtService: z.coerce.number().int().min(0).optional().or(z.literal("")),
 })
 

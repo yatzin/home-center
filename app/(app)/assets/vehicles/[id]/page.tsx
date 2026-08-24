@@ -7,6 +7,7 @@ import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { VehicleEditButton } from "@/components/vehicles/vehicle-edit-button"
+import { meterUnitNoun, meterUnitShort } from "@/lib/maintenance-due"
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -28,7 +29,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           <Stat icon={Factory} label="Make" value={vehicle.make} />
           <Stat icon={Tag} label="Model" value={vehicle.model} />
           <Stat icon={Calendar} label="Year" value={vehicle.year.toString()} />
-          {vehicle.currentMileage != null && <Stat icon={Gauge} label="Mileage" value={`${vehicle.currentMileage.toLocaleString()} mi`} />}
+          {vehicle.currentMileage != null && <Stat icon={Gauge} label={meterUnitNoun(vehicle.meterUnit)} value={`${vehicle.currentMileage.toLocaleString()} ${meterUnitShort(vehicle.meterUnit)}`} />}
           {vehicle.color && <Stat icon={Palette} label="Color" value={vehicle.color} />}
           {vehicle.vin && <Stat icon={Fingerprint} label="VIN" value={vehicle.vin} mono />}
           {vehicle.purchaseDate && <Stat icon={Calendar} label="Purchased" value={new Date(vehicle.purchaseDate).toLocaleDateString()} />}
@@ -63,13 +64,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             <TabsTrigger value="maintenance">Maintenance Reminders ({maintenanceSchedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="service" className="mt-4">
-            <ServiceRecordList records={serviceRecords} assetId={id} assetType="VEHICLE" />
+            <ServiceRecordList records={serviceRecords} assetId={id} assetType="VEHICLE" meterUnit={vehicle.meterUnit} />
           </TabsContent>
           <TabsContent value="warranties" className="mt-4">
             <WarrantyList warranties={warranties} assetId={id} assetType="VEHICLE" />
           </TabsContent>
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="VEHICLE" currentMileage={vehicle.currentMileage} />
+            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="VEHICLE" currentMileage={vehicle.currentMileage} meterUnit={vehicle.meterUnit} />
           </TabsContent>
         </Tabs>
       </div>

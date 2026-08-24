@@ -1,4 +1,16 @@
-import type { AssetType } from "@/app/generated/prisma/client"
+import type { AssetType, MeterUnit } from "@/app/generated/prisma/client"
+
+export function meterUnitShort(unit: MeterUnit) {
+  return unit === "HOURS" ? "hrs" : "mi"
+}
+
+export function meterUnitNoun(unit: MeterUnit) {
+  return unit === "HOURS" ? "Hours" : "Mileage"
+}
+
+export function meterUnitWord(unit: MeterUnit) {
+  return unit === "HOURS" ? "hour" : "mile"
+}
 
 // A schedule can come due two ways: by date, or — for vehicles — by odometer.
 // The rule used to live only in the asset-detail list, with the mileage warning
@@ -21,18 +33,21 @@ export type Due = {
   dueSoon: boolean
   /** Days until due; negative when past due. Null when the schedule has no date. */
   daysLeft: number | null
-  /** Miles until due; negative when past due. Null when it isn't mileage-tracked. */
+  /** Miles (or hours — see meterUnit) until due; negative when past due. Null when it isn't meter-tracked. */
   milesLeft: number | null
   /** Which side of the schedule is driving the status, for wording messages. */
   reason: "date" | "mileage" | null
+  /** Set alongside milesLeft — which unit that number is actually counting. */
+  meterUnit: MeterUnit | null
 }
 
 /**
- * Odometer readings by vehicle id. Only vehicles have one. Built on the server
- * by loadVehicleMileage in lib/maintenance-due-server.ts — this module stays
- * free of Prisma so the asset-detail list can import it from the client.
+ * Odometer/hour-meter readings by vehicle id. Only vehicles have one. Built on
+ * the server by loadVehicleMileage in lib/maintenance-due-server.ts — this
+ * module stays free of Prisma so the asset-detail list can import it from the
+ * client.
  */
-export type MileageIndex = Map<string, number>
+export type MileageIndex = Map<string, { value: number; unit: MeterUnit }>
 
 export function scheduleDue(s: DueInput, mileage: MileageIndex, now: Date = new Date()): Due {
   const daysLeft = s.nextDueDate
@@ -40,7 +55,8 @@ export function scheduleDue(s: DueInput, mileage: MileageIndex, now: Date = new 
     : null
 
   // Mileage only means anything for a vehicle whose odometer we actually know.
-  const current = s.assetType === "VEHICLE" ? mileage.get(s.assetId) : undefined
+  const reading = s.assetType === "VEHICLE" ? mileage.get(s.assetId) : undefined
+  const current = reading?.value
   const milesLeft = s.nextDueMileage != null && current != null ? s.nextDueMileage - current : null
 
   const overdueByDate = daysLeft != null && daysLeft < 0
@@ -57,7 +73,7 @@ export function scheduleDue(s: DueInput, mileage: MileageIndex, now: Date = new 
   if (overdue) reason = overdueByMiles ? "mileage" : "date"
   else if (dueSoon) reason = soonByMiles ? "mileage" : "date"
 
-  return { overdue, dueSoon, daysLeft, milesLeft, reason }
+  return { overdue, dueSoon, daysLeft, milesLeft, reason, meterUnit: milesLeft != null ? (reading?.unit ?? "MILES") : null }
 }
 
 /** Badge wording shared by the maintenance page and the asset-detail list. */
@@ -65,7 +81,7 @@ export function dueBadge(due: Due, hasSchedule: boolean) {
   if (due.overdue) return { label: "Overdue", variant: "destructive" as const }
   if (due.dueSoon) {
     if (due.reason === "mileage" && due.milesLeft != null) {
-      return { label: `${due.milesLeft.toLocaleString()} mi`, variant: "secondary" as const }
+      return { label: `${due.milesLeft.toLocaleString()} ${meterUnitShort(due.meterUnit ?? "MILES")}`, variant: "secondary" as const }
     }
     return { label: due.daysLeft != null ? `${due.daysLeft}d` : "Due soon", variant: "secondary" as const }
   }

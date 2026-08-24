@@ -14,6 +14,10 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { createProperty, updateProperty } from "@/lib/actions/properties"
 import type { Property } from "@/app/generated/prisma/client"
 
+const TYPE_LABELS: Record<string, string> = {
+  HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
+}
+
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   type: z.enum(["HOUSE", "CONDO", "TOWNHOUSE", "LOT", "OTHER"]),
@@ -94,7 +98,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
                 <FormItem>
                   <FormLabel>Type *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue>{(v: string) => TYPE_LABELS[v] ?? v}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="HOUSE">House</SelectItem>
                       <SelectItem value="CONDO">Condo</SelectItem>

@@ -10,8 +10,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createVehicle, updateVehicle } from "@/lib/actions/vehicles"
+import { meterUnitNoun } from "@/lib/maintenance-due"
 import type { Vehicle } from "@/app/generated/prisma/client"
+
+const METER_UNIT_LABELS: Record<string, string> = { MILES: "Miles", HOURS: "Hours" }
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -22,6 +26,7 @@ const schema = z.object({
   color: z.string().optional(),
   purchaseDate: z.string().optional(),
   currentMileage: z.string().optional(),
+  meterUnit: z.enum(["MILES", "HOURS"]),
   notes: z.string().optional(),
 })
 
@@ -38,7 +43,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-      vin: "", color: "", purchaseDate: "", currentMileage: "", notes: "",
+      vin: "", color: "", purchaseDate: "", currentMileage: "", meterUnit: "MILES", notes: "",
     },
   })
 
@@ -53,12 +58,13 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
         color: vehicle.color ?? "",
         purchaseDate: vehicle.purchaseDate ? new Date(vehicle.purchaseDate).toISOString().split("T")[0] : "",
         currentMileage: vehicle.currentMileage?.toString() ?? "",
+        meterUnit: vehicle.meterUnit,
         notes: vehicle.notes ?? "",
       })
     } else {
       form.reset({
         name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-        vin: "", color: "", purchaseDate: "", currentMileage: "", notes: "",
+        vin: "", color: "", purchaseDate: "", currentMileage: "", meterUnit: "MILES", notes: "",
       })
     }
   }, [vehicle, open, form])
@@ -136,8 +142,22 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="currentMileage" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Current Mileage</FormLabel>
-                  <FormControl><Input type="number" placeholder="45000" {...field} /></FormControl>
+                  <FormLabel>Current {meterUnitNoun(form.watch("meterUnit"))}</FormLabel>
+                  <FormControl><Input type="number" placeholder={form.watch("meterUnit") === "HOURS" ? "1250" : "45000"} {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="meterUnit" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tracked In</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => METER_UNIT_LABELS[v] ?? v}</SelectValue></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="MILES">Miles</SelectItem>
+                      <SelectItem value="HOURS">Hours</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />

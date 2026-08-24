@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, useCallback, useState } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
@@ -14,7 +15,8 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
-import type { Attachment, ServiceRecord } from "@/app/generated/prisma/client"
+import { meterUnitShort, meterUnitNoun } from "@/lib/maintenance-due"
+import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
 
 type RecordWithAttachments = ServiceRecord & { attachments: Attachment[] }
 
@@ -32,9 +34,15 @@ interface Props {
   records: RecordWithAttachments[]
   assetId: string
   assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
+  equipment?: { id: string; name: string }[]
+  propertyName?: string
+  /** Vehicle's odometer unit, for the Mileage column header/suffix. Defaults to miles. */
+  meterUnit?: MeterUnit
 }
 
-export function ServiceRecordList({ records: initialRecords, assetId, assetType }: Props) {
+export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES" }: Props) {
+  const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
   const [records, setRecords] = useState(initialRecords)
   const [prevInitialRecords, setPrevInitialRecords] = useState(initialRecords)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -55,6 +63,8 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
   })
 
   const editing = editingId ? records.find((r) => r.id === editingId) ?? null : null
+  const showSource = !!equipmentNames
+  const columnCount = 6 + (assetType === "VEHICLE" ? 1 : 0) + (showSource ? 1 : 0)
 
   const handleAttachmentDeleted = useCallback((recordId: string, attachmentId: string) => {
     setRecords((prev) =>
@@ -91,9 +101,10 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
                 <SortableTableHead column="date" label="Date" sortState={table.sortState} onToggle={table.toggleSort} />
                 <SortableTableHead column="title" label="Title" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Notes</TableHead>
+                {showSource && <TableHead>Source</TableHead>}
                 <SortableTableHead column="cost" label="Cost" sortState={table.sortState} onToggle={table.toggleSort} />
                 {assetType === "VEHICLE" && (
-                  <SortableTableHead column="mileage" label="Mileage" sortState={table.sortState} onToggle={table.toggleSort} />
+                  <SortableTableHead column="mileage" label={meterUnitNoun(meterUnit)} sortState={table.sortState} onToggle={table.toggleSort} />
                 )}
                 <TableHead>Files</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -102,6 +113,7 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
             <TableBody>
               {table.rows.map((record) => {
                 const expanded = expandedId === record.id
+                const isForeign = showSource && record.assetType !== assetType
                 return (
                   <Fragment key={record.id}>
                     <TableRow
@@ -127,12 +139,26 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      {showSource && (
+                        <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          {isForeign ? (
+                            <Link
+                              href={`/assets/equipment/${record.assetId}`}
+                              className="text-sm hover:underline"
+                            >
+                              {equipmentNames?.[record.assetId] ?? "Equipment"}
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Property</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="whitespace-nowrap">
-                        {record.cost != null ? `$${record.cost.toLocaleString()}` : <span className="text-muted-foreground">—</span>}
+                        {record.cost != null ? `${record.cost < 0 ? "-$" : "$"}${Math.abs(record.cost).toLocaleString()}` : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       {assetType === "VEHICLE" && (
                         <TableCell className="whitespace-nowrap">
-                          {record.mileageAtService != null ? `${record.mileageAtService.toLocaleString()} mi` : <span className="text-muted-foreground">—</span>}
+                          {record.mileageAtService != null ? `${record.mileageAtService.toLocaleString()} ${meterUnitShort(meterUnit)}` : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -160,7 +186,7 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
                     </TableRow>
                     {expanded && (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={assetType === "VEHICLE" ? 7 : 6} className="bg-muted/30 whitespace-normal">
+                        <TableCell colSpan={columnCount} className="bg-muted/30 whitespace-normal">
                           <AttachmentList
                             recordId={record.id}
                             recordType="SERVICE"
@@ -195,6 +221,9 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType 
         record={editing}
         attachments={editing?.attachments ?? []}
         onAttachmentDeleted={handleAttachmentDeleted}
+        equipmentOptions={equipment}
+        propertyName={propertyName}
+        meterUnit={meterUnit}
       />
     </>
   )
