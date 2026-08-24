@@ -25,6 +25,7 @@ const schema = z.object({
   vin: z.string().optional(),
   color: z.string().optional(),
   purchaseDate: z.string().optional(),
+  purchasePrice: z.string().optional(),
   currentMileage: z.string().optional(),
   meterUnit: z.enum(["MILES", "HOURS"]),
   notes: z.string().optional(),
@@ -43,7 +44,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-      vin: "", color: "", purchaseDate: "", currentMileage: "", meterUnit: "MILES", notes: "",
+      vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
     },
   })
 
@@ -57,6 +58,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
         vin: vehicle.vin ?? "",
         color: vehicle.color ?? "",
         purchaseDate: vehicle.purchaseDate ? new Date(vehicle.purchaseDate).toISOString().split("T")[0] : "",
+        purchasePrice: vehicle.purchasePrice?.toString() ?? "",
         currentMileage: vehicle.currentMileage?.toString() ?? "",
         meterUnit: vehicle.meterUnit,
         notes: vehicle.notes ?? "",
@@ -64,7 +66,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
     } else {
       form.reset({
         name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-        vin: "", color: "", purchaseDate: "", currentMileage: "", meterUnit: "MILES", notes: "",
+        vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
       })
     }
   }, [vehicle, open, form])
@@ -136,6 +138,14 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
                 <FormItem>
                   <FormLabel>Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="purchasePrice" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purchase Price ($)</FormLabel>
+                  <FormControl><Input type="number" step="0.01" placeholder="28500" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

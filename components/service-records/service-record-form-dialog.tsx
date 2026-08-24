@@ -18,6 +18,9 @@ import { meterUnitNoun } from "@/lib/maintenance-due"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
 
+// Base UI Select has no empty-string option, so "no category" needs a sentinel.
+const NO_CATEGORY = "__none__"
+
 const schema = z.object({
   assetId: z.string(),
   assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
@@ -26,6 +29,7 @@ const schema = z.object({
   description: z.string().optional(),
   vendor: z.string().optional(),
   cost: z.string().optional(),
+  category: z.string().optional(),
   mileageAtService: z.string().optional(),
 })
 
@@ -85,7 +89,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
     defaultValues: {
       assetId, assetType,
       date: new Date().toISOString().split("T")[0],
-      title: "", description: "", vendor: "", cost: "", mileageAtService: "",
+      title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "",
     },
   })
 
@@ -98,10 +102,11 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
         description: record.description ?? "",
         vendor: record.vendor ?? "",
         cost: record.cost?.toString() ?? "",
+        category: record.category ?? NO_CATEGORY,
         mileageAtService: record.mileageAtService?.toString() ?? "",
       })
     } else {
-      form.reset({ assetId, assetType, date: new Date().toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", mileageAtService: "" })
+      form.reset({ assetId, assetType, date: new Date().toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "" })
     }
   }, [record, open, form, assetId, assetType])
 
@@ -127,7 +132,10 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
   }
 
   async function onSubmit(values: FormValues) {
-    const payload = values as unknown as Parameters<typeof createServiceRecord>[0]
+    const payload = {
+      ...values,
+      category: values.category === NO_CATEGORY ? "" : values.category,
+    } as unknown as Parameters<typeof createServiceRecord>[0]
     const existingId = record?.id ?? createdRecordId
     const result = existingId
       ? await updateServiceRecord(existingId, payload)
