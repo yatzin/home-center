@@ -5,16 +5,32 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 ## Features
 
 - **Properties & vehicles** — houses, condos, land, cars, whatever you own
+- **Equipment** — appliances, HVAC, tools, electronics, and other gear tied to a property, with category, manufacturer, model/serial, and purchase info
 - **Service records** — log repairs and maintenance as they happen
-- **Warranties** — track coverage so you know what's still protected
+- **Warranties** — track coverage on a property, vehicle, or piece of equipment so you know what's still protected
 - **Maintenance reminders** — get notified before something's due
 - **Receipts & photos** — attach files to any record
 - **Multiple users** — admin and standard accounts
 - **Local login** — no third-party account required, your data stays on your hardware
+- **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
 
-## Screenshot
+## Screenshots
 
-![HomeCenter dashboard](docs/screenshots/dashboard.JPG)
+![HomeCenter dashboard](docs/screenshots/1.Dashboard.png)
+
+<p>
+<a href="docs/screenshots/2.Properties.png"><img src="docs/screenshots/2.Properties.png" width="32%" alt="Properties"></a>
+<a href="docs/screenshots/3.House.png"><img src="docs/screenshots/3.House.png" width="32%" alt="House"></a>
+<a href="docs/screenshots/4.ServiceRecord.png"><img src="docs/screenshots/4.ServiceRecord.png" width="32%" alt="Service record"></a>
+<a href="docs/screenshots/5.Warranties.png"><img src="docs/screenshots/5.Warranties.png" width="32%" alt="Warranties"></a>
+<a href="docs/screenshots/6.MaintenanceReminders.png"><img src="docs/screenshots/6.MaintenanceReminders.png" width="32%" alt="Maintenance reminders"></a>
+<a href="docs/screenshots/7.Vehicles.png"><img src="docs/screenshots/7.Vehicles.png" width="32%" alt="Vehicles"></a>
+<a href="docs/screenshots/8.VehicleService.png"><img src="docs/screenshots/8.VehicleService.png" width="32%" alt="Vehicle service"></a>
+<a href="docs/screenshots/9.Equipment.png"><img src="docs/screenshots/9.Equipment.png" width="32%" alt="Equipment"></a>
+<a href="docs/screenshots/10.WarrantyOverview.png"><img src="docs/screenshots/10.WarrantyOverview.png" width="32%" alt="Warranty overview"></a>
+<a href="docs/screenshots/11.MaintenanceReminderOverview.png"><img src="docs/screenshots/11.MaintenanceReminderOverview.png" width="32%" alt="Maintenance reminder overview"></a>
+<a href="docs/screenshots/12.EmailNotifications.png"><img src="docs/screenshots/12.EmailNotifications.png" width="32%" alt="Email notifications"></a>
+</p>
 
 ## Requirements
 
