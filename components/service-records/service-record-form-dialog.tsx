@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createServiceRecord, updateServiceRecord } from "@/lib/actions/service-records"
 import { deleteAttachment } from "@/lib/actions/attachments"
 import { meterUnitNoun } from "@/lib/maintenance-due"
+import { SERVICE_CATEGORIES } from "@/lib/costs"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
 
@@ -252,6 +253,28 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                 <FormItem>
                   <FormLabel>Cost ($)</FormLabel>
                   <FormControl><Input type="number" step="0.01" placeholder="89.99" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="category" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Category</FormLabel>
+                  <Select value={field.value} onValueChange={(v) => field.onChange(v ?? NO_CATEGORY)}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Uncategorized">
+                          {(v: string) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label ?? "Uncategorized"}
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NO_CATEGORY}>Uncategorized</SelectItem>
+                      {SERVICE_CATEGORIES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />
