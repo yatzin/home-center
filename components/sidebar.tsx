@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
-  Calendar, Bell, Settings, Menu,
+  Calendar, Bell, Settings, Menu, PiggyBank,
 } from "lucide-react"
 
 const navItems = [
@@ -16,6 +16,7 @@ const navItems = [
   { href: "/assets/vehicles", label: "Vehicles", icon: Car },
   { href: "/assets/equipment", label: "Equipment", icon: Refrigerator },
   { href: "/records", label: "Service Records", icon: Wrench },
+  { href: "/costs", label: "Costs", icon: PiggyBank },
   { href: "/warranties", label: "Warranties", icon: ShieldCheck },
   { href: "/maintenance", label: "Maintenance", icon: Calendar },
   { href: "/notifications", label: "Notifications", icon: Bell },
