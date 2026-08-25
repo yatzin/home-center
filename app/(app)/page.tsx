@@ -3,13 +3,15 @@ import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator } from "lucide-react"
+import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator, PiggyBank } from "lucide-react"
 import { SummaryCard } from "@/components/dashboard/summary-card"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
 import { assetHref } from "@/lib/assets"
 import { scheduleDue, dueCandidateFilter, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
+import { loadCostRecords } from "@/lib/costs-server"
+import { formatMoney, sum, yearToDate } from "@/lib/costs"
 
 // Thumbnails per summary card.
 const THUMBNAILS_LARGE = 7
@@ -26,7 +28,7 @@ export default async function DashboardPage() {
     propertyCount, vehicleCount, equipmentCount, recordCount,
     warrantyCount,
     recentRecords, maintenanceCandidates, mileage, expiringWarranties,
-    properties, vehicles, equipment, assets, activity,
+    properties, vehicles, equipment, assets, activity, costRows,
   ] = await Promise.all([
     prisma.property.count(),
     prisma.vehicle.count(),
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
     prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     loadAssetIndex(),
     loadActivityIndex(),
+    loadCostRecords(),
   ])
 
   // A schedule counts as due when its own date window says so (the card's "30d"
@@ -60,6 +63,12 @@ export default async function DashboardPage() {
     .filter(({ due }) => due.overdue || due.dueSoon || (due.daysLeft != null && due.daysLeft <= 30))
 
   const maintenanceCount = dueMaintenance.length
+
+  // Same window a year earlier, not the whole of last year — comparing March-to-date
+  // against a full twelve months would make every spring look thrifty.
+  const spendThisYear = sum(yearToDate(costRows, now))
+  const spendLastYear = sum(yearToDate(costRows, now, now.getFullYear() - 1))
+  const spendDelta = spendLastYear > 0 ? (spendThisYear - spendLastYear) / spendLastYear : null
 
   // Rank by severity before taking the top few. Ordering by date alone would
   // hide a truck that's 300 miles past an oil change but whose due date is two
@@ -99,6 +108,21 @@ export default async function DashboardPage() {
             <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
             <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
           </div>
+          <div className="col-span-2">
+            <SummaryCard
+              icon={<PiggyBank />}
+              label={`Spent in ${now.getFullYear()}`}
+              value={formatMoney(spendThisYear)}
+              href="/costs"
+              compact
+            />
+          </div>
+          {spendDelta !== null && (
+            <p className="col-span-2 text-xs text-muted-foreground">
+              {spendDelta >= 0 ? "Up" : "Down"} {Math.abs(spendDelta * 100).toFixed(0)}% on the
+              same point last year ({formatMoney(spendLastYear)}).
+            </p>
+          )}
           <div className="col-span-2">
             <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact />
           </div>
