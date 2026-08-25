@@ -5,6 +5,9 @@ import { StackedColumns } from "@/components/charts/stacked-columns"
 import { loadCostRecords } from "@/lib/costs-server"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
+import { cn } from "@/lib/utils"
+import { withParams } from "@/lib/table-params"
+import type { AssetType } from "@/app/generated/prisma/client"
 import {
   CATEGORY_ORDER, averagePerMonth, byAsset, byCategory, byVendor, categoryColor,
   categoryLabel, formatMoney, inYear, parseAssetKey, ranked, stackedByYear, sum,
@@ -15,11 +18,22 @@ const TOP_ASSETS = 8
 const TOP_VENDORS = 6
 const BIGGEST_EXPENSES = 8
 
-export default async function CostsPage() {
-  const now = new Date()
-  const [rows, assets] = await Promise.all([loadCostRecords(), loadAssetIndex()])
+const ASSET_TYPE_FILTERS: { value: AssetType; label: string }[] = [
+  { value: "PROPERTY", label: "Properties" },
+  { value: "VEHICLE", label: "Vehicles" },
+  { value: "EQUIPMENT", label: "Equipment" },
+]
 
-  if (rows.length === 0) {
+export default async function CostsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const now = new Date()
+  const [allRows, assets] = await Promise.all([loadCostRecords(), loadAssetIndex()])
+
+  if (allRows.length === 0) {
     return (
       <div className="space-y-6">
         <Heading />
@@ -28,6 +42,34 @@ export default async function CostsPage() {
           <p className="mt-1 text-sm">
             Add a cost to a service record and this page will start reporting on it.
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Whitelisted before use: both values arrive from the query string.
+  const typeParam = typeof params.type === "string" ? params.type : undefined
+  const assetType = ASSET_TYPE_FILTERS.some((t) => t.value === typeParam)
+    ? (typeParam as AssetType)
+    : undefined
+  const yearParam = Number(typeof params.year === "string" ? params.year : NaN)
+  const year = Number.isInteger(yearParam) ? yearParam : undefined
+
+  // Years come from the unfiltered set so the list doesn't shift when an asset
+  // type is picked.
+  const years = [...new Set(allRows.map((r) => r.date.getFullYear()))].sort((a, b) => b - a)
+
+  const typeRows = assetType ? allRows.filter((r) => r.assetType === assetType) : allRows
+  const rows = year != null ? inYear(typeRows, year) : typeRows
+
+  if (rows.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Heading />
+        <FilterRow params={params} years={years} assetType={assetType} year={year} />
+        <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+          <p className="font-medium">No costs match those filters</p>
+          <p className="mt-1 text-sm">Try a different year or asset type.</p>
         </div>
       </div>
     )
@@ -51,12 +93,15 @@ export default async function CostsPage() {
   return (
     <div className="space-y-6">
       <Heading />
+      <FilterRow params={params} years={years} assetType={assetType} year={year} />
 
+      {/* Year-filter-independent on purpose: these labels name their own periods,
+          so narrowing them to a selected year would make "All time" untrue. */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label={`${thisYear} to date`} value={formatMoney(sum(yearToDate(rows, now)))} />
-        <Kpi label={`All of ${thisYear - 1}`} value={formatMoney(sum(inYear(rows, thisYear - 1)))} />
-        <Kpi label="All time" value={formatMoney(sum(rows))} />
-        <Kpi label="Average per month" value={formatMoney(averagePerMonth(rows, now))} />
+        <Kpi label={`${thisYear} to date`} value={formatMoney(sum(yearToDate(typeRows, now)))} />
+        <Kpi label={`All of ${thisYear - 1}`} value={formatMoney(sum(inYear(typeRows, thisYear - 1)))} />
+        <Kpi label="All time" value={formatMoney(sum(typeRows))} />
+        <Kpi label="Average per month" value={formatMoney(averagePerMonth(typeRows, now))} />
       </div>
 
       <Panel title="Spend by year">
@@ -186,5 +231,63 @@ function BiggestRow({ row, assets }: { row: CostRow; assets: Awaited<ReturnType<
         <span className="shrink-0 tabular-nums">{formatMoney(row.cost)}</span>
       </Link>
     </li>
+  )
+}
+
+function FilterRow({
+  params,
+  years,
+  assetType,
+  year,
+}: {
+  params: Record<string, string | string[] | undefined>
+  years: number[]
+  assetType?: AssetType
+  year?: number
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Assets</span>
+        <FilterLink label="All" href={`/costs${withParams(params, { type: undefined })}`} active={!assetType} />
+        {ASSET_TYPE_FILTERS.map((t) => (
+          <FilterLink
+            key={t.value}
+            label={t.label}
+            href={`/costs${withParams(params, { type: t.value })}`}
+            active={assetType === t.value}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Year</span>
+        <FilterLink label="All" href={`/costs${withParams(params, { year: undefined })}`} active={year == null} />
+        {years.map((y) => (
+          <FilterLink
+            key={y}
+            label={String(y)}
+            href={`/costs${withParams(params, { year: y })}`}
+            active={year === y}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FilterLink({ label, href, active }: { label: string; href: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150",
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+      )}
+    >
+      {label}
+    </Link>
   )
 }
