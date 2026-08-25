@@ -43,10 +43,10 @@ export async function createWarranty(data: z.infer<typeof schema>) {
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
-  await prisma.warranty.create({ data: clean(parsed.data) })
+  const warranty = await prisma.warranty.create({ data: clean(parsed.data) })
   revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/warranties")
-  return { success: true }
+  return { success: true, id: warranty.id }
 }
 
 export async function updateWarranty(id: string, data: z.infer<typeof schema>) {

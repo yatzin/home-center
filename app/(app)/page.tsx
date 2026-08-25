@@ -3,13 +3,19 @@ import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator } from "lucide-react"
+import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator, PiggyBank } from "lucide-react"
 import { SummaryCard } from "@/components/dashboard/summary-card"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
 import { assetHref } from "@/lib/assets"
-import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
+import { scheduleDue, dueCandidateFilter, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
+import { loadCostRecords } from "@/lib/costs-server"
+import { formatMoney, monthSeries, sum, yearToDate } from "@/lib/costs"
+import { MonthColumns } from "@/components/charts/month-columns"
+
+// Months of history in the dashboard's spending chart.
+const SPEND_MONTHS = 6
 
 // Thumbnails per summary card.
 const THUMBNAILS_LARGE = 7
@@ -25,15 +31,14 @@ export default async function DashboardPage() {
   const [
     propertyCount, vehicleCount, equipmentCount, recordCount,
     warrantyCount,
-    recentRecords, maintenanceCandidates, mileage, expiringWarranties,
-    properties, vehicles, equipment, assets, activity,
+    maintenanceCandidates, mileage, expiringWarranties,
+    properties, vehicles, equipment, assets, activity, costRows,
   ] = await Promise.all([
     prisma.property.count(),
     prisma.vehicle.count(),
     prisma.equipment.count(),
     prisma.serviceRecord.count(),
     prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
-    prisma.serviceRecord.findMany({ orderBy: { date: "desc" }, take: 5 }),
     // Everything that could be due either way; narrowed to what actually is,
     // and counted, below — mileage can't be filtered in SQL.
     prisma.maintenanceSchedule.findMany({
@@ -51,6 +56,7 @@ export default async function DashboardPage() {
     prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     loadAssetIndex(),
     loadActivityIndex(),
+    loadCostRecords(),
   ])
 
   // A schedule counts as due when its own date window says so (the card's "30d"
@@ -60,6 +66,13 @@ export default async function DashboardPage() {
     .filter(({ due }) => due.overdue || due.dueSoon || (due.daysLeft != null && due.daysLeft <= 30))
 
   const maintenanceCount = dueMaintenance.length
+
+  // Same window a year earlier, not the whole of last year — comparing March-to-date
+  // against a full twelve months would make every spring look thrifty.
+  const spendThisYear = sum(yearToDate(costRows, now))
+  const spendLastYear = sum(yearToDate(costRows, now, now.getFullYear() - 1))
+  const spendDelta = spendLastYear > 0 ? (spendThisYear - spendLastYear) / spendLastYear : null
+  const monthSpend = monthSeries(costRows, now, SPEND_MONTHS)
 
   // Rank by severity before taking the top few. Ordering by date alone would
   // hide a truck that's 300 miles past an oil change but whose due date is two
@@ -180,38 +193,38 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent service */}
+        {/* Spending */}
         <Card className="py-5">
           <CardHeader className="px-5 pb-1">
             <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
-              Recent Service
+              Spending
               <Link
-                href="/records"
+                href="/costs"
                 className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
               >
                 View all →
               </Link>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 px-5">
-            {recentRecords.length === 0 ? (
-              <EmptyPanel icon={Wrench} message="No service records yet." />
-            ) : recentRecords.map((r) => {
-              const assetName = assets.assetName(r.assetType, r.assetId)
-              const href = assetHref(r.assetType, r.assetId)
-              return (
-                <Link
-                  key={r.id}
-                  href={href}
-                  className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
-                >
-                  <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{r.title}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{new Date(r.date).toLocaleDateString()}</span>
-                </Link>
-              )
-            })}
+          <CardContent className="space-y-4 px-5">
+            {costRows.length === 0 ? (
+              <EmptyPanel icon={PiggyBank} message="No costs recorded yet." />
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold leading-none tabular-nums">{formatMoney(spendThisYear)}</span>
+                    <span className="text-xs text-muted-foreground">in {now.getFullYear()}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {spendDelta === null
+                      ? `Nothing recorded by this point in ${now.getFullYear() - 1}.`
+                      : `${spendDelta >= 0 ? "Up" : "Down"} ${Math.abs(spendDelta * 100).toFixed(0)}% on the same point last year (${formatMoney(spendLastYear)}).`}
+                  </p>
+                </div>
+                <MonthColumns points={monthSpend} />
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -219,12 +232,13 @@ export default async function DashboardPage() {
   )
 }
 
-// Mileage-driven rows have no meaningful day count, so they report miles.
+// Mileage-driven rows have no meaningful day count, so they report the meter instead.
 function dueLabel(due: Due) {
   if (due.reason === "mileage" && due.milesLeft != null) {
+    const unit = meterUnitShort(due.meterUnit ?? "MILES")
     return due.milesLeft < 0
-      ? `${Math.abs(due.milesLeft).toLocaleString()} mi over`
-      : `${due.milesLeft.toLocaleString()} mi`
+      ? `${Math.abs(due.milesLeft).toLocaleString()} ${unit} over`
+      : `${due.milesLeft.toLocaleString()} ${unit}`
   }
   const d = due.daysLeft
   if (d === null) return "—"

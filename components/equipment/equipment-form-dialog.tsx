@@ -12,8 +12,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { createEquipment, updateEquipment } from "@/lib/actions/equipment"
-import { EQUIPMENT_CATEGORIES } from "./categories"
-import type { Equipment } from "@/app/generated/prisma/client"
+import { EQUIPMENT_CATEGORIES, categoryLabel } from "./categories"
+import type { Equipment, EquipmentCategory } from "@/app/generated/prisma/client"
 
 // Base UI Select has no empty-string option, so "unassigned" needs a sentinel.
 const NO_PROPERTY = "__none__"
@@ -116,7 +116,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties }: Pr
                 <FormItem>
                   <FormLabel>Category *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: EquipmentCategory) => categoryLabel(v)}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
                       {EQUIPMENT_CATEGORIES.map((c) => (
                         <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
@@ -131,7 +131,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties }: Pr
                 <FormItem>
                   <FormLabel>Property</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger className="w-full"><SelectValue /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => properties.find((p) => p.id === v)?.name ?? "Not assigned"}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value={NO_PROPERTY}>Not assigned</SelectItem>
                       {properties.map((p) => (

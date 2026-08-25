@@ -73,7 +73,6 @@ export function AttachmentList({ recordId, recordType, attachments: initial }: P
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"
             className="hidden"
             onChange={handleUpload}
             disabled={uploading}

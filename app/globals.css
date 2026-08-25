@@ -81,6 +81,23 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.90 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* Cost report palette. Validated with the dataviz skill's validate_palette.js
+     against this app's own surfaces (--card: #ffffff light, #2e2e2e dark): all
+     six categorical checks pass in both modes, worst adjacent CVD ΔE 9.1 light /
+     8.4 dark, worst adjacent normal-vision ΔE 19.6 / 19.3. Three light slots sit
+     below 3:1 on white, which is why the /costs page ships a table view — that
+     relief is required, not optional. Do not re-pick these by eye. */
+  --cost-routine: #2a78d6;
+  --cost-repair: #eb6834;
+  --cost-upgrade: #1baf7a;
+  --cost-inspection: #eda100;
+  --cost-parts: #e87ba4;
+  --cost-other: #008300;
+  /* An absence, not a hue: grey keeps it from reading as a seventh kind of spend. */
+  --cost-uncategorized: var(--muted-foreground);
+  /* Single hue for nominal bars (assets, vendors), where length already encodes
+     magnitude and colour carries no identity. Matches --primary's hue. */
+  --cost-bar: oklch(0.488 0.243 264.376);
 }
 
 .dark {
@@ -115,6 +132,17 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 14%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* The same six hues re-stepped for the dark card, not an automatic flip. */
+  --cost-routine: #3987e5;
+  --cost-repair: #d95926;
+  --cost-upgrade: #199e70;
+  --cost-inspection: #c98500;
+  --cost-parts: #d55181;
+  --cost-other: #008300;
+  --cost-uncategorized: var(--muted-foreground);
+  /* --primary itself measures only 1.99:1 on the dark card, below the 3:1 floor
+     for marks, so the bar hue is lightened here to 4.24:1. */
+  --cost-bar: oklch(0.66 0.18 264.376);
 }
 
 @layer base {

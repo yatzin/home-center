@@ -37,6 +37,26 @@ enum AssetType {
   EQUIPMENT
 }
 
+/// What a vehicle's odometer-style field on maintenance schedules and service
+/// records actually counts — miles for cars, hours for engines with an hour
+/// meter instead (mowers, generators, boats, tractors).
+enum MeterUnit {
+  MILES
+  HOURS
+}
+
+/// What kind of spending a service record represents, as distinct from what it was
+/// spent on. Nullable on the record: anything logged before categories existed is
+/// genuinely uncategorized, and the reports say so rather than guessing.
+enum ServiceCategory {
+  ROUTINE
+  REPAIR
+  UPGRADE
+  INSPECTION
+  PARTS
+  OTHER
+}
+
 enum EquipmentCategory {
   APPLIANCE
   HVAC
@@ -108,7 +128,9 @@ model Vehicle {
   vin            String?
   color          String?
   purchaseDate   DateTime?
+  purchasePrice  Float?
   currentMileage Int?
+  meterUnit      MeterUnit @default(MILES)
   notes          String?
   imageFilename  String?
   createdAt      DateTime  @default(now())
@@ -146,6 +168,7 @@ model ServiceRecord {
   description      String?
   vendor           String?
   cost             Float?
+  category         ServiceCategory?
   mileageAtService Int?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

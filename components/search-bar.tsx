@@ -47,7 +47,9 @@ export function SearchBar({ placeholder = "Search…", filters = [] }: Props) {
       {filters.map((f) => (
         <Select key={f.key} value={searchParams.get(f.key) ?? ""} onValueChange={(v) => update(f.key, v === "__all__" ? "" : (v ?? ""))}>
           <SelectTrigger className="h-8 text-sm w-44">
-            <SelectValue placeholder={f.placeholder} />
+            <SelectValue placeholder={f.placeholder}>
+              {(v: string) => f.options.find((o) => o.value === v)?.label ?? f.placeholder}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">{f.placeholder}</SelectItem>

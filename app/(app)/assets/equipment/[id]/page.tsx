@@ -9,6 +9,7 @@ import { MaintenanceList } from "@/components/maintenance/maintenance-list"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { EquipmentEditButton } from "@/components/equipment/equipment-edit-button"
 import { categoryLabel } from "@/components/equipment/categories"
+import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 
 export default async function EquipmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -53,6 +54,8 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
             <Stat icon={DollarSign} label="Price" value={`$${equipment.purchasePrice.toLocaleString()}`} />
           )}
         </div>
+
+        <AssetCostPanel assetType="EQUIPMENT" assetId={id} purchasePrice={equipment.purchasePrice} />
 
         {equipment.notes && (
           <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">
