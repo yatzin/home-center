@@ -219,6 +219,33 @@ export function yearSeries(rows: CostRow[]): SparkPoint[] {
   return out
 }
 
+export type MonthPoint = { key: string; label: string; total: number; share: number }
+
+/// The last `count` months, ending with the one `now` falls in, oldest first.
+/// Months with no spending are emitted as zero rather than skipped, for the same
+/// reason yearSeries fills its gaps: a missing bar would misreport the history.
+export function monthSeries(rows: CostRow[], now: Date, count: number): MonthPoint[] {
+  // Pinned to string: left to infer, the template literal narrows K to
+  // `${number}-${number}` and the plain-string lookups below stop type-checking.
+  const totals = rollup<string>(rows, (r) => `${r.date.getFullYear()}-${r.date.getMonth()}`)
+
+  const points = []
+  for (let i = count - 1; i >= 0; i--) {
+    // Day 1 with a possibly-negative month index: Date rolls it back across the
+    // year boundary, so this needs no year arithmetic of its own.
+    const month = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = `${month.getFullYear()}-${month.getMonth()}`
+    points.push({
+      key,
+      label: month.toLocaleString(undefined, { month: "short" }),
+      total: totals.get(key)?.total ?? 0,
+    })
+  }
+
+  const max = Math.max(0, ...points.map((p) => p.total))
+  return points.map((p) => ({ ...p, share: max > 0 ? p.total / max : 0 }))
+}
+
 export function sum(rows: CostRow[]): number {
   return cents(rows.reduce((s, r) => s + r.cost, 0))
 }

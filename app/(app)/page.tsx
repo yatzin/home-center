@@ -11,7 +11,11 @@ import { assetHref } from "@/lib/assets"
 import { scheduleDue, dueCandidateFilter, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { loadCostRecords } from "@/lib/costs-server"
-import { formatMoney, sum, yearToDate } from "@/lib/costs"
+import { formatMoney, monthSeries, sum, yearToDate } from "@/lib/costs"
+import { MonthColumns } from "@/components/charts/month-columns"
+
+// Months of history in the dashboard's spending chart.
+const SPEND_MONTHS = 6
 
 // Thumbnails per summary card.
 const THUMBNAILS_LARGE = 7
@@ -27,7 +31,7 @@ export default async function DashboardPage() {
   const [
     propertyCount, vehicleCount, equipmentCount, recordCount,
     warrantyCount,
-    recentRecords, maintenanceCandidates, mileage, expiringWarranties,
+    maintenanceCandidates, mileage, expiringWarranties,
     properties, vehicles, equipment, assets, activity, costRows,
   ] = await Promise.all([
     prisma.property.count(),
@@ -35,7 +39,6 @@ export default async function DashboardPage() {
     prisma.equipment.count(),
     prisma.serviceRecord.count(),
     prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
-    prisma.serviceRecord.findMany({ orderBy: { date: "desc" }, take: 5 }),
     // Everything that could be due either way; narrowed to what actually is,
     // and counted, below — mileage can't be filtered in SQL.
     prisma.maintenanceSchedule.findMany({
@@ -69,6 +72,7 @@ export default async function DashboardPage() {
   const spendThisYear = sum(yearToDate(costRows, now))
   const spendLastYear = sum(yearToDate(costRows, now, now.getFullYear() - 1))
   const spendDelta = spendLastYear > 0 ? (spendThisYear - spendLastYear) / spendLastYear : null
+  const monthSpend = monthSeries(costRows, now, SPEND_MONTHS)
 
   // Rank by severity before taking the top few. Ordering by date alone would
   // hide a truck that's 300 miles past an oil change but whose due date is two
@@ -108,21 +112,6 @@ export default async function DashboardPage() {
             <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
             <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
           </div>
-          <div className="col-span-2">
-            <SummaryCard
-              icon={<PiggyBank />}
-              label={`Spent in ${now.getFullYear()}`}
-              value={formatMoney(spendThisYear)}
-              href="/costs"
-              compact
-            />
-          </div>
-          {spendDelta !== null && (
-            <p className="col-span-2 text-xs text-muted-foreground">
-              {spendDelta >= 0 ? "Up" : "Down"} {Math.abs(spendDelta * 100).toFixed(0)}% on the
-              same point last year ({formatMoney(spendLastYear)}).
-            </p>
-          )}
           <div className="col-span-2">
             <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact />
           </div>
@@ -204,38 +193,38 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent service */}
+        {/* Spending */}
         <Card className="py-5">
           <CardHeader className="px-5 pb-1">
             <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
-              Recent Service
+              Spending
               <Link
-                href="/records"
+                href="/costs"
                 className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
               >
                 View all →
               </Link>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-1 px-5">
-            {recentRecords.length === 0 ? (
-              <EmptyPanel icon={Wrench} message="No service records yet." />
-            ) : recentRecords.map((r) => {
-              const assetName = assets.assetName(r.assetType, r.assetId)
-              const href = assetHref(r.assetType, r.assetId)
-              return (
-                <Link
-                  key={r.id}
-                  href={href}
-                  className="flex items-center gap-2 rounded-md px-2 py-2.5 text-sm transition-colors duration-150 hover:bg-muted/60"
-                >
-                  <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{r.title}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{assetName}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{new Date(r.date).toLocaleDateString()}</span>
-                </Link>
-              )
-            })}
+          <CardContent className="space-y-4 px-5">
+            {costRows.length === 0 ? (
+              <EmptyPanel icon={PiggyBank} message="No costs recorded yet." />
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold leading-none tabular-nums">{formatMoney(spendThisYear)}</span>
+                    <span className="text-xs text-muted-foreground">in {now.getFullYear()}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {spendDelta === null
+                      ? `Nothing recorded by this point in ${now.getFullYear() - 1}.`
+                      : `${spendDelta >= 0 ? "Up" : "Down"} ${Math.abs(spendDelta * 100).toFixed(0)}% on the same point last year (${formatMoney(spendLastYear)}).`}
+                  </p>
+                </div>
+                <MonthColumns points={monthSpend} />
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
