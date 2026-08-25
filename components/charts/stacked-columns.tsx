@@ -34,8 +34,13 @@ export function StackedColumns({ columns }: { columns: YearColumn[] }) {
                   // A 1.5px surface-coloured border separates touching segments,
                   // so two similar hues never read as one block.
                   className="w-full border-b-[1.5px] border-card first:border-b-0"
+                  // Zero-cost records are kept by design — a no-charge warranty
+                  // visit is a real event — so a year can total $0 while still
+                  // having segments. Dividing 0/0 there would emit NaN, an
+                  // invalid height browsers silently drop; guard it to 0% so the
+                  // segment collapses instead of rendering at an undefined size.
                   style={{
-                    height: `${(segment.total / column.total) * 100}%`,
+                    height: column.total > 0 ? `${(segment.total / column.total) * 100}%` : "0%",
                     backgroundColor: segment.color,
                   }}
                   title={`${column.year} · ${segment.label}: ${formatMoney(segment.total)}`}
@@ -53,6 +58,7 @@ export function StackedColumns({ columns }: { columns: YearColumn[] }) {
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: categoryColor(key) }}
+              aria-hidden="true"
             />
             {categoryLabel(key)}
           </li>
