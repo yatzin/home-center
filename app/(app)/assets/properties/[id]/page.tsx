@@ -7,6 +7,7 @@ import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { PropertyEditButton } from "@/components/properties/property-edit-button"
+import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 
 const typeLabel: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
@@ -62,6 +63,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           {property.purchasePrice && <Stat icon={DollarSign} label="Purchase Price" value={`$${property.purchasePrice.toLocaleString()}`} />}
           {property.purchaseDate && <Stat icon={Calendar} label="Purchased" value={new Date(property.purchaseDate).toLocaleDateString()} />}
         </div>
+
+        <AssetCostPanel assetType="PROPERTY" assetId={id} purchasePrice={property.purchasePrice} />
 
         {property.notes && (
           <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">

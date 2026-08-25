@@ -7,6 +7,7 @@ import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { VehicleEditButton } from "@/components/vehicles/vehicle-edit-button"
+import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 import { meterUnitNoun, meterUnitShort } from "@/lib/maintenance-due"
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -34,6 +35,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           {vehicle.vin && <Stat icon={Fingerprint} label="VIN" value={vehicle.vin} mono />}
           {vehicle.purchaseDate && <Stat icon={Calendar} label="Purchased" value={new Date(vehicle.purchaseDate).toLocaleDateString()} />}
         </div>
+
+        <AssetCostPanel
+          assetType="VEHICLE"
+          assetId={id}
+          purchasePrice={vehicle.purchasePrice}
+          meterUnit={vehicle.meterUnit}
+        />
 
         {vehicle.notes && (
           <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">
