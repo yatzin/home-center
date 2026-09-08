@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Download, Factory, Tag, Fingerprint, MapPin, Building2, DollarSign, Wrench } from "lucide-react"
+import { Calendar, Download, Factory, Tag, Fingerprint, MapPin, Building2, DollarSign, Wrench, FileText } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
@@ -69,6 +69,13 @@ export default async function EquipmentDetailPage({ params }: { params: Promise<
           <h1 className="font-heading text-2xl font-semibold">{equipment.name}</h1>
           <div className="flex shrink-0 items-center gap-2">
             <EquipmentEditButton equipment={equipment} properties={properties} />
+            <Link
+              href={`/reports/equipment/${id}`}
+              target="_blank"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" /> Report
+            </Link>
             <a
               href={`/api/assets/equipment/${id}/download`}
               download

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MapPin, Calendar, DollarSign, Maximize, Download, Home } from "lucide-react"
+import { MapPin, Calendar, DollarSign, Maximize, Download, Home, FileText } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
@@ -78,6 +79,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           <h1 className="font-heading text-2xl font-semibold">{property.name}</h1>
           <div className="flex shrink-0 items-center gap-2">
             <PropertyEditButton property={property} />
+            <Link
+              href={`/reports/properties/${id}`}
+              target="_blank"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" /> Report
+            </Link>
             <a
               href={`/api/assets/properties/${id}/download`}
               download
