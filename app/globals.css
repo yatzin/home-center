@@ -229,3 +229,95 @@
     }
   }
 }
+
+/* ─── Printable asset report ──────────────────────────────────────────────────
+   The report is a document, not a screen: it is ink on paper that happens to be
+   previewable in a browser. So it pins its own light palette rather than reading
+   the theme — a dark-mode reader gets a white sheet on a dark desk, which is what
+   every document editor does and what the print output will actually look like.
+
+   The category hues are repeated here as literals on purpose. They are the same
+   validated light-mode values as --cost-*, but those flip under .dark, and a
+   report printed from a dark-themed session must not come out in dark-mode ink. */
+.report-doc {
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-soft: #565b66;
+  --ink-faint: #878d99;
+  --rule: #e2e5ea;
+  --rule-strong: #c7ccd4;
+  --accent: #2a4d8f;
+
+  --cat-ROUTINE: #2a78d6;
+  --cat-REPAIR: #eb6834;
+  --cat-UPGRADE: #1baf7a;
+  --cat-INSPECTION: #eda100;
+  --cat-PARTS: #e87ba4;
+  --cat-OTHER: #008300;
+  --cat-UNCATEGORIZED: #8a8a8a;
+
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 10.5pt;
+  line-height: 1.5;
+}
+
+/* Chips and rules carry meaning, so they must survive the browser's default
+   "don't waste ink" behaviour. Every one of them is paired with a text label,
+   so a mono printer loses nothing but the cue. */
+.report-doc [data-print-color] {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    /* The app shell fixes the viewport height and hides overflow; a printed
+       document has to be free to run onto as many pages as it needs. */
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .report-sheet {
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  /* A record split across a page boundary is the main way a printed report goes
+     wrong: half a service entry at the foot of one page reads as a different
+     entry from its own continuation. */
+  .report-break-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* A heading stranded at the foot of a page is the same failure in miniature. */
+  .report-section > h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .report-section {
+    break-before: auto;
+  }
+
+  a[href] {
+    text-decoration: none;
+    color: inherit;
+  }
+}
