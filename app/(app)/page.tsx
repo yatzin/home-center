@@ -11,11 +11,12 @@ import { assetHref } from "@/lib/assets"
 import { scheduleDue, dueCandidateFilter, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { loadCostRecords } from "@/lib/costs-server"
-import { formatMoney, monthSeries, sum, yearToDate } from "@/lib/costs"
-import { MonthColumns } from "@/components/charts/month-columns"
+import { bucketed, formatMoney, priorPeriod, sum, yearToDate } from "@/lib/costs"
+import { SpendArea } from "@/components/charts/spend-area"
 
-// Months of history in the dashboard's spending chart.
-const SPEND_MONTHS = 6
+// Months of history in the dashboard's spending chart. Twelve rather than six:
+// six months cannot show a season, and a household's spending is seasonal.
+const SPEND_MONTHS = 12
 
 // Thumbnails per summary card.
 const THUMBNAILS_LARGE = 7
@@ -72,7 +73,11 @@ export default async function DashboardPage() {
   const spendThisYear = sum(yearToDate(costRows, now))
   const spendLastYear = sum(yearToDate(costRows, now, now.getFullYear() - 1))
   const spendDelta = spendLastYear > 0 ? (spendThisYear - spendLastYear) / spendLastYear : null
-  const monthSpend = monthSeries(costRows, now, SPEND_MONTHS)
+  const monthSpend = bucketed(costRows, "month", {
+    start: new Date(now.getFullYear(), now.getMonth() - (SPEND_MONTHS - 1), 1),
+    end: now,
+  })
+  const monthSpendPrior = priorPeriod(costRows, monthSpend, "month")
 
   // Rank by severity before taking the top few. Ordering by date alone would
   // hide a truck that's 300 miles past an oil change but whose due date is two
@@ -213,16 +218,27 @@ export default async function DashboardPage() {
               <>
                 <div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-semibold leading-none tabular-nums">{formatMoney(spendThisYear)}</span>
+                    {/* Proportional figures: tabular-nums gives every digit the
+                        width of a zero, which reads loose at this size. */}
+                    <span className="text-2xl font-semibold leading-none">{formatMoney(spendThisYear)}</span>
                     <span className="text-xs text-muted-foreground">in {now.getFullYear()}</span>
+                    {spendDelta !== null && (
+                      <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                        {spendDelta >= 0 ? "↑" : "↓"} {Math.abs(spendDelta * 100).toFixed(0)}%
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
                     {spendDelta === null
                       ? `Nothing recorded by this point in ${now.getFullYear() - 1}.`
-                      : `${spendDelta >= 0 ? "Up" : "Down"} ${Math.abs(spendDelta * 100).toFixed(0)}% on the same point last year (${formatMoney(spendLastYear)}).`}
+                      : `vs the same point last year (${formatMoney(spendLastYear)}).`}
                   </p>
                 </div>
-                <MonthColumns points={monthSpend} />
+                <SpendArea
+                  points={monthSpend}
+                  prior={monthSpendPrior}
+                  priorLabel={`${now.getFullYear() - 1}`}
+                />
               </>
             )}
           </CardContent>

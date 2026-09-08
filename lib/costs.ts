@@ -169,82 +169,6 @@ export function ranked(
 }
 
 export type StackSegment = { key: CategoryKey; label: string; color: string; total: number }
-export type YearColumn = { year: string; total: number; segments: StackSegment[]; share: number }
-
-export function stackedByYear(rows: CostRow[]): YearColumn[] {
-  const grouped = new Map<string, CostRow[]>()
-  for (const row of rows) {
-    const year = String(row.date.getFullYear())
-    const list = grouped.get(year)
-    if (list) list.push(row)
-    else grouped.set(year, [row])
-  }
-
-  const columns = [...grouped.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([year, yearRows]) => {
-      const categories = byCategory(yearRows)
-      // Walk CATEGORY_ORDER rather than the map's own order, so a category keeps
-      // its position in the stack whether or not the year above it used it.
-      const segments = CATEGORY_ORDER.filter((key) => categories.has(key)).map((key) => ({
-        key,
-        label: categoryLabel(key),
-        color: categoryColor(key),
-        total: categories.get(key)!.total,
-      }))
-      return {
-        year,
-        total: cents(segments.reduce((s, seg) => s + seg.total, 0)),
-        segments,
-      }
-    })
-
-  const max = Math.max(0, ...columns.map((c) => c.total))
-  return columns.map((c) => ({ ...c, share: max > 0 ? c.total / max : 0 }))
-}
-
-export type SparkPoint = { year: string; total: number }
-
-/// Every year between the first and last is emitted, including the ones with no
-/// spend. Skipping them would draw a straight line across a gap and tell the
-/// reader that money was spent in a year when none was.
-export function yearSeries(rows: CostRow[]): SparkPoint[] {
-  const map = byYear(rows)
-  if (map.size === 0) return []
-  const years = [...map.keys()].map(Number)
-  const out: SparkPoint[] = []
-  for (let y = Math.min(...years); y <= Math.max(...years); y++) {
-    out.push({ year: String(y), total: map.get(String(y))?.total ?? 0 })
-  }
-  return out
-}
-
-export type MonthPoint = { key: string; label: string; total: number; share: number }
-
-/// The last `count` months, ending with the one `now` falls in, oldest first.
-/// Months with no spending are emitted as zero rather than skipped, for the same
-/// reason yearSeries fills its gaps: a missing bar would misreport the history.
-export function monthSeries(rows: CostRow[], now: Date, count: number): MonthPoint[] {
-  // Pinned to string: left to infer, the template literal narrows K to
-  // `${number}-${number}` and the plain-string lookups below stop type-checking.
-  const totals = rollup<string>(rows, (r) => `${r.date.getFullYear()}-${r.date.getMonth()}`)
-
-  const points = []
-  for (let i = count - 1; i >= 0; i--) {
-    // Day 1 with a possibly-negative month index: Date rolls it back across the
-    // year boundary, so this needs no year arithmetic of its own.
-    const month = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const key = `${month.getFullYear()}-${month.getMonth()}`
-    points.push({
-      key,
-      label: month.toLocaleString(undefined, { month: "short" }),
-      total: totals.get(key)?.total ?? 0,
-    })
-  }
-
-  const max = Math.max(0, ...points.map((p) => p.total))
-  return points.map((p) => ({ ...p, share: max > 0 ? p.total / max : 0 }))
-}
 
 export function sum(rows: CostRow[]): number {
   return cents(rows.reduce((s, r) => s + r.cost, 0))
@@ -285,4 +209,179 @@ export function costPerMeter(rows: CostRow[]): number | null {
   const span = Math.max(...readings) - Math.min(...readings)
   if (span <= 0) return null
   return sum(rows) / span
+}
+
+// ---------------------------------------------------------------------------
+// Bucketing over a date range.
+//
+// `monthSeries` above answers one narrow question — the last N months ending
+// now — which is all the dashboard needed. The costs page needs the same shaping
+// at three granularities over an arbitrary range, so the general form lives here
+// and the two share their gap-filling policy: a bucket with no spending is
+// emitted as zero, never skipped. Skipping it would draw the chart straight
+// across the gap and claim money was spent in a period that had none.
+// ---------------------------------------------------------------------------
+
+export type Granularity = "month" | "quarter" | "year"
+
+export type DateRange = { start: Date; end: Date }
+
+const GRANULARITIES: Granularity[] = ["month", "quarter", "year"]
+
+export function isGranularity(value: unknown): value is Granularity {
+  return typeof value === "string" && (GRANULARITIES as string[]).includes(value)
+}
+
+/// The first instant of the bucket `d` falls in.
+function bucketStart(d: Date, g: Granularity): Date {
+  if (g === "year") return new Date(d.getFullYear(), 0, 1)
+  if (g === "quarter") return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1)
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
+function nextBucket(d: Date, g: Granularity): Date {
+  const step = g === "year" ? 12 : g === "quarter" ? 3 : 1
+  return new Date(d.getFullYear(), d.getMonth() + step, 1)
+}
+
+function bucketKeyOf(d: Date, g: Granularity): string {
+  if (g === "year") return String(d.getFullYear())
+  if (g === "quarter") return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`
+  return `${d.getFullYear()}-${d.getMonth()}`
+}
+
+/// Two labels per bucket on purpose. `label` is the axis tick, kept short enough
+/// that twelve of them fit side by side; `fullLabel` is unambiguous on its own and
+/// is what the tooltip and the table view use, where there is room for it and no
+/// neighbouring tick to supply the year.
+function bucketLabels(d: Date, g: Granularity): { label: string; fullLabel: string } {
+  const year = d.getFullYear()
+  if (g === "year") return { label: String(year), fullLabel: String(year) }
+  if (g === "quarter") {
+    const q = `Q${Math.floor(d.getMonth() / 3) + 1}`
+    return { label: q, fullLabel: `${q} ${year}` }
+  }
+  return {
+    label: d.toLocaleString(undefined, { month: "short" }),
+    fullLabel: d.toLocaleString(undefined, { month: "long", year: "numeric" }),
+  }
+}
+
+/// The window the costs page charts. With a year selected it is that calendar
+/// year; with none it runs from the earliest costed record to the bucket `now`
+/// falls in, so the range is derived from the data rather than being a third
+/// control the reader has to set.
+export function costRange(rows: CostRow[], now: Date, year?: number): DateRange {
+  if (year != null) return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) }
+  if (rows.length === 0) return { start: bucketStart(now, "month"), end: now }
+  const earliest = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0].date)
+  return { start: earliest, end: now }
+}
+
+export type BucketPoint = {
+  key: string
+  label: string
+  fullLabel: string
+  total: number
+  /// This bucket's total as a fraction of the largest in the series.
+  share: number
+}
+
+export type StackedBucket = BucketPoint & { segments: StackSegment[] }
+
+/// Every bucket start from `range.start` through `range.end`, inclusive of the
+/// bucket the end falls in. Capped so a corrupt range cannot spin forever.
+const MAX_BUCKETS = 600
+
+function bucketStarts(range: DateRange, g: Granularity): Date[] {
+  const out: Date[] = []
+  let cursor = bucketStart(range.start, g)
+  const last = bucketStart(range.end, g)
+  while (cursor <= last && out.length < MAX_BUCKETS) {
+    out.push(cursor)
+    cursor = nextBucket(cursor, g)
+  }
+  return out
+}
+
+function withShares<T extends { total: number }>(points: T[]): (T & { share: number })[] {
+  const max = Math.max(0, ...points.map((p) => p.total))
+  return points.map((p) => ({ ...p, share: max > 0 ? p.total / max : 0 }))
+}
+
+export function bucketed(rows: CostRow[], g: Granularity, range: DateRange): BucketPoint[] {
+  const totals = rollup<string>(rows, (r) => bucketKeyOf(r.date, g))
+  return withShares(
+    bucketStarts(range, g).map((start) => ({
+      key: bucketKeyOf(start, g),
+      ...bucketLabels(start, g),
+      total: totals.get(bucketKeyOf(start, g))?.total ?? 0,
+    }))
+  )
+}
+
+export function stackedBuckets(rows: CostRow[], g: Granularity, range: DateRange): StackedBucket[] {
+  const grouped = new Map<string, CostRow[]>()
+  for (const row of rows) {
+    const key = bucketKeyOf(row.date, g)
+    const list = grouped.get(key)
+    if (list) list.push(row)
+    else grouped.set(key, [row])
+  }
+
+  return withShares(
+    bucketStarts(range, g).map((start) => {
+      const key = bucketKeyOf(start, g)
+      const categories = byCategory(grouped.get(key) ?? [])
+      // Walked in CATEGORY_ORDER, not the map's order, so a category keeps its
+      // position in every stack whether or not its neighbours are present.
+      const segments = CATEGORY_ORDER.filter((c) => categories.has(c)).map((c) => ({
+        key: c,
+        label: categoryLabel(c),
+        color: categoryColor(c),
+        total: categories.get(c)!.total,
+      }))
+      return {
+        key,
+        ...bucketLabels(start, g),
+        total: cents(segments.reduce((s, seg) => s + seg.total, 0)),
+        segments,
+      }
+    })
+  )
+}
+
+/// Trailing mean over `window` buckets. The leading positions where the window is
+/// not yet full emit `null` rather than a partial mean: a three-bucket average
+/// that averages one bucket is just that bucket wearing a trend line's authority.
+export function rollingAverage(points: BucketPoint[], window: number): (number | null)[] {
+  return points.map((_, i) => {
+    if (i + 1 < window) return null
+    let total = 0
+    for (let j = i - window + 1; j <= i; j++) total += points[j].total
+    return cents(total / window)
+  })
+}
+
+/// The same buckets one year earlier, aligned index-for-index with `points`, for
+/// the year-on-year reference series. Returns totals only — the labels come from
+/// the primary series, which is what the reader is actually looking at.
+export function priorPeriod(rows: CostRow[], points: BucketPoint[], g: Granularity): number[] {
+  const totals = rollup<string>(rows, (r) => bucketKeyOf(r.date, g))
+  return points.map((point) => {
+    // Reconstructing the key a year back from the key itself keeps this honest
+    // for all three granularities without a second date walk.
+    const prior = priorKey(point.key, g)
+    return totals.get(prior)?.total ?? 0
+  })
+}
+
+function priorKey(key: string, g: Granularity): string {
+  if (g === "year") return String(Number(key) - 1)
+  if (g === "quarter") {
+    const [year, q] = key.split("-")
+    return `${Number(year) - 1}-${q}`
+  }
+  const [year, month] = key.split("-")
+  return `${Number(year) - 1}-${month}`
 }

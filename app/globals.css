@@ -98,6 +98,22 @@
   /* Single hue for nominal bars (assets, vendors), where length already encodes
      magnitude and colour carries no identity. Matches --primary's hue. */
   --cost-bar: oklch(0.488 0.243 264.376);
+  /* Chart chrome and non-categorical marks. These are not categorical hues and
+     are not checked against the category ramp: grid and crosshair are chrome,
+     and the two data marks below are separated from the categories by mark type
+     rather than by hue. WCAG vs --card #ffffff: grid 1.18:1, crosshair 1.66:1,
+     ghost 3.45:1, trend 14.16:1. */
+  --chart-grid: #ececec;
+  --chart-crosshair: #c9c9c9;
+  /* The prior-period reference series. Neutral on purpose: it is the same
+     measure a year earlier, not a second kind of spending. */
+  --chart-ghost: #8a8a8a;
+  /* The rolling-average line drawn over the category stack. A seventh hue was
+     tried and abandoned: every candidate violet collided with --cost-routine
+     under deutan/protan in at least one mode (worst adjacent ΔE 1.4-5.2). A
+     line in near-ink over filled columns separates by mark type instead, which
+     no amount of colour tuning could achieve here. */
+  --chart-trend: #2b2b2b;
 }
 
 .dark {
@@ -143,6 +159,12 @@
   /* --primary itself measures only 1.99:1 on the dark card, below the 3:1 floor
      for marks, so the bar hue is lightened here to 4.24:1. */
   --cost-bar: oklch(0.66 0.18 264.376);
+  /* Re-stepped for the dark card, not flipped. WCAG vs --card #2e2e2e:
+     grid 1.29:1, crosshair 1.88:1, ghost 4.20:1, trend 12.13:1. */
+  --chart-grid: #3f3f3f;
+  --chart-crosshair: #575757;
+  --chart-ghost: #8f8f8f;
+  --chart-trend: #f2f2f2;
 }
 
 @layer base {
@@ -154,5 +176,56 @@
   }
   html {
     @apply font-sans;
+  }
+}
+/* Chart motion lives here, in one place, rather than as inline styles spread
+   across the chart components — that way the reduced-motion opt-out is a single
+   rule that cannot be half-applied. Marks animate once, on mount. */
+@layer utilities {
+  @keyframes chart-grow {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+  }
+  @keyframes chart-draw {
+    from { stroke-dashoffset: var(--chart-draw-length); }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes chart-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .chart-grow {
+    transform-origin: bottom;
+    animation: chart-grow 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .chart-grow-x {
+    transform-origin: left;
+    animation: chart-grow 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    /* scaleY on a horizontal bar would squash it; reuse the keyframe on X. */
+    animation-name: chart-grow-x;
+  }
+  @keyframes chart-grow-x {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .chart-draw {
+    stroke-dasharray: var(--chart-draw-length);
+    animation: chart-draw 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .chart-fade {
+    animation: chart-fade 300ms ease-out backwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chart-grow,
+    .chart-grow-x,
+    .chart-draw,
+    .chart-fade {
+      animation: none;
+    }
+    .chart-draw {
+      stroke-dasharray: none;
+    }
   }
 }
