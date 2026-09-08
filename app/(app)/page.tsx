@@ -231,7 +231,7 @@ export default async function DashboardPage() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     {spendDelta === null
                       ? `Nothing recorded by this point in ${now.getFullYear() - 1}.`
-                      : `on the same point last year (${formatMoney(spendLastYear)}).`}
+                      : `vs the same point last year (${formatMoney(spendLastYear)}).`}
                   </p>
                 </div>
                 <SpendArea

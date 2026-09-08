@@ -232,7 +232,10 @@ export function TrendChart({
 
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <Legend items={legendItems} mutedKeys={muted} onToggle={toggle} />
-        {showTrend ? (
+        {/* Tied to the drawn path, not to the intent to draw one: a series short
+            enough that the rolling average never fills its window produces no
+            line, and a legend entry for an invisible line is a lie. */}
+        {trendPath ? (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span
               aria-hidden="true"

@@ -107,7 +107,7 @@ export function RankedBars({
                     <Sparkline
                       values={entry.history}
                       ariaLabel={"Spending history for " + entry.label}
-                      className="h-5 w-12 shrink-0"
+                      className="h-5 w-16 shrink-0"
                       color="var(--chart-ghost)"
                       showArea={false}
                       showEnd={false}

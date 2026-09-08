@@ -242,7 +242,7 @@ export default async function CostsPage({
           />
         </Panel>
 
-        <Panel title="Biggest single expenses">
+        <Panel title="Biggest single expenses" className="lg:col-span-2">
           <ul className="space-y-0.5">
             {biggest.map((row, i) => (
               <BiggestRow key={`${row.title}-${i}`} row={row} assets={assets} max={biggestMax} />
@@ -285,7 +285,7 @@ function Kpi({
   return (
     <Card className="py-4">
       <CardContent className="px-5">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
           {/* Proportional figures, not tabular: at this size equal-width digits
               make a number like $121 read loose. tabular-nums is for columns. */}
           <div className="text-[22px] font-semibold leading-none">{value}</div>
@@ -317,9 +317,17 @@ function DeltaChip({ delta }: { delta: number }) {
   )
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  className,
+}: {
+  title: string
+  children: React.ReactNode
+  className?: string
+}) {
   return (
-    <Card className="py-5">
+    <Card className={cn("py-5", className)}>
       <CardHeader className="px-5 pb-1">
         <CardTitle className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
           {title}
@@ -347,16 +355,16 @@ function BiggestRow({
         href={assetHref(row.assetType, row.assetId)}
         className="relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-muted/60"
       >
-        {/* The magnitude bar sits behind the row rather than beside it: the list
-            is already a ranking, and a separate bar column would repeat the order
-            the rows are in. A wash gives the comparison without adding a column. */}
+        {/* A thin rule along the bottom edge rather than a wash behind the text:
+            a filled block spanning part of a row reads as a selection, not as a
+            measure, and it fights the hover state for the same signal. */}
         <span
           aria-hidden="true"
-          className="absolute inset-y-0 left-0 rounded-md"
+          className="absolute bottom-0 left-2 h-0.5 rounded-full"
           style={{
-            width: max > 0 ? `${Math.max((row.cost / max) * 100, 1)}%` : "0%",
+            width: max > 0 ? `calc((100% - 1rem) * ${Math.max(row.cost / max, 0.01)})` : "0%",
             backgroundColor: "var(--cost-bar)",
-            opacity: 0.1,
+            opacity: 0.55,
           }}
         />
         <AssetIcon className="relative h-3.5 w-3.5 shrink-0 text-muted-foreground" />

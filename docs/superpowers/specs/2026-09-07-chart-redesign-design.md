@@ -1,7 +1,7 @@
 # Chart Redesign — Design
 
 **Date:** 2026-09-07
-**Status:** Approved, pending implementation plan
+**Status:** Implemented. See "Changed during implementation" for where the build departed from this design and why.
 **Supersedes:** the "Charts" section of `2026-08-24-cost-reporting-design.md`
 
 ## Problem
@@ -210,20 +210,21 @@ actually takes.
 
 ## Tokens
 
-Added to both `:root` and `.dark` in `globals.css`, and validated the same way
-the category ramp was:
+Added to both `:root` and `.dark` in `globals.css`, contrast-checked against each
+mode's card surface rather than picked by eye:
 
-- `--chart-grid` — gridlines and axis rules; must sit below the mark hues in
-  contrast so it never competes with data
-- `--chart-axis-text` — tick labels
-- `--chart-ghost` — the prior-year comparison series; deliberately low-chroma so
-  it reads as reference, not as a second equal series
-- `--chart-trend` — the rolling-average line; must clear 3:1 against `--card` and
-  remain distinguishable from every category hue
-- `--chart-crosshair` — the hover rule
+| Token | Light | Dark | Job |
+| --- | --- | --- | --- |
+| `--chart-grid` | `#ececec` 1.18:1 | `#3f3f3f` 1.29:1 | gridlines; must stay under the marks |
+| `--chart-crosshair` | `#c9c9c9` 1.66:1 | `#575757` 1.88:1 | hover rule |
+| `--chart-ghost` | `#8a8a8a` 3.45:1 | `#8f8f8f` 4.20:1 | prior-period reference series |
+| `--chart-trend` | `#2b2b2b` 14.16:1 | `#f2f2f2` 12.13:1 | rolling-average line |
 
-Existing `--cost-*` tokens and `--cost-bar` are unchanged and keep their current
-meanings.
+No `--chart-axis-text` token: axis labels wear `--muted-foreground`, because text
+takes text tokens and inventing a second one for the same job invites them to
+drift apart.
+
+The existing `--cost-*` category ramp and `--cost-bar` are unchanged.
 
 ## Accessibility
 
@@ -280,3 +281,63 @@ No test runner (decision 6). Per implementation step:
    year totalling $0 with segments present (the case `stacked-columns.tsx:37-43`
    guards).
 4. Keyboard-only pass over one chart of each kind.
+
+## Changed during implementation
+
+Each of these is a departure from the design above, made after building or
+looking at the result. They are recorded here rather than quietly absorbed.
+
+1. **The rolling-average line is a neutral, not a seventh hue, and the costs hero
+   dropped its prior-year ghost.** The design assumed an eighth colour could be
+   found. It cannot: every candidate violet failed against `--cost-routine` under
+   simulated protan/deutan in at least one mode (worst adjacent ΔE 1.4-5.2, well
+   under the floor of 6), which is the documented consequence of a ramp that
+   already spends seven slots. The line separates by *mark type* instead — a
+   stroke over filled columns. That in turn ruled out also carrying a neutral
+   ghost on the same plot, so year-on-year comparison lives on the dashboard,
+   where there are no category hues to compete with, and in the KPI delta chips.
+2. **Charts take resolved data, never callbacks.** `hrefFor`, `colorFor` and
+   `hrefForBucket` were in the design and cannot exist: these are client
+   components, and a function thrown across the RSC boundary is a runtime error
+   the build does not catch. Links and colours are resolved on the server and
+   passed as values. This is the practical cost of decision 2 and worth knowing
+   before adding the next chart.
+3. **The granularity toggle went into the page's filter row, not the chart card.**
+   Filters belong in one row above everything they scope; a control inside the
+   card it happens to drive reads as a property of that card.
+4. **The composition bar labels in its legend, not inside its fills.** In-fill
+   percentages have to clear contrast against whichever hue lands under them, and
+   three of this ramp's light slots cannot carry white text. The legend sits on
+   the card surface, where every label is legible by construction.
+5. **Only two KPI tiles carry a delta and only one a sparkline.** The design gave
+   all four both. All-time spend is cumulative, so its trend line could only ever
+   rise; the monthly average draws the same series the first tile already shows.
+   Four sparklines of one series is decoration.
+6. **The asset panel drops its chart below three populated periods, and never
+   draws a rolling average.** One bar beside two empty slots is the one-bar-chart
+   anti-pattern, and a trailing mean over a handful of service events smooths
+   noise into a trend that is not there. The panel's figures carry those cases.
+7. **`stackedByYear`, `yearSeries` and `monthSeries` were deleted rather than kept
+   as thin wrappers.** Nothing called them once the new charts landed, and a
+   wrapper nobody calls is a second way to do the same thing.
+8. **`tabular-nums` came off the large standalone values** on the KPI tiles, the
+   dashboard headline and the asset panel. Equal-width digits are for columns that
+   must align; at display size they make a number read loose.
+
+## Verified
+
+Driven in a real browser (headless Chrome over CDP) against a seeded copy of the
+dev database, at 1440px and 390px, in both themes:
+
+- Tooltips appear on hover and on keyboard focus with the same content, and
+  dismiss on leave. (An earlier "no tooltip" result was a test artifact —
+  React derives `onPointerEnter` from `pointerover`, so a synthetic non-bubbling
+  `pointerenter` never reaches the handler.)
+- Legend muting toggles `aria-pressed`, strikes the label through, and redraws:
+  31 segments and 1280px of ink become 20 and 679px when Repair is muted, and
+  restore exactly on unmute.
+- Four table views on `/costs`, 27 rows in the hero's.
+- No horizontal overflow at either width.
+- 14 category and 30 period drill-down links resolve.
+- Zero server runtime errors across dashboard, all `/costs` filter combinations,
+  and property, vehicle and equipment detail pages.

@@ -11,10 +11,6 @@ import { formatMoney, type RankedEntry } from "@/lib/costs"
 /// boundary — functions are not serializable — so the data arrives resolved.
 export type CompositionSlice = RankedEntry & { color: string; href?: string }
 
-/// Below this share, a segment is too narrow to hold its own label at any
-/// sensible font size. Those keep the segment and drop the label to the legend,
-/// the tooltip, and the table — never a clipped or overflowing one.
-const LABEL_MIN_SHARE = 0.11
 const BAR_HEIGHT = 40
 const SEGMENT_GAP = 2
 
@@ -39,9 +35,13 @@ export function CompositionBar({
     return <p className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</p>
   }
 
+  // The share rides in the legend rather than inside the segment. A label set on
+  // the fill has to clear contrast against whichever hue lands under it, and
+  // three of this ramp's light slots cannot carry white text; the legend is on
+  // the card surface, where every label is legible by construction.
   const legendItems: LegendItem[] = entries.map((entry) => ({
     key: entry.key,
-    label: entry.label,
+    label: entry.label + "  " + Math.round((entry.total / total) * 100) + "%",
     color: entry.color,
   }))
 
@@ -53,8 +53,7 @@ export function CompositionBar({
       <div ref={containerRef} className="relative">
         <div className="flex w-full overflow-hidden" style={{ height: BAR_HEIGHT }}>
           {entries.map((entry, i) => {
-            const share = entry.total / total
-            const percent = share * 100
+            const percent = (entry.total / total) * 100
             const color = entry.color
             const content = {
               title: entry.label,
@@ -74,7 +73,7 @@ export function CompositionBar({
 
             const body = (
               <span
-                className="chart-grow-x flex h-full w-full items-center justify-center"
+                className="chart-grow-x block h-full w-full"
                 style={{
                   backgroundColor: color,
                   opacity: dimmed ? 0.35 : 1,
@@ -84,17 +83,7 @@ export function CompositionBar({
                   borderBottomRightRadius: isLast ? 4 : 0,
                   animationDelay: Math.min(i * 40, 240) + "ms",
                 }}
-              >
-                {/* A label only where it demonstrably fits. Text set inside a
-                    fill takes white or ink by the fill's own luminance, which is
-                    why the caller supplies colours from the validated ramp and
-                    not arbitrary ones. */}
-                {share >= LABEL_MIN_SHARE ? (
-                  <span className="px-1 text-[11px] font-medium text-white mix-blend-luminosity">
-                    {Math.round(percent)}%
-                  </span>
-                ) : null}
-              </span>
+              />
             )
 
             const shared = {
