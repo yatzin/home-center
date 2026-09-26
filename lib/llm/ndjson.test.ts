@@ -6,7 +6,7 @@ describe("createNdjsonReader", () => {
     const out: unknown[] = []
     const r = createNdjsonReader((e) => out.push(e))
     r.feed('{"type":"delta","te')
-    r.feed('xt":"a"}\n\nnot json\n{"type":"done"')
+    r.feed('xt":"a"}\n\nnot json\n{"type":"done"}')
     r.flush()
     expect(out).toEqual([{ type: "delta", text: "a" }, { type: "done" }])
   })
