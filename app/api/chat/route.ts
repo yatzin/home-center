@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { loadLlmConfig } from "@/lib/llm/config"
 import { isLlmReady } from "@/lib/llm/settings-schema"
 import { createChatClient } from "@/lib/llm/client"
-import { agentErrorMessage } from "@/lib/llm/errors"
+import { agentErrorMessage, LlmError } from "@/lib/llm/errors"
 import { runAgent } from "@/lib/llm/agent"
 import { buildSystemPrompt } from "@/lib/llm/prompt"
 import { chatRequestSchema, firstIssue } from "@/lib/llm/request-schema"
@@ -81,7 +81,10 @@ export async function POST(request: Request) {
         })
       } catch (error) {
         if (!request.signal.aborted) send({ type: "error", message: agentErrorMessage(error, timeout.aborted) })
-        console.error("[llm] chat failed:", error instanceof Error ? `${error.name}: ${error.name === "LlmError" ? error.message : ""}` : typeof error)
+        console.error(
+          "[llm] chat failed:",
+          error instanceof LlmError ? `LlmError${error.status ? ` status=${error.status}` : ""}` : error instanceof Error ? error.name : typeof error
+        )
       } finally {
         console.info(`[llm] chat user=${userId} rounds=${rounds} tools=${used.join(",") || "-"} ms=${Date.now() - started}`)
         try {
