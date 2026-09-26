@@ -7,8 +7,7 @@ import { ASSET_TYPES, assetHref } from "@/lib/assets"
 import { SERVICE_CATEGORY_VALUES } from "@/lib/costs"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import { z } from "zod"
 
 const schema = z.object({
@@ -86,7 +85,7 @@ export async function deleteServiceRecord(id: string, assetType: AssetType, asse
   if (!record) return { error: "Not found" }
 
   await prisma.serviceRecord.delete({ where: { id: record.id } })
-  await rm(resolveUploadPath("service", record.id), { recursive: true, force: true })
+  await removeUploadDir("service", record.id)
 
   revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/records")

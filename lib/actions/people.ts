@@ -4,9 +4,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
 import { personSchema } from "@/lib/health-schemas"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import type { ActionResult, FormValues } from "@/lib/form-types"
 
 export async function createPerson(values: FormValues): Promise<ActionResult> {
@@ -64,7 +63,7 @@ export async function deletePerson(id: string): Promise<ActionResult> {
     ...schedules.map((s): [string, string] => ["maintenance", s.id]),
     ...person.conditions.map((c): [string, string] => ["condition", c.id]),
   ]
-  for (const dir of dirs) await rm(resolveUploadPath(...dir), { recursive: true, force: true })
+  for (const dir of dirs) await removeUploadDir(...dir)
 
   revalidatePath("/assets/people")
   revalidatePath("/records")

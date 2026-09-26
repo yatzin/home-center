@@ -4,9 +4,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
 import { attachmentDir } from "@/lib/attachment-location"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 
 export async function deleteAttachment(id: string) {
   const session = await auth()
@@ -18,9 +17,11 @@ export async function deleteAttachment(id: string) {
   await prisma.attachment.delete({ where: { id } })
 
   const dir = attachmentDir(attachment)
-  if (dir) await rm(resolveUploadPath(...dir, attachment.filename), { force: true })
+  if (dir) await removeUploadDir(...dir, attachment.filename)
 
   revalidatePath("/records")
   revalidatePath("/warranties")
+  revalidatePath("/insurance")
+  revalidatePath("/assets/people", "layout")
   return { success: true }
 }

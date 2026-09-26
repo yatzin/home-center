@@ -6,8 +6,7 @@ import { revalidatePath } from "next/cache"
 import { ASSET_TYPES, assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import { z } from "zod"
 
 const schema = z.object({
@@ -70,7 +69,7 @@ export async function deleteWarranty(id: string, assetType: AssetType, assetId: 
   if (!warranty) return { error: "Not found" }
 
   await prisma.warranty.delete({ where: { id: warranty.id } })
-  await rm(resolveUploadPath("warranty", warranty.id), { recursive: true, force: true })
+  await removeUploadDir("warranty", warranty.id)
 
   revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/warranties")

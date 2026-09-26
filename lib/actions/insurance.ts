@@ -4,9 +4,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
 import { insuranceSchema } from "@/lib/health-schemas"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import type { ActionResult, FormValues } from "@/lib/form-types"
 
 // Policies show in every covered person's aside, so the people subtree is
@@ -57,7 +56,7 @@ export async function deleteInsurancePolicy(id: string): Promise<ActionResult> {
   if (!existing) return { error: "Not found" }
 
   await prisma.insurancePolicy.delete({ where: { id: existing.id } })
-  await rm(resolveUploadPath("insurance", existing.id), { recursive: true, force: true })
+  await removeUploadDir("insurance", existing.id)
   revalidateInsurance()
   return { success: true }
 }

@@ -4,10 +4,9 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
 import { allergySchema, conditionSchema, immunizationSchema, medicationSchema } from "@/lib/health-schemas"
 import { nextRefillFrom } from "@/lib/health"
-import { resolveUploadPath } from "@/lib/upload-path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import type { ActionResult, FormValues } from "@/lib/form-types"
 
 async function requireSession() {
@@ -58,7 +57,7 @@ export async function deleteCondition(id: string): Promise<ActionResult> {
   if (!existing) return NOT_FOUND
 
   await prisma.healthCondition.delete({ where: { id: existing.id } })
-  await rm(resolveUploadPath("condition", existing.id), { recursive: true, force: true })
+  await removeUploadDir("condition", existing.id)
   revalidatePerson(existing.personId)
   return { success: true }
 }
