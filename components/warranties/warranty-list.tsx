@@ -16,7 +16,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
-import type { Attachment, Warranty } from "@/app/generated/prisma/client"
+import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
 
 type WarrantyWithAttachments = Warranty & { attachments: Attachment[] }
 
@@ -34,7 +34,7 @@ const INITIAL_DIRS: Record<string, SortDir> = { purchased: "desc" }
 interface Props {
   warranties: WarrantyWithAttachments[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
   equipment?: { id: string; name: string }[]
   propertyName?: string

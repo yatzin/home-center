@@ -13,11 +13,12 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDes
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createMaintenanceSchedule, updateMaintenanceSchedule } from "@/lib/actions/maintenance"
 import { meterUnitNoun, meterUnitShort } from "@/lib/maintenance-due"
-import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
+import { ASSET_TYPES } from "@/lib/assets"
+import type { MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   intervalDays: z.string().optional(),
@@ -34,7 +35,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   schedule?: MaintenanceSchedule | null
   /** When set (property view), shows a target picker: this property or one of its equipment. */
   equipmentOptions?: { id: string; name: string }[]
@@ -43,7 +44,7 @@ interface Props {
   meterUnit?: MeterUnit
 }
 
-function targetKey(assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT", assetId: string) {
+function targetKey(assetType: AssetType, assetId: string) {
   return `${assetType}:${assetId}`
 }
 

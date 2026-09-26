@@ -3,7 +3,8 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
-import { assetHref } from "@/lib/assets"
+import { ASSET_TYPES, assetHref } from "@/lib/assets"
+import { SERVICE_CATEGORY_VALUES } from "@/lib/costs"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
 import { rm } from "fs/promises"
@@ -12,13 +13,13 @@ import { z } from "zod"
 
 const schema = z.object({
   assetId: z.string().min(1),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   date: z.string().min(1, "Date is required"),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   vendor: z.string().optional(),
   cost: z.coerce.number().optional().or(z.literal("")),
-  category: z.enum(["ROUTINE", "REPAIR", "UPGRADE", "INSPECTION", "PARTS", "OTHER"]).optional().or(z.literal("")),
+  category: z.enum(SERVICE_CATEGORY_VALUES).optional().or(z.literal("")),
   mileageAtService: z.coerce.number().int().min(0).optional().or(z.literal("")),
 })
 

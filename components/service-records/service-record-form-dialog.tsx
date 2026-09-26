@@ -15,16 +15,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createServiceRecord, updateServiceRecord } from "@/lib/actions/service-records"
 import { deleteAttachment } from "@/lib/actions/attachments"
 import { meterUnitNoun } from "@/lib/maintenance-due"
-import { SERVICE_CATEGORIES } from "@/lib/costs"
+import { ASSET_CATEGORIES } from "@/lib/costs"
+import { ASSET_TYPES } from "@/lib/assets"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
-import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
+import type { Attachment, ServiceRecord, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 // Base UI Select has no empty-string option, so "no category" needs a sentinel.
 const NO_CATEGORY = "__none__"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   date: z.string().min(1, "Date is required"),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
@@ -40,7 +41,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   record?: ServiceRecord | null
   attachments?: Attachment[]
   onAttachmentDeleted?: (recordId: string, attachmentId: string) => void
@@ -51,7 +52,7 @@ interface Props {
   meterUnit?: MeterUnit
 }
 
-function targetKey(assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT", assetId: string) {
+function targetKey(assetType: AssetType, assetId: string) {
   return `${assetType}:${assetId}`
 }
 
@@ -264,13 +265,13 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Uncategorized">
-                          {(v: string) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label ?? "Uncategorized"}
+                          {(v: string) => ASSET_CATEGORIES.find((c) => c.value === v)?.label ?? "Uncategorized"}
                         </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>Uncategorized</SelectItem>
-                      {SERVICE_CATEGORIES.map((c) => (
+                      {ASSET_CATEGORIES.map((c) => (
                         <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>

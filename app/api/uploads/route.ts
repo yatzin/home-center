@@ -7,7 +7,7 @@ import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { extensionForFilename, UPLOAD_TYPES } from "@/lib/upload-types"
 
-const RECORD_TYPES = ["SERVICE", "WARRANTY", "MAINTENANCE"] as const
+const RECORD_TYPES = ["SERVICE", "WARRANTY", "MAINTENANCE", "CONDITION", "INSURANCE"] as const
 type RecordType = (typeof RECORD_TYPES)[number]
 
 function isRecordType(v: string | null): v is RecordType {
@@ -20,7 +20,9 @@ async function recordExists(type: RecordType, id: string): Promise<boolean> {
   const where = { where: { id }, select: { id: true } } as const
   if (type === "SERVICE") return !!(await prisma.serviceRecord.findUnique(where))
   if (type === "WARRANTY") return !!(await prisma.warranty.findUnique(where))
-  return !!(await prisma.maintenanceSchedule.findUnique(where))
+  if (type === "MAINTENANCE") return !!(await prisma.maintenanceSchedule.findUnique(where))
+  if (type === "CONDITION") return !!(await prisma.healthCondition.findUnique(where))
+  return !!(await prisma.insurancePolicy.findUnique(where))
 }
 
 export async function POST(request: NextRequest) {
@@ -63,6 +65,8 @@ export async function POST(request: NextRequest) {
       serviceRecordId: recordType === "SERVICE" ? recordId : null,
       warrantyId: recordType === "WARRANTY" ? recordId : null,
       maintenanceScheduleId: recordType === "MAINTENANCE" ? recordId : null,
+      healthConditionId: recordType === "CONDITION" ? recordId : null,
+      insurancePolicyId: recordType === "INSURANCE" ? recordId : null,
     },
   })
 

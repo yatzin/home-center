@@ -14,12 +14,13 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createWarranty, updateWarranty } from "@/lib/actions/warranties"
 import { deleteAttachment } from "@/lib/actions/attachments"
+import { ASSET_TYPES } from "@/lib/assets"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
-import type { Attachment, Warranty } from "@/app/generated/prisma/client"
+import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   productName: z.string().min(1, "Product name is required"),
   purchaseDate: z.string().optional(),
   expirationDate: z.string().optional(),
@@ -35,7 +36,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   warranty?: Warranty | null
   attachments?: Attachment[]
   onAttachmentDeleted?: (warrantyId: string, attachmentId: string) => void
@@ -48,7 +49,7 @@ function fmt(d: Date | null | undefined) {
   return d ? new Date(d).toISOString().split("T")[0] : ""
 }
 
-function targetKey(assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT", assetId: string) {
+function targetKey(assetType: AssetType, assetId: string) {
   return `${assetType}:${assetId}`
 }
 

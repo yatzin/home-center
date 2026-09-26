@@ -31,6 +31,7 @@ const ASSET_TYPE_FILTERS: { value: AssetType; label: string }[] = [
   { value: "PROPERTY", label: "Properties" },
   { value: "VEHICLE", label: "Vehicles" },
   { value: "EQUIPMENT", label: "Equipment" },
+  { value: "PERSON", label: "People" },
 ]
 
 const GRANULARITY_FILTERS: { value: Granularity; label: string }[] = [

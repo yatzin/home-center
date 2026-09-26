@@ -18,7 +18,7 @@ import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
 import { scheduleDue, dueBadge, meterUnitShort, meterUnitNoun, type MileageIndex } from "@/lib/maintenance-due"
-import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
+import type { MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
   title: (s) => s.title,
@@ -32,7 +32,7 @@ const INITIAL_DIRS: Record<string, SortDir> = { lastCompleted: "desc" }
 interface Props {
   schedules: MaintenanceSchedule[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   currentMileage?: number | null
   /** Vehicle's odometer unit. Defaults to miles. */
   meterUnit?: MeterUnit
@@ -217,7 +217,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
 
 function CompleteDialog({ schedule, assetType, currentMileage, meterUnit, onClose }: {
   schedule: MaintenanceSchedule
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   currentMileage?: number | null
   meterUnit: MeterUnit
   onClose: () => void

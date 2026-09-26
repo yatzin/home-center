@@ -17,6 +17,7 @@ export function parseAssetSegment(segment: string): AssetType | null {
   if (segment === "properties") return "PROPERTY"
   if (segment === "vehicles") return "VEHICLE"
   if (segment === "equipment") return "EQUIPMENT"
+  if (segment === "people") return "PERSON"
   return null
 }
 
@@ -116,6 +117,9 @@ export async function loadReport(assetType: AssetType, assetId: string): Promise
 }
 
 async function loadAsset(assetType: AssetType, assetId: string): Promise<ReportAsset | null> {
+  // People get their own branch in Task 16; until then the report 404s for them.
+  if (assetType === "PERSON") return null
+
   if (assetType === "PROPERTY") {
     const p = await prisma.property.findUnique({
       where: { id: assetId },

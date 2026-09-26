@@ -26,7 +26,8 @@ export const UNCATEGORIZED = "UNCATEGORIZED"
 
 export type CategoryKey = ServiceCategory | typeof UNCATEGORIZED
 
-export const SERVICE_CATEGORIES: { value: ServiceCategory; label: string }[] = [
+/// Categories for houses, vehicles and equipment.
+export const ASSET_CATEGORIES: { value: ServiceCategory; label: string }[] = [
   { value: "ROUTINE", label: "Routine" },
   { value: "REPAIR", label: "Repair" },
   { value: "UPGRADE", label: "Upgrade" },
@@ -34,6 +35,38 @@ export const SERVICE_CATEGORIES: { value: ServiceCategory; label: string }[] = [
   { value: "PARTS", label: "Parts" },
   { value: "OTHER", label: "Other" },
 ]
+
+const MEDICAL_ONLY: { value: ServiceCategory; label: string }[] = [
+  { value: "OFFICE_VISIT", label: "Office visit" },
+  { value: "PRESCRIPTION", label: "Prescription" },
+  { value: "LAB", label: "Lab / imaging" },
+  { value: "DENTAL", label: "Dental" },
+  { value: "VISION", label: "Vision" },
+  { value: "PROCEDURE", label: "Procedure" },
+  { value: "THERAPY", label: "Therapy" },
+]
+
+const OTHER_CATEGORY = { value: "OTHER" as ServiceCategory, label: "Other" }
+
+/// Categories for people's visits and medical expenses.
+export const MEDICAL_CATEGORIES = [...MEDICAL_ONLY, OTHER_CATEGORY]
+
+/// Every category, in the fixed order the charts colour them. Other stays last
+/// among the real categories whichever set it came from.
+export const SERVICE_CATEGORIES = [
+  ...ASSET_CATEGORIES.filter((c) => c.value !== "OTHER"),
+  ...MEDICAL_ONLY,
+  OTHER_CATEGORY,
+]
+
+export const SERVICE_CATEGORY_VALUES = [
+  "ROUTINE", "REPAIR", "UPGRADE", "INSPECTION", "PARTS", "OTHER",
+  "OFFICE_VISIT", "PRESCRIPTION", "LAB", "DENTAL", "VISION", "PROCEDURE", "THERAPY",
+] as const satisfies readonly ServiceCategory[]
+
+export function categoriesFor(assetType: AssetType) {
+  return assetType === "PERSON" ? MEDICAL_CATEGORIES : ASSET_CATEGORIES
+}
 
 // Fixed order, assigned in sequence and never cycled — the colour a category
 // wears must not depend on which categories happen to be on screen. Uncategorized
@@ -60,6 +93,13 @@ const CATEGORY_COLORS: Record<CategoryKey, string> = {
   INSPECTION: "var(--cost-inspection)",
   PARTS: "var(--cost-parts)",
   OTHER: "var(--cost-other)",
+  OFFICE_VISIT: "var(--cost-office-visit)",
+  PRESCRIPTION: "var(--cost-prescription)",
+  LAB: "var(--cost-lab)",
+  DENTAL: "var(--cost-dental)",
+  VISION: "var(--cost-vision)",
+  PROCEDURE: "var(--cost-procedure)",
+  THERAPY: "var(--cost-therapy)",
   [UNCATEGORIZED]: "var(--cost-uncategorized)",
 }
 
