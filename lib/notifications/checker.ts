@@ -49,6 +49,8 @@ export async function checkAndNotify(): Promise<number> {
   if (users.length === 0) return 0
 
   const now = new Date()
+  const startOfToday = new Date(now)
+  startOfToday.setUTCHours(0, 0, 0, 0)
 
   const [schedules, mileage, warranties, medications, immunizations, policies] = await Promise.all([
     prisma.maintenanceSchedule.findMany({ where: dueCandidateFilter(MAINTENANCE_WINDOW_DAYS, now) }),
@@ -71,8 +73,9 @@ export async function checkAndNotify(): Promise<number> {
       where: { nextDueDate: { lte: new Date(now.getTime() + HEALTH_WINDOWS.immunizationDays * DAY) } },
       include: { person: { select: { name: true } } },
     }),
+    // endDate is stored as UTC midnight, so use startOfToday to include policies ending today.
     prisma.insurancePolicy.findMany({
-      where: { endDate: { gte: now, lte: new Date(now.getTime() + HEALTH_WINDOWS.insuranceDays * DAY) } },
+      where: { endDate: { gte: startOfToday, lte: new Date(now.getTime() + HEALTH_WINDOWS.insuranceDays * DAY) } },
     }),
   ])
 
