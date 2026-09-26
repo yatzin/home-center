@@ -25,7 +25,7 @@ const url = process.env.DATABASE_URL ?? "file:./prisma/dev.db"
 const prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) })
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads"
-const MANAGED_DIRS = ["properties", "vehicles", "equipment", "service", "warranty", "maintenance"]
+const MANAGED_DIRS = ["properties", "vehicles", "equipment", "people", "service", "warranty", "maintenance", "condition", "insurance"]
 
 const ADMIN_EMAIL = process.env.DEMO_EMAIL ?? "demo@homecenter.local"
 const ADMIN_PASSWORD = process.env.DEMO_PASSWORD ?? "demo1234"
@@ -105,6 +105,13 @@ async function wipe() {
   await prisma.serviceRecord.deleteMany()
   await prisma.warranty.deleteMany()
   await prisma.maintenanceSchedule.deleteMany()
+  await prisma.medication.deleteMany()
+  await prisma.healthCondition.deleteMany()
+  await prisma.allergy.deleteMany()
+  await prisma.immunization.deleteMany()
+  await prisma.insurancePolicy.deleteMany()
+  await prisma.person.deleteMany()
+  await prisma.provider.deleteMany()
   await prisma.equipment.deleteMany()
   await prisma.vehicle.deleteMany()
   await prisma.property.deleteMany()
@@ -563,6 +570,64 @@ const MAINTENANCE: {
   { ref: E(1), title: "Clean dishwasher filter", intervalDays: 90, dueInDays: 33 },
 ]
 
+// ─── People ──────────────────────────────────────────────────────────────────
+
+type VisitSeed = {
+  personId: string
+  providerId: string | null
+  conditionId: string | null
+  vendor: string
+  days: number
+  title: string
+  category: "OFFICE_VISIT" | "DENTAL" | "PRESCRIPTION"
+  cost: number
+}
+
+async function seedPeople(userId: string) {
+  const drChen = await prisma.provider.create({ data: { name: "Dr. Maria Chen", specialty: "Family medicine", practice: "Riverside Family Health", phone: "555-201-4410" } })
+  const drPatel = await prisma.provider.create({ data: { name: "Dr. Anil Patel", specialty: "Dentistry", practice: "Bright Smile Dental", phone: "555-201-8832" } })
+  const drOkafor = await prisma.provider.create({ data: { name: "Dr. Grace Okafor", specialty: "Pediatrics", practice: "Riverside Family Health", phone: "555-201-4411" } })
+
+  const adult = await prisma.person.create({ data: { name: ADMIN_NAME, relationship: "SELF", dateOfBirth: new Date("1984-03-12"), bloodType: "O+", primaryProviderId: drChen.id } })
+  const child = await prisma.person.create({ data: { name: "Sam Rivera", relationship: "CHILD", dateOfBirth: new Date("2016-08-30"), primaryProviderId: drOkafor.id } })
+
+  const hypertension = await prisma.healthCondition.create({ data: { personId: adult.id, name: "Hypertension", status: "MANAGED", diagnosedDate: at(-900), providerId: drChen.id } })
+  await prisma.healthCondition.create({ data: { personId: child.id, name: "Seasonal asthma", status: "ACTIVE", diagnosedDate: at(-500), providerId: drOkafor.id } })
+
+  await prisma.medication.create({ data: { personId: adult.id, name: "Lisinopril", dosage: "10 mg", frequency: "Once daily", prescriberId: drChen.id, conditionId: hypertension.id, startDate: at(-890), refillIntervalDays: 30, nextRefillDate: at(4), pharmacy: "Walgreens on Main" } })
+  await prisma.medication.create({ data: { personId: child.id, name: "Amoxicillin", dosage: "250 mg", frequency: "Three times daily", prescriberId: drOkafor.id, startDate: at(-200), endDate: at(-190) } })
+
+  await prisma.allergy.create({ data: { personId: child.id, substance: "Penicillin", severity: "SEVERE", reaction: "Hives, facial swelling" } })
+  await prisma.allergy.create({ data: { personId: adult.id, substance: "Pollen", severity: "MILD", reaction: "Sneezing" } })
+
+  await prisma.immunization.create({ data: { personId: adult.id, vaccine: "Tdap", dateGiven: at(-3400), nextDueDate: at(250) } })
+  await prisma.immunization.create({ data: { personId: child.id, vaccine: "Influenza", dateGiven: at(-340), nextDueDate: at(20) } })
+
+  const both = { connect: [{ id: adult.id }, { id: child.id }] }
+  await prisma.insurancePolicy.create({ data: { carrier: "Blue Cross", planName: "PPO Family", kind: "MEDICAL", memberId: "XJH448201", groupNumber: "77120", phone: "800-555-0199", startDate: at(-600), endDate: at(45), deductible: 3000, outOfPocketMax: 8000, members: both } })
+  await prisma.insurancePolicy.create({ data: { carrier: "Delta Dental", kind: "DENTAL", memberId: "DD-5521", startDate: at(-600), members: both } })
+
+  const visits: VisitSeed[] = [
+    { personId: adult.id, providerId: drChen.id, conditionId: hypertension.id, vendor: drChen.name, days: -60, title: "Blood pressure follow-up", category: "OFFICE_VISIT", cost: 45 },
+    { personId: adult.id, providerId: drChen.id, conditionId: null, vendor: drChen.name, days: -200, title: "Annual physical", category: "OFFICE_VISIT", cost: 0 },
+    { personId: adult.id, providerId: drPatel.id, conditionId: null, vendor: drPatel.name, days: -120, title: "Dental cleaning", category: "DENTAL", cost: 85 },
+    { personId: child.id, providerId: drOkafor.id, conditionId: null, vendor: drOkafor.name, days: -195, title: "Ear infection", category: "OFFICE_VISIT", cost: 35 },
+    { personId: child.id, providerId: null, conditionId: null, vendor: "Walgreens on Main", days: -194, title: "Amoxicillin prescription", category: "PRESCRIPTION", cost: 12.5 },
+  ]
+  for (const v of visits) {
+    const record = await prisma.serviceRecord.create({
+      data: {
+        assetType: "PERSON", assetId: v.personId, date: at(v.days), title: v.title, category: v.category,
+        cost: v.cost, vendor: v.vendor, providerId: v.providerId, conditionId: v.conditionId, createdById: userId,
+      },
+    })
+    await attach("SERVICE", record.id, userId, `${v.title}.pdf`, [v.title, v.vendor, `Amount due: $${v.cost.toFixed(2)}`])
+  }
+
+  await prisma.maintenanceSchedule.create({ data: { assetType: "PERSON", assetId: adult.id, title: "Annual physical", intervalDays: 365, nextDueDate: at(165) } })
+  await prisma.maintenanceSchedule.create({ data: { assetType: "PERSON", assetId: child.id, title: "Dental cleaning", intervalDays: 180, nextDueDate: at(10) } })
+}
+
 // ─── Seed ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -697,6 +762,9 @@ async function main() {
     SECURITY: "home security", OTHER: "hardware",
   }
 
+  console.log("  Creating people…")
+  await seedPeople(user.id)
+
   const jobs: PhotoJob[] = [
     ...properties.map((p, i) => ({ kind: "properties" as const, id: p.id, query: PROPERTIES[i].photo, fallbackQuery: "house exterior", variant: i })),
     ...vehicles.map((v, i) => ({ kind: "vehicles" as const, id: v.id, query: VEHICLES[i].photo, fallbackQuery: "automobile", variant: i })),
@@ -721,6 +789,7 @@ async function main() {
     ${properties.length} properties, ${vehicles.length} vehicles, ${equipment.length} equipment
     ${SERVICE.length} service records, ${WARRANTIES.length} warranties, ${MAINTENANCE.length} reminders
     ${await prisma.attachment.count()} attachments
+    ${await prisma.person.count()} people, ${await prisma.provider.count()} providers, ${await prisma.insurancePolicy.count()} insurance policies
     photos: ${cached} cached, ${downloaded} fetched, ${generated} generated
 
   Timeline (relative to today):
