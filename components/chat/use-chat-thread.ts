@@ -59,6 +59,9 @@ export function useChatThread(userId: string) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
           throw new Error(body?.error ?? `Request failed (${res.status}).`)
         }
+        if (res.redirected || !res.headers.get("content-type")?.includes("application/x-ndjson")) {
+          throw new Error("Your session has expired — sign in again.")
+        }
         const reader = createNdjsonReader<AgentEvent>((event) => {
           if (event.type === "delta") {
             turn.text += event.text
