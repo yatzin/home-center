@@ -18,6 +18,27 @@ export type RegisteredTool = {
   execute(raw: unknown, ctx: ToolContext): Promise<string>
 }
 
+function isArraySchema(schema: unknown): boolean {
+  let s = schema
+  while (s instanceof z.ZodOptional || s instanceof z.ZodNullable || s instanceof z.ZodDefault) s = s.unwrap()
+  return s instanceof z.ZodArray
+}
+
+/**
+ * Smooths over two common small-model habits before validation: null for an
+ * optional argument ("not set"), and a bare string where a list is expected.
+ */
+export function normalizeArgs(schema: z.ZodType, raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw
+  const shape = schema instanceof z.ZodObject ? (schema.shape as Record<string, unknown>) : {}
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (v === null) continue
+    out[k] = typeof v === "string" && isArraySchema(shape[k]) ? [v] : v
+  }
+  return out
+}
+
 export function defineTool<S extends z.ZodType>(t: {
   name: string
   description: string
@@ -32,11 +53,11 @@ export function defineTool<S extends z.ZodType>(t: {
     description: t.description,
     parameters,
     label(raw) {
-      const parsed = t.schema.safeParse(raw)
+      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw))
       return parsed.success ? t.label(parsed.data) : FALLBACK_LABEL
     },
     async execute(raw, ctx) {
-      const parsed = t.schema.safeParse(raw)
+      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw))
       if (!parsed.success) {
         return JSON.stringify({
           error: "Invalid arguments.",
@@ -48,7 +69,11 @@ export function defineTool<S extends z.ZodType>(t: {
       } catch (error) {
         if (error instanceof ToolInputError) return JSON.stringify({ error: error.message })
         // Name only: messages from the database can carry row data.
-        console.error(`[llm] tool ${t.name} failed:`, error instanceof Error ? error.name : typeof error)
+        const name = error instanceof Error ? error.name : typeof error
+        console.error(`[llm] tool ${t.name} failed:`, name)
+        if (name === "PrismaClientValidationError") {
+          return JSON.stringify({ error: "That filter isn't valid for these fields (e.g. isNull on a required field). Adjust the filters." })
+        }
         return JSON.stringify({ error: "The lookup failed on the server." })
       }
     },

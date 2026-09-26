@@ -113,7 +113,7 @@ describe("runAgent", () => {
     const events = await run(chat)
     expect(requests).toHaveLength(6)
     expect(requests[5].toolChoice).toBe("none")
-    expect(requests[5].messages.at(-1)).toEqual({ role: "system", content: FINAL_NUDGE })
+    expect(requests[5].messages.at(-1)).toEqual({ role: "user", content: FINAL_NUDGE })
     expect(events.at(-1)).toEqual({ type: "done", rounds: 6, model: "m" })
     expect(events.filter((e) => e.type === "status")).toHaveLength(5)
   })
@@ -149,7 +149,22 @@ describe("runAgent", () => {
     expect(requests[0].messages.at(-1)).toEqual({ role: "user", content: "last" })
   })
 
-  it("stops without another call when aborted during tools", async () => {
+  it("caps tool calls per round at 8, answering the rest with an error", async () => {
+    const calls = Array.from({ length: 10 }, (_, i) => toolCall(`c${i}`, `q${i}`))
+    const { chat, requests } = scripted([
+      { content: "", toolCalls: calls },
+      { content: "ok", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(events.filter((e) => e.type === "status")).toHaveLength(8)
+    const toolMessages = requests[1].messages.flatMap((m) => (m.role === "tool" ? [m] : []))
+    expect(toolMessages.map((m) => m.tool_call_id)).toEqual(calls.map((c) => c.id))
+    expect(toolMessages[7].content).toBe('{"rows":["q7"]}')
+    expect(JSON.parse(toolMessages[8].content)).toEqual({ error: "Too many tool calls in one turn — at most 8." })
+    expect(JSON.parse(toolMessages[9].content).error).toMatch(/at most 8/)
+  })
+
+  it("rejects without another call when aborted during tools", async () => {
     const controller = new AbortController()
     const aborting = defineTool({
       name: "lookup",
@@ -162,7 +177,8 @@ describe("runAgent", () => {
       },
     })
     const { chat, requests } = scripted([{ content: "", toolCalls: [toolCall("c1", "x")] }])
-    const events = await run(chat, { tools: [aborting], signal: controller.signal })
+    const events: AgentEvent[] = []
+    await expect(run(chat, { tools: [aborting], signal: controller.signal, emit: (e) => events.push(e) })).rejects.toThrow()
     expect(requests).toHaveLength(1)
     expect(events.some((e) => e.type === "done")).toBe(false)
   })

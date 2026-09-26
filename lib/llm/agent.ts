@@ -6,6 +6,8 @@ import type { ChatRequest, ChatResult } from "./types"
 
 export const MAX_TOOL_ROUNDS = 5
 export const HISTORY_LIMIT = 20
+export const MAX_CALLS_PER_ROUND = 8
+const TOO_MANY_CALLS = JSON.stringify({ error: `Too many tool calls in one turn — at most ${MAX_CALLS_PER_ROUND}.` })
 
 export type AgentOptions = {
   history: HistoryMessage[]
@@ -73,17 +75,21 @@ export async function runAgent(o: AgentOptions): Promise<void> {
       content: result.content || null,
       tool_calls: result.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } })),
     })
+    // Every call id still gets exactly one tool message; calls past the cap get an error.
     const outputs = await Promise.all(
-      result.toolCalls.map((call) => {
+      result.toolCalls.map((call, i) => {
+        if (i >= MAX_CALLS_PER_ROUND) return TOO_MANY_CALLS
         o.emit({ type: "status", tool: call.name, label: toolLabel(o.tools, call), round })
         return runToolCall(o.tools, call, o.ctx)
       })
     )
-    if (o.signal.aborted) return
+    // Returning quietly would end the stream without "done"; the route hides client aborts.
+    if (o.signal.aborted) throw o.signal.reason ?? new Error("aborted")
     result.toolCalls.forEach((call, i) => messages.push({ role: "tool", tool_call_id: call.id, content: outputs[i] }))
   }
 
-  messages.push({ role: "system", content: FINAL_NUDGE })
+  // As a user message: strict chat templates reject a system message mid-conversation.
+  messages.push({ role: "user", content: FINAL_NUDGE })
   const { result: final, streamed } = await runStreamedCall(o.chat, { messages, tools, toolChoice: "none" }, o.emit, o.signal)
   finishTurn(o.emit, final.content, streamed, maxRounds + 1, o.model)
 }

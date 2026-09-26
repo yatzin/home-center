@@ -30,7 +30,25 @@ const crashy = defineTool({
     throw new Error("SQLITE_CORRUPT with secret row data")
   },
 })
-const tools = [echo, picky, crashy]
+const listy = defineTool({
+  name: "listy",
+  description: "Joins tags.",
+  schema: z.object({ tags: z.array(z.string()).optional(), note: z.string().optional() }),
+  label: (a) => `Tags ${a.tags?.join("+") ?? "none"}…`,
+  run: async (a) => ({ tags: a.tags ?? [], note: a.note ?? "none" }),
+})
+const invalidFilter = defineTool({
+  name: "invalid_filter",
+  description: "Throws a Prisma validation error.",
+  schema: z.object({}),
+  label: () => "…",
+  run: async () => {
+    const e = new Error("Argument `endDate` must not be null. row data")
+    e.name = "PrismaClientValidationError"
+    throw e
+  },
+})
+const tools = [echo, picky, crashy, listy, invalidFilter]
 const call = (name: string, args: string) => ({ id: "c1", name, arguments: args })
 
 describe("toOpenAiTools", () => {
@@ -68,8 +86,20 @@ describe("runToolCall", () => {
   })
   it("lists tools when the name is unknown", async () => {
     expect(JSON.parse(await runToolCall(tools, call("nope", "{}"), ctx))).toEqual({
-      error: 'Unknown tool "nope". Available: echo, picky, crashy.',
+      error: 'Unknown tool "nope". Available: echo, picky, crashy, listy, invalid_filter.',
     })
+  })
+  it("treats null optional args as unset and a bare string as a one-item list", async () => {
+    expect(JSON.parse(await runToolCall(tools, call("listy", '{"tags":null,"note":null}'), ctx))).toEqual({ tags: [], note: "none" })
+    expect(JSON.parse(await runToolCall(tools, call("listy", '{"tags":"a","note":"n"}'), ctx))).toEqual({ tags: ["a"], note: "n" })
+    expect(toolLabel(tools, call("listy", '{"tags":"a"}'))).toBe("Tags a…")
+  })
+  it("explains Prisma validation errors as a filter problem, logging the name only", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const out = JSON.parse(await runToolCall(tools, call("invalid_filter", "{}"), ctx))
+    expect(out.error).toMatch(/That filter isn't valid for these fields/)
+    expect(spy.mock.calls.flat().join(" ")).not.toMatch(/row data/)
+    spy.mockRestore()
   })
   it("hides unexpected server errors", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})
