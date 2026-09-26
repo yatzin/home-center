@@ -120,6 +120,7 @@ export async function loadReport(assetType: AssetType, assetId: string): Promise
   const costRows: CostRow[] = services
     .filter((s) => s.cost != null)
     .map((s) => ({
+      id: s.id,
       assetId,
       assetType,
       date: s.date,

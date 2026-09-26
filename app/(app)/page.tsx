@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator, PiggyBank } from "lucide-react"
+import { Building2, Car, Wrench, ShieldCheck, Calendar, AlertTriangle, Clock, Refrigerator, PiggyBank, HeartPulse } from "lucide-react"
 import { SummaryCard } from "@/components/dashboard/summary-card"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
@@ -30,14 +30,15 @@ export default async function DashboardPage() {
   const in60 = new Date(now.getTime() + 60 * 86400000)
 
   const [
-    propertyCount, vehicleCount, equipmentCount, recordCount,
+    propertyCount, vehicleCount, equipmentCount, personCount, recordCount,
     warrantyCount,
     maintenanceCandidates, mileage, expiringWarranties,
-    properties, vehicles, equipment, assets, activity, costRows,
+    properties, vehicles, equipment, people, assets, activity, costRows,
   ] = await Promise.all([
     prisma.property.count(),
     prisma.vehicle.count(),
     prisma.equipment.count(),
+    prisma.person.count(),
     prisma.serviceRecord.count(),
     prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
     // Everything that could be due either way; narrowed to what actually is,
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
     prisma.property.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     prisma.vehicle.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
+    prisma.person.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     loadAssetIndex(),
     loadActivityIndex(),
     loadCostRecords(),
@@ -94,6 +96,7 @@ export default async function DashboardPage() {
   const propertyThumbnails = mostRecentlyActive(properties, "PROPERTY", activity, THUMBNAILS_LARGE)
   const vehicleThumbnails = mostRecentlyActive(vehicles, "VEHICLE", activity, THUMBNAILS_LARGE)
   const equipmentThumbnails = mostRecentlyActive(equipment, "EQUIPMENT", activity, THUMBNAILS_COMPACT)
+  const peopleThumbnails = mostRecentlyActive(people, "PERSON", activity, THUMBNAILS_COMPACT)
 
   return (
     <div className="space-y-6">
@@ -101,25 +104,24 @@ export default async function DashboardPage() {
         <h1 className="font-heading text-xl font-semibold tracking-tight">
           Welcome back{session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}
         </h1>
-        <p className="text-sm text-muted-foreground mt-2">Here&apos;s an overview of your homes, vehicles, and equipment.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.3fr_1.3fr_2fr]">
-        <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} />
-        <SummaryCard icon={<Car />} label="Vehicles" value={vehicleCount} href="/assets/vehicles" thumbnails={vehicleThumbnails} />
-        {/* The four small cards share the third column: three across the top,
-            with Due and Warranties splitting one cell between them, and
-            Equipment spanning the full width underneath so it has room for
-            its thumbnail strip. */}
-        <div className="col-span-2 grid grid-cols-2 content-start gap-4 sm:col-span-3 lg:col-span-1">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.3fr_1.3fr_1.6fr_1fr]">
+        <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} hero />
+        <SummaryCard icon={<Car />} label="Vehicles" value={vehicleCount} href="/assets/vehicles" thumbnails={vehicleThumbnails} hero />
+        {/* People and Equipment stack full-width in the third column, each with
+            room for its own thumbnail strip. */}
+        <div className="col-span-2 grid grid-cols-1 gap-4 sm:col-span-3 lg:col-span-1">
+          <SummaryCard icon={<HeartPulse />} label="People" value={personCount} href="/assets/people" thumbnails={peopleThumbnails} compact hero />
+          <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact hero />
+        </div>
+        {/* Service Records, Active Warranties, and Due stack vertically in a
+            narrow far-right column on wide screens; on narrower ones they run
+            side by side so they don't stretch the page tall. */}
+        <div className="col-span-2 grid grid-cols-3 gap-4 sm:col-span-3 lg:col-span-1 lg:flex lg:flex-col">
           <SummaryCard icon={<Wrench />} label="Service Records" value={recordCount} href="/records" compact />
-          <div className="grid grid-cols-2 gap-4">
-            <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
-            <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
-          </div>
-          <div className="col-span-2">
-            <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact />
-          </div>
+          <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
+          <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
         </div>
       </div>
 

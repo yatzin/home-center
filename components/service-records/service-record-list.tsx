@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -42,9 +42,10 @@ interface Props {
   /** People only: the provider directory and this person's conditions. */
   providerOptions?: { id: string; name: string }[]
   conditionOptions?: { id: string; name: string }[]
+  openId?: string
 }
 
-export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES", providerOptions, conditionOptions }: Props) {
+export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES", providerOptions, conditionOptions, openId }: Props) {
   const isPerson = assetType === "PERSON"
   const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
   const [records, setRecords] = useState(initialRecords)
@@ -57,6 +58,11 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
     setPrevInitialRecords(initialRecords)
     setRecords(initialRecords)
   }
+
+  useEffect(() => {
+    if (!openId) return
+    if (initialRecords.some((r) => r.id === openId)) { setEditingId(openId); setDialogOpen(true) }
+  }, [openId])
 
   const table = useClientTable({
     rows: records,

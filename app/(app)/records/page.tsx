@@ -9,10 +9,12 @@ import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
-import type { Prisma } from "@/app/generated/prisma/client"
+import type { AssetType, Prisma } from "@/app/generated/prisma/client"
 
 const DEFAULT_SORT = "date"
 const DEFAULT_DIR = "desc"
+
+const serviceTab = (assetType: AssetType) => (assetType === "PERSON" ? "visits" : "service")
 
 // Asset is deliberately absent: the name lives in one of three sibling tables
 // reached through a polymorphic assetId/assetType pair with no foreign key, so
@@ -135,13 +137,16 @@ export default async function RecordsPage({
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <Link
+                          href={`${assetHref(r.assetType, r.assetId)}?tab=${serviceTab(r.assetType)}&open=${r.id}`}
+                          className="flex items-center gap-2 hover:underline"
+                        >
                           <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           {r.title}
                           {r._count.attachments > 0 && (
                             <Badge variant="outline" className="h-4 px-1.5 text-xs">{r._count.attachments}</Badge>
                           )}
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{r.vendor}</td>
                       <td className="px-4 py-3 text-right tabular-nums">

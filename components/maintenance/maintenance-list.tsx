@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -39,6 +39,7 @@ interface Props {
   /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
   equipment?: { id: string; name: string }[]
   propertyName?: string
+  openId?: string
 }
 
 function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undefined, meterUnit: MeterUnit) {
@@ -54,10 +55,16 @@ function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undef
   return { ...badge, label: due.dueSoon ? "Due soon" : badge.label, icon }
 }
 
-export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName }: Props) {
+export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, openId }: Props) {
   const [editing, setEditing] = useState<MaintenanceSchedule | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [completing, setCompleting] = useState<MaintenanceSchedule | null>(null)
+
+  useEffect(() => {
+    if (!openId) return
+    const match = schedules.find((s) => s.id === openId)
+    if (match) { setEditing(match); setFormOpen(true) }
+  }, [openId])
 
   const table = useClientTable({
     rows: schedules,

@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma"
 import { InsuranceList } from "@/components/insurance/insurance-list"
 
-export default async function InsurancePage() {
+export default async function InsurancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ open?: string }>
+}) {
+  const { open } = await searchParams
   const [policies, people] = await Promise.all([
     prisma.insurancePolicy.findMany({
       include: {
@@ -15,7 +20,7 @@ export default async function InsurancePage() {
 
   return (
     <div className="space-y-6">
-      <InsuranceList policies={policies} people={people} />
+      <InsuranceList policies={policies} people={people} openId={open} />
     </div>
   )
 }

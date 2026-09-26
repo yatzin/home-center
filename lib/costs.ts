@@ -7,6 +7,7 @@ import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
 /// model: these functions must stay usable from a client component and testable
 /// without a database.
 export type CostRow = {
+  id: string
   assetId: string
   assetType: AssetType
   date: Date

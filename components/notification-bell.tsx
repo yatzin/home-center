@@ -1,25 +1,137 @@
 "use client"
 
 import Link from "next/link"
-import { Bell } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useEffect, useState, useTransition } from "react"
+import { Bell, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
+import { cn } from "@/lib/utils"
 
-export function NotificationBell({ unreadCount }: { unreadCount: number }) {
+type NotificationItem = {
+  id: string
+  type: string
+  title: string
+  message: string
+  isRead: boolean
+  createdAt: Date
+  href: string
+}
+
+const typeIcon: Record<string, React.ElementType> = {
+  MAINTENANCE_DUE: Wrench,
+  WARRANTY_EXPIRING: ShieldCheck,
+  MEDICATION_REFILL: Pill,
+  IMMUNIZATION_DUE: Syringe,
+  INSURANCE_EXPIRING: ShieldPlus,
+  CUSTOM: Bell,
+}
+
+export function NotificationBell({ notifications }: { notifications: NotificationItem[] }) {
+  const router = useRouter()
+  const [items, setItems] = useState(notifications)
+  const [open, setOpen] = useState(false)
+  const [, startTransition] = useTransition()
+
+  useEffect(() => setItems(notifications), [notifications])
+
+  const unreadCount = items.filter((n) => !n.isRead).length
+
+  function dismiss(id: string) {
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
+    startTransition(async () => {
+      await markNotificationRead(id)
+      router.refresh()
+    })
+  }
+
+  function dismissAll() {
+    setItems((prev) => prev.map((n) => ({ ...n, isRead: true })))
+    startTransition(async () => {
+      await markAllNotificationsRead()
+      router.refresh()
+    })
+  }
+
+  function openItem(n: NotificationItem) {
+    setOpen(false)
+    if (!n.isRead) dismiss(n.id)
+  }
+
   return (
-    <Link
-      href="/notifications"
-      className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-      aria-label={`${unreadCount} unread notifications`}
-    >
-      <Bell className="h-4 w-4 transition-transform duration-150 group-hover:scale-110" />
-      {unreadCount > 0 && (
-        <Badge
-          variant="destructive"
-          className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] font-semibold leading-none flex items-center justify-center ring-2 ring-card"
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger
+        className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
+        aria-label={`${unreadCount} unread notifications`}
+      >
+        <Bell className="h-4 w-4 transition-transform duration-150 group-hover:scale-110" />
+        {unreadCount > 0 && (
+          <Badge
+            variant="destructive"
+            className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] font-semibold leading-none flex items-center justify-center ring-2 ring-card"
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </Badge>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm font-semibold">Notifications</span>
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={dismissAll}>
+              Mark all read
+            </Button>
+          )}
+        </div>
+        <DropdownMenuSeparator className="m-0" />
+        <div className="max-h-96 overflow-y-auto p-1">
+          {items.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              <Bell className="h-6 w-6 mx-auto mb-2 opacity-40" />
+              No notifications yet
+            </div>
+          ) : (
+            items.slice(0, 20).map((n) => {
+              const Icon = typeIcon[n.type] ?? Bell
+              return (
+                <Link
+                  key={n.id}
+                  href={n.href}
+                  onClick={() => openItem(n)}
+                  className={cn("flex items-start gap-2.5 rounded-md p-2.5 text-sm hover:bg-muted/60", !n.isRead && "bg-primary/5")}
+                >
+                  <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("font-medium leading-snug", !n.isRead && "text-foreground")}>{n.title}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5 leading-snug">{n.message}</p>
+                    <p className="text-muted-foreground/70 text-[11px] mt-1">{n.createdAt.toLocaleString()}</p>
+                  </div>
+                  {!n.isRead && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[11px] shrink-0"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismiss(n.id) }}
+                    >
+                      Dismiss
+                    </Button>
+                  )}
+                </Link>
+              )
+            })
+          )}
+        </div>
+        <DropdownMenuSeparator className="m-0" />
+        <Link
+          href="/notifications"
+          onClick={() => setOpen(false)}
+          className="block px-3 py-2 text-center text-xs font-medium text-primary hover:underline"
         >
-          {unreadCount > 99 ? "99+" : unreadCount}
-        </Badge>
-      )}
-    </Link>
+          View all
+        </Link>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -15,8 +15,15 @@ import { ConditionsSection } from "@/components/health/conditions-section"
 import { MedicationsSection } from "@/components/health/medications-section"
 import { ageFrom, formatDay, INSURANCE_KINDS, labelFor, RELATIONSHIPS } from "@/lib/health"
 
-export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PersonDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string; open?: string }>
+}) {
   const { id } = await params
+  const { tab, open } = await searchParams
   const person = await prisma.person.findUnique({
     where: { id },
     include: {
@@ -117,7 +124,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        <Tabs defaultValue="visits">
+        <Tabs defaultValue={tab ?? "visits"}>
           <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
             <TabsTrigger value="visits">Visits &amp; Expenses ({visits.length})</TabsTrigger>
             <TabsTrigger value="conditions">Conditions ({person.conditions.length})</TabsTrigger>
@@ -127,22 +134,22 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
             <TabsTrigger value="reminders">Reminders ({schedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="visits" className="mt-4">
-            <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} conditionOptions={conditionOptions} />
+            <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} conditionOptions={conditionOptions} openId={tab === "visits" ? open : undefined} />
           </TabsContent>
           <TabsContent value="conditions" className="mt-4">
             <ConditionsSection personId={id} conditions={person.conditions} providers={providers} />
           </TabsContent>
           <TabsContent value="medications" className="mt-4">
-            <MedicationsSection personId={id} medications={person.medications} providers={providers} conditions={conditionOptions} />
+            <MedicationsSection personId={id} medications={person.medications} providers={providers} conditions={conditionOptions} openId={tab === "medications" ? open : undefined} />
           </TabsContent>
           <TabsContent value="immunizations" className="mt-4">
-            <ImmunizationsSection personId={id} immunizations={person.immunizations} />
+            <ImmunizationsSection personId={id} immunizations={person.immunizations} openId={tab === "immunizations" ? open : undefined} />
           </TabsContent>
           <TabsContent value="allergies" className="mt-4">
             <AllergiesSection personId={id} allergies={person.allergies} />
           </TabsContent>
           <TabsContent value="reminders" className="mt-4">
-            <MaintenanceList schedules={schedules} assetId={id} assetType="PERSON" currentMileage={null} />
+            <MaintenanceList schedules={schedules} assetId={id} assetType="PERSON" currentMileage={null} openId={tab === "reminders" ? open : undefined} />
           </TabsContent>
         </Tabs>
       </div>

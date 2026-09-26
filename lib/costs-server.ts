@@ -19,6 +19,7 @@ export async function loadCostRecords(filter?: {
       ...(filter?.assetType ? { assetType: filter.assetType } : {}),
     },
     select: {
+      id: true,
       assetId: true,
       assetType: true,
       date: true,

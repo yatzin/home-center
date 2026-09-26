@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -68,11 +68,18 @@ interface Props {
   medications: MedicationRow[]
   providers: { id: string; name: string }[]
   conditions: { id: string; name: string }[]
+  openId?: string
 }
 
-export function MedicationsSection({ personId, medications, providers, conditions }: Props) {
+export function MedicationsSection({ personId, medications, providers, conditions, openId }: Props) {
   const [editing, setEditing] = useState<MedicationRow | null>(null)
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!openId) return
+    const match = medications.find((m) => m.id === openId)
+    if (match) { setEditing(match); setOpen(true) }
+  }, [openId])
 
   const now = new Date()
   const active = medications.filter((m) => isMedicationActive(m, now))

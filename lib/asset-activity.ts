@@ -39,8 +39,10 @@ export function mostRecentlyActive<T extends Thumbnailable>(
   activity: { at: (assetType: AssetType, assetId: string) => number | null },
   limit: number
 ) {
+  // No longer filtered to only photographed assets: the card renders an
+  // initials tile for anything without a photo, so the row fills up rather
+  // than shrinking to however many happen to have one.
   return rows
-    .filter((row): row is T & { imageFilename: string } => !!row.imageFilename)
     .map((row) => ({
       row,
       at: activity.at(assetType, row.id) ?? row.updatedAt.getTime(),

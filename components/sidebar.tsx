@@ -14,7 +14,7 @@ type NavItem = { href: string; label: string; icon: React.ElementType; section?:
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/assets/properties", label: "Properties", icon: Building2 },
+  { href: "/assets/properties", label: "Properties", icon: Building2, section: "Home" },
   { href: "/assets/vehicles", label: "Vehicles", icon: Car },
   { href: "/assets/equipment", label: "Equipment", icon: Refrigerator },
   { href: "/assets/people", label: "People", icon: HeartPulse, section: "Health" },

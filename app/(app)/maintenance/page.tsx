@@ -10,10 +10,12 @@ import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
 import { scheduleDue, dueBadge, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
-import type { Prisma } from "@/app/generated/prisma/client"
+import type { AssetType, Prisma } from "@/app/generated/prisma/client"
 
 const DEFAULT_SORT = "nextDue"
 const DEFAULT_DIR = "asc"
+
+const reminderTab = (assetType: AssetType) => (assetType === "PERSON" ? "reminders" : "maintenance")
 
 // "status" still sorts by nextDueDate. That orders date-driven rows correctly,
 // but a row that is overdue only on mileage sorts by its date, so it won't lead
@@ -138,7 +140,11 @@ export default async function MaintenancePage({
                           {assetName ?? <span className="text-muted-foreground italic">Unknown</span>}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 font-medium">{s.title}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`${assetHref(s.assetType, s.assetId)}?tab=${reminderTab(s.assetType)}&open=${s.id}`} className="hover:underline">
+                          {s.title}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
                         {s.nextDueDate ? new Date(s.nextDueDate).toLocaleDateString() : "—"}
                         {s.nextDueMileage != null && <span className="block text-xs">{s.nextDueMileage.toLocaleString()} {meterUnitShort(mileage.get(s.assetId)?.unit ?? "MILES")}</span>}
