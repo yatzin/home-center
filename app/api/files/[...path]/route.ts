@@ -1,7 +1,6 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
-import { readFile } from "fs/promises"
-import { existsSync } from "fs"
+import { readFile, stat } from "fs/promises"
 import path from "path"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { UPLOAD_TYPES } from "@/lib/upload-types"
@@ -21,7 +20,13 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  if (!existsSync(filePath)) {
+  let fileStat
+  try {
+    fileStat = await stat(filePath)
+  } catch {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+  if (!fileStat.isFile()) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 

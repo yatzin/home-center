@@ -79,6 +79,8 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
       }
       toast.success(successMessage)
       onClose()
+    } catch {
+      toast.error("Something went wrong saving. Please try again.")
     } finally {
       setSubmitting(false)
     }

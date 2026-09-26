@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { zipSync, strToU8 } from "fflate"
 import { readFileSync, existsSync } from "fs"
+import path from "path"
 import { parseAssetSegment } from "@/lib/report-server"
 import { resolveUploadPath } from "@/lib/upload-path"
 
@@ -47,9 +48,25 @@ export async function GET(
   ])
 
   const files: Record<string, Uint8Array> = {}
+
+  // Two attachments can land on the same zip path (e.g. same title, same
+  // filename) — number the later ones instead of letting them overwrite.
+  function uniquePath(zipPath: string): string {
+    if (!(zipPath in files)) return zipPath
+    const ext = path.extname(zipPath)
+    const base = zipPath.slice(0, zipPath.length - ext.length)
+    let n = 2
+    let candidate = `${base} (${n})${ext}`
+    while (candidate in files) {
+      n++
+      candidate = `${base} (${n})${ext}`
+    }
+    return candidate
+  }
+
   function add(zipPath: string, ...segments: string[]) {
     const filePath = resolveUploadPath(...segments)
-    if (existsSync(filePath)) files[zipPath] = new Uint8Array(readFileSync(filePath))
+    if (existsSync(filePath)) files[uniquePath(zipPath)] = new Uint8Array(readFileSync(filePath))
   }
 
   for (const a of serviceAttachments) {
