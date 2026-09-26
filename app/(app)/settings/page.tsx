@@ -4,8 +4,11 @@ import { redirect } from "next/navigation"
 import { UserManagement } from "@/components/settings/user-management"
 import { EmailPreferences } from "@/components/settings/email-preferences"
 import { MailSettings } from "@/components/settings/mail-settings"
+import { LlmSettings } from "@/components/settings/llm-settings"
 import { loadMailConfig, SETTINGS_ID } from "@/lib/notifications/mail-config"
 import { isMailConfigured } from "@/lib/notifications/mailer"
+import { loadLlmConfig } from "@/lib/llm/config"
+import { isLlmReady } from "@/lib/llm/settings-schema"
 
 export default async function SettingsPage() {
   const session = await auth()
@@ -16,7 +19,7 @@ export default async function SettingsPage() {
   // Every account reaches Settings now: email cadence is a personal preference,
   // so gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. User and server management stay admin-only.
-  const [me, users, mail, storedMail] = await Promise.all([
+  const [me, users, mail, storedMail, llm] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true },
@@ -26,6 +29,7 @@ export default async function SettingsPage() {
     isAdmin
       ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } })
       : Promise.resolve(null),
+    isAdmin ? loadLlmConfig() : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -72,6 +76,23 @@ export default async function SettingsPage() {
           passwordUnreadable={mail.passwordUnreadable}
           configured={isMailConfigured(mail)}
           dryRun={mail.dryRun}
+        />
+      )}
+
+      {isAdmin && llm && (
+        <LlmSettings
+          // The key itself is never sent — only whether one is stored.
+          initial={{
+            enabled: llm.enabled,
+            baseUrl: llm.baseUrl ?? "",
+            model: llm.model ?? "",
+            temperature: llm.temperature?.toString() ?? "",
+            maxTokens: llm.maxTokens?.toString() ?? "",
+            systemPrompt: llm.systemPrompt ?? "",
+          }}
+          hasStoredKey={llm.hasStoredKey}
+          keyUnreadable={llm.keyUnreadable}
+          ready={isLlmReady(llm)}
         />
       )}
 
