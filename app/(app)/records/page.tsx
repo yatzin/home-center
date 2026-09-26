@@ -126,7 +126,7 @@ export default async function RecordsPage({
                   return (
                     <tr key={r.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                        {new Date(r.date).toLocaleDateString()}
+                        {new Date(r.date).toLocaleDateString(undefined, { timeZone: "UTC" })}
                       </td>
                       <td className="px-4 py-3">
                         <Link href={assetHref(r.assetType, r.assetId)} className="flex items-center gap-1.5 hover:underline">

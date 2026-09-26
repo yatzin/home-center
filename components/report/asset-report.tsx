@@ -153,10 +153,19 @@ export function AssetReport({ data }: { data: ReportData }) {
           <span>HomeCenter</span>
         </div>
         <p className="mt-1.5">
-          {services.length} service record{services.length === 1 ? "" : "s"} ·{" "}
-          {warranties.length} warrant{warranties.length === 1 ? "y" : "ies"} ·{" "}
-          {schedules.length} maintenance schedule{schedules.length === 1 ? "" : "s"}. Attachments are
-          named but not embedded; download them from the asset page.
+          {isPerson ? (
+            <>
+              {services.length} visit{services.length === 1 ? "" : "s"} ·{" "}
+              {schedules.length} health reminder{schedules.length === 1 ? "" : "s"}.{" "}
+            </>
+          ) : (
+            <>
+              {services.length} service record{services.length === 1 ? "" : "s"} ·{" "}
+              {warranties.length} warrant{warranties.length === 1 ? "y" : "ies"} ·{" "}
+              {schedules.length} maintenance schedule{schedules.length === 1 ? "" : "s"}.{" "}
+            </>
+          )}
+          Attachments are named but not embedded; download them from the asset page.
         </p>
       </footer>
     </article>
@@ -277,6 +286,7 @@ function ServiceHistory({
               <tr className="border-t align-top" style={{ borderColor: "var(--rule)" }}>
                 <td className="whitespace-nowrap py-2.5 pr-3 tabular-nums" style={{ color: "var(--ink-soft)" }}>
                   {new Date(s.date).toLocaleDateString(undefined, {
+                    timeZone: "UTC",
                     year: "numeric",
                     month: "short",
                     day: "numeric",
@@ -361,12 +371,12 @@ function Warranties({ warranties, now }: { warranties: ReportWarranty[]; now: Da
                   <span>
                     Purchased{" "}
                     {w.purchaseDate
-                      ? new Date(w.purchaseDate).toLocaleDateString(undefined, { dateStyle: "medium" })
+                      ? new Date(w.purchaseDate).toLocaleDateString(undefined, { timeZone: "UTC", dateStyle: "medium" })
                       : "—"}
                   </span>
                   <span>
                     Expires{" "}
-                    {expires ? expires.toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}
+                    {expires ? expires.toLocaleDateString(undefined, { timeZone: "UTC", dateStyle: "medium" }) : "—"}
                   </span>
                 </div>
                 {contact ? (
@@ -406,7 +416,7 @@ function Maintenance({
     <section className="report-section mt-7">
       <SectionTitle>{asset.type === "PERSON" ? "Health reminders" : "Maintenance schedule"}</SectionTitle>
       {schedules.length === 0 ? (
-        <Empty>No recurring maintenance is scheduled for this asset.</Empty>
+        <Empty>{asset.type === "PERSON" ? "No health reminders are scheduled." : "No recurring maintenance is scheduled for this asset."}</Empty>
       ) : (
         <ul className="mt-1">
           {schedules.map((m) => {
@@ -460,7 +470,7 @@ function Maintenance({
                   <span>
                     Last completed{" "}
                     {m.lastCompletedDate
-                      ? new Date(m.lastCompletedDate).toLocaleDateString(undefined, { dateStyle: "medium" })
+                      ? new Date(m.lastCompletedDate).toLocaleDateString(undefined, { timeZone: "UTC", dateStyle: "medium" })
                       : "—"}
                     {m.lastCompletedMileage != null
                       ? ` at ${m.lastCompletedMileage.toLocaleString()} ${unit}`
@@ -469,7 +479,7 @@ function Maintenance({
                   <span>
                     Next due{" "}
                     {m.nextDueDate
-                      ? new Date(m.nextDueDate).toLocaleDateString(undefined, { dateStyle: "medium" })
+                      ? new Date(m.nextDueDate).toLocaleDateString(undefined, { timeZone: "UTC", dateStyle: "medium" })
                       : "—"}
                     {m.nextDueMileage != null ? ` / ${m.nextDueMileage.toLocaleString()} ${unit}` : ""}
                   </span>

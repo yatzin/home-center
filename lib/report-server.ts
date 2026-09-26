@@ -77,7 +77,7 @@ export type ReportData = {
 
 function formatDate(date: Date | null | undefined): string {
   if (!date) return "—"
-  return new Date(date).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+  return new Date(date).toLocaleDateString(undefined, { timeZone: "UTC", year: "numeric", month: "long", day: "numeric" })
 }
 
 function formatMoneyPlain(n: number): string {
