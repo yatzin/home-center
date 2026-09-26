@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
-import type { Attachment, Warranty } from "@/app/generated/prisma/client"
+import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
 
 type WarrantyWithAttachments = Warranty & { attachments: Attachment[] }
 
@@ -34,10 +34,11 @@ const INITIAL_DIRS: Record<string, SortDir> = { purchased: "desc" }
 interface Props {
   warranties: WarrantyWithAttachments[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
   equipment?: { id: string; name: string }[]
   propertyName?: string
+  openId?: string
 }
 
 function warrantyStatus(expirationDate: Date | null) {
@@ -52,12 +53,18 @@ function warrantyStatus(expirationDate: Date | null) {
   return { label: "Active", variant: "outline" as const }
 }
 
-export function WarrantyList({ warranties: initialWarranties, assetId, assetType, equipment, propertyName }: Props) {
+export function WarrantyList({ warranties: initialWarranties, assetId, assetType, equipment, propertyName, openId }: Props) {
   const [warranties, setWarranties] = useState(initialWarranties)
   const [prevInitialWarranties, setPrevInitialWarranties] = useState(initialWarranties)
   const [editing, setEditing] = useState<WarrantyWithAttachments | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!openId) return
+    const match = initialWarranties.find((w) => w.id === openId)
+    if (match) { setEditing(match); setDialogOpen(true) }
+  }, [openId])
 
   if (initialWarranties !== prevInitialWarranties) {
     setPrevInitialWarranties(initialWarranties)

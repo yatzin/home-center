@@ -7,7 +7,7 @@ export type AssetView = (typeof ASSET_VIEWS)[number]
 
 export const DEFAULT_ASSET_VIEW: AssetView = "cards"
 
-export type AssetViewKey = "properties" | "vehicles" | "equipment"
+export type AssetViewKey = "properties" | "vehicles" | "equipment" | "people"
 
 export function assetViewCookieName(key: AssetViewKey) {
   return `hc-view-${key}`

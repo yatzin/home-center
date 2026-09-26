@@ -35,6 +35,7 @@ enum AssetType {
   PROPERTY
   VEHICLE
   EQUIPMENT
+  PERSON
 }
 
 /// What a vehicle's odometer-style field on maintenance schedules and service
@@ -48,6 +49,7 @@ enum MeterUnit {
 /// What kind of spending a service record represents, as distinct from what it was
 /// spent on. Nullable on the record: anything logged before categories existed is
 /// genuinely uncategorized, and the reports say so rather than guessing.
+/// The medical values are offered only on people's records — see lib/costs.ts.
 enum ServiceCategory {
   ROUTINE
   REPAIR
@@ -55,6 +57,13 @@ enum ServiceCategory {
   INSPECTION
   PARTS
   OTHER
+  OFFICE_VISIT
+  PRESCRIPTION
+  LAB
+  DENTAL
+  VISION
+  PROCEDURE
+  THERAPY
 }
 
 enum EquipmentCategory {
@@ -68,16 +77,48 @@ enum EquipmentCategory {
   OTHER
 }
 
+enum Relationship {
+  SELF
+  SPOUSE
+  CHILD
+  PARENT
+  OTHER
+}
+
+enum ConditionStatus {
+  ACTIVE
+  MANAGED
+  RESOLVED
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum InsuranceKind {
+  MEDICAL
+  DENTAL
+  VISION
+  OTHER
+}
+
 enum AttachmentRecordType {
   SERVICE
   WARRANTY
   MAINTENANCE
+  CONDITION
+  INSURANCE
 }
 
 enum NotificationType {
   MAINTENANCE_DUE
   WARRANTY_EXPIRING
   CUSTOM
+  MEDICATION_REFILL
+  IMMUNIZATION_DUE
+  INSURANCE_EXPIRING
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -157,6 +198,140 @@ model Equipment {
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 }
 
+// ─── People & health ──────────────────────────────────────────────────────────
+
+model Person {
+  id            String       @id @default(cuid())
+  name          String
+  relationship  Relationship @default(OTHER)
+  dateOfBirth   DateTime?
+  sex           String?
+  bloodType     String?
+  notes         String?
+  imageFilename String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  primaryProviderId String?
+  primaryProvider   Provider? @relation("PrimaryProvider", fields: [primaryProviderId], references: [id], onDelete: SetNull)
+
+  conditions        HealthCondition[]
+  medications       Medication[]
+  allergies         Allergy[]
+  immunizations     Immunization[]
+  insurancePolicies InsurancePolicy[]
+}
+
+/// Shared household directory, not owned by one person.
+model Provider {
+  id        String   @id @default(cuid())
+  name      String
+  specialty String?
+  practice  String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  primaryFor     Person[]          @relation("PrimaryProvider")
+  conditions     HealthCondition[]
+  prescriptions  Medication[]
+  serviceRecords ServiceRecord[]
+}
+
+model HealthCondition {
+  id            String          @id @default(cuid())
+  name          String
+  status        ConditionStatus @default(ACTIVE)
+  diagnosedDate DateTime?
+  resolvedDate  DateTime?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  personId   String
+  person     Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  providerId String?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  medications    Medication[]
+  serviceRecords ServiceRecord[]
+  attachments    Attachment[]
+}
+
+model Medication {
+  id                 String    @id @default(cuid())
+  name               String
+  dosage             String?
+  frequency          String?
+  pharmacy           String?
+  startDate          DateTime?
+  endDate            DateTime?
+  refillIntervalDays Int?
+  nextRefillDate     DateTime?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  personId     String
+  person       Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  prescriberId String?
+  prescriber   Provider?        @relation(fields: [prescriberId], references: [id], onDelete: SetNull)
+  conditionId  String?
+  condition    HealthCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+}
+
+model Allergy {
+  id        String          @id @default(cuid())
+  substance String
+  reaction  String?
+  severity  AllergySeverity @default(MODERATE)
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+}
+
+model Immunization {
+  id          String    @id @default(cuid())
+  vaccine     String
+  dateGiven   DateTime
+  dose        String?
+  givenBy     String?
+  nextDueDate DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+}
+
+model InsurancePolicy {
+  id             String        @id @default(cuid())
+  carrier        String
+  planName       String?
+  kind           InsuranceKind @default(MEDICAL)
+  policyNumber   String?
+  groupNumber    String?
+  memberId       String?
+  phone          String?
+  startDate      DateTime?
+  endDate        DateTime?
+  deductible     Float?
+  outOfPocketMax Float?
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  members     Person[]
+  attachments Attachment[]
+}
+
 // ─── Service Records ──────────────────────────────────────────────────────────
 
 model ServiceRecord {
@@ -170,6 +345,12 @@ model ServiceRecord {
   cost             Float?
   category         ServiceCategory?
   mileageAtService Int?
+  /// Person records only: who was seen and what for. vendor stays free text for
+  /// facilities outside the provider directory.
+  providerId       String?
+  provider         Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  conditionId      String?
+  condition        HealthCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -243,6 +424,12 @@ model Attachment {
 
   maintenanceScheduleId String?
   maintenanceSchedule   MaintenanceSchedule? @relation(fields: [maintenanceScheduleId], references: [id], onDelete: Cascade)
+
+  healthConditionId     String?
+  healthCondition       HealthCondition?     @relation(fields: [healthConditionId], references: [id], onDelete: Cascade)
+
+  insurancePolicyId     String?
+  insurancePolicy       InsurancePolicy?     @relation(fields: [insurancePolicyId], references: [id], onDelete: Cascade)
 }
 
 // ─── Mail settings ────────────────────────────────────────────────────────────

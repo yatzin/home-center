@@ -15,16 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createServiceRecord, updateServiceRecord } from "@/lib/actions/service-records"
 import { deleteAttachment } from "@/lib/actions/attachments"
 import { meterUnitNoun } from "@/lib/maintenance-due"
-import { SERVICE_CATEGORIES } from "@/lib/costs"
+import { SERVICE_CATEGORIES, categoriesFor } from "@/lib/costs"
+import { ASSET_TYPES } from "@/lib/assets"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
-import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
+import type { Attachment, ServiceRecord, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 // Base UI Select has no empty-string option, so "no category" needs a sentinel.
 const NO_CATEGORY = "__none__"
+const NO_LINK = "__none__"
 
 const schema = z.object({
   assetId: z.string(),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   date: z.string().min(1, "Date is required"),
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
@@ -32,6 +34,8 @@ const schema = z.object({
   cost: z.string().optional(),
   category: z.string().optional(),
   mileageAtService: z.string().optional(),
+  providerId: z.string().optional(),
+  conditionId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -40,7 +44,7 @@ interface Props {
   open: boolean
   onClose: () => void
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   record?: ServiceRecord | null
   attachments?: Attachment[]
   onAttachmentDeleted?: (recordId: string, attachmentId: string) => void
@@ -49,9 +53,12 @@ interface Props {
   propertyName?: string
   /** Vehicle's odometer unit, for the mileage field's label. Defaults to miles. */
   meterUnit?: MeterUnit
+  /** People only: the provider directory and this person's conditions. */
+  providerOptions?: { id: string; name: string }[]
+  conditionOptions?: { id: string; name: string }[]
 }
 
-function targetKey(assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT", assetId: string) {
+function targetKey(assetType: AssetType, assetId: string) {
   return `${assetType}:${assetId}`
 }
 
@@ -66,7 +73,8 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, record, attachments: initialAttachments = [], onAttachmentDeleted, equipmentOptions, propertyName = "This property", meterUnit = "MILES" }: Props) {
+export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, record, attachments: initialAttachments = [], onAttachmentDeleted, equipmentOptions, propertyName = "This property", meterUnit = "MILES", providerOptions, conditionOptions }: Props) {
+  const isPerson = assetType === "PERSON"
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
   const [createdRecordId, setCreatedRecordId] = useState<string | null>(null)
@@ -91,6 +99,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
       assetId, assetType,
       date: new Date().toISOString().split("T")[0],
       title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "",
+      providerId: "", conditionId: "",
     },
   })
 
@@ -105,9 +114,11 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
         cost: record.cost?.toString() ?? "",
         category: record.category ?? NO_CATEGORY,
         mileageAtService: record.mileageAtService?.toString() ?? "",
+        providerId: record.providerId ?? "",
+        conditionId: record.conditionId ?? "",
       })
     } else {
-      form.reset({ assetId, assetType, date: new Date().toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "" })
+      form.reset({ assetId, assetType, date: new Date().toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "", providerId: "", conditionId: "" })
     }
   }, [record, open, form, assetId, assetType])
 
@@ -125,7 +136,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
   async function handleDeleteExisting(attachment: Attachment) {
     if (!confirm(`Remove "${attachment.originalName}"?`)) return
     if (!record) return
-    const result = await deleteAttachment(attachment.id, record.id, "SERVICE")
+    const result = await deleteAttachment(attachment.id)
     if (result?.error) { toast.error(result.error); return }
     setRemovedIds((prev) => new Set(prev).add(attachment.id))
     onAttachmentDeleted?.(record.id, attachment.id)
@@ -136,6 +147,8 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
     const payload = {
       ...values,
       category: values.category === NO_CATEGORY ? "" : values.category,
+      providerId: values.providerId === NO_LINK ? "" : values.providerId,
+      conditionId: values.conditionId === NO_LINK ? "" : values.conditionId,
     } as unknown as Parameters<typeof createServiceRecord>[0]
     const existingId = record?.id ?? createdRecordId
     const result = existingId
@@ -175,7 +188,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
       }
     }
 
-    toast.success(record ? "Record updated." : "Service record added.")
+    toast.success(record ? "Record updated." : isPerson ? "Visit added." : "Service record added.")
     router.refresh()
     handleClose()
   }
@@ -191,7 +204,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()} disablePointerDismissal={filePickerOpen}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{record ? "Edit Service Record" : "Add Service Record"}</DialogTitle>
+          <DialogTitle>{record ? (isPerson ? "Edit Visit" : "Edit Service Record") : (isPerson ? "Add Visit / Expense" : "Add Service Record")}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -236,15 +249,15 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel>Title *</FormLabel>
-                  <FormControl><Input placeholder="Oil Change" {...field} /></FormControl>
+                  <FormControl><Input placeholder={isPerson ? "Annual physical" : "Oil Change"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
 
               <FormField control={form.control} name="vendor" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor / Shop</FormLabel>
-                  <FormControl><Input placeholder="Jiffy Lube" {...field} /></FormControl>
+                  <FormLabel>{isPerson ? "Facility" : "Vendor / Shop"}</FormLabel>
+                  <FormControl><Input placeholder={isPerson ? "City Medical Center" : "Jiffy Lube"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -270,7 +283,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>Uncategorized</SelectItem>
-                      {SERVICE_CATEGORIES.map((c) => (
+                      {categoriesFor(assetType).map((c) => (
                         <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -278,6 +291,44 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {providerOptions && (
+                <FormField control={form.control} name="providerId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Provider</FormLabel>
+                    <Select value={field.value || NO_LINK} onValueChange={(v) => field.onChange(!v || v === NO_LINK ? "" : v)}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{(v: string) => providerOptions.find((p) => p.id === v)?.name ?? "None"}</SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_LINK}>None</SelectItem>
+                        {providerOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )} />
+              )}
+
+              {conditionOptions && conditionOptions.length > 0 && (
+                <FormField control={form.control} name="conditionId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>For condition</FormLabel>
+                    <Select value={field.value || NO_LINK} onValueChange={(v) => field.onChange(!v || v === NO_LINK ? "" : v)}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{(v: string) => conditionOptions.find((c) => c.id === v)?.name ?? "None"}</SelectValue>
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_LINK}>None</SelectItem>
+                        {conditionOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )} />
+              )}
 
               {assetType === "VEHICLE" && (
                 <FormField control={form.control} name="mileageAtService" render={({ field }) => (

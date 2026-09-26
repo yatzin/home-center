@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -18,7 +18,7 @@ import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
 import { scheduleDue, dueBadge, meterUnitShort, meterUnitNoun, type MileageIndex } from "@/lib/maintenance-due"
-import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
+import type { MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
   title: (s) => s.title,
@@ -32,13 +32,14 @@ const INITIAL_DIRS: Record<string, SortDir> = { lastCompleted: "desc" }
 interface Props {
   schedules: MaintenanceSchedule[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   currentMileage?: number | null
   /** Vehicle's odometer unit. Defaults to miles. */
   meterUnit?: MeterUnit
   /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
   equipment?: { id: string; name: string }[]
   propertyName?: string
+  openId?: string
 }
 
 function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undefined, meterUnit: MeterUnit) {
@@ -54,10 +55,16 @@ function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undef
   return { ...badge, label: due.dueSoon ? "Due soon" : badge.label, icon }
 }
 
-export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName }: Props) {
+export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, openId }: Props) {
   const [editing, setEditing] = useState<MaintenanceSchedule | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [completing, setCompleting] = useState<MaintenanceSchedule | null>(null)
+
+  useEffect(() => {
+    if (!openId) return
+    const match = schedules.find((s) => s.id === openId)
+    if (match) { setEditing(match); setFormOpen(true) }
+  }, [openId])
 
   const table = useClientTable({
     rows: schedules,
@@ -217,7 +224,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
 
 function CompleteDialog({ schedule, assetType, currentMileage, meterUnit, onClose }: {
   schedule: MaintenanceSchedule
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   currentMileage?: number | null
   meterUnit: MeterUnit
   onClose: () => void

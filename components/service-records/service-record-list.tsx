@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,7 @@ import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
 import { meterUnitShort, meterUnitNoun } from "@/lib/maintenance-due"
-import type { Attachment, ServiceRecord, MeterUnit } from "@/app/generated/prisma/client"
+import type { Attachment, ServiceRecord, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
 type RecordWithAttachments = ServiceRecord & { attachments: Attachment[] }
 
@@ -33,15 +33,20 @@ const INITIAL_DIRS: Record<string, SortDir> = { date: "desc", cost: "desc", mile
 interface Props {
   records: RecordWithAttachments[]
   assetId: string
-  assetType: "PROPERTY" | "VEHICLE" | "EQUIPMENT"
+  assetType: AssetType
   /** Property's equipment, for the Source column and the "For" picker when adding/editing. */
   equipment?: { id: string; name: string }[]
   propertyName?: string
   /** Vehicle's odometer unit, for the Mileage column header/suffix. Defaults to miles. */
   meterUnit?: MeterUnit
+  /** People only: the provider directory and this person's conditions. */
+  providerOptions?: { id: string; name: string }[]
+  conditionOptions?: { id: string; name: string }[]
+  openId?: string
 }
 
-export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES" }: Props) {
+export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES", providerOptions, conditionOptions, openId }: Props) {
+  const isPerson = assetType === "PERSON"
   const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
   const [records, setRecords] = useState(initialRecords)
   const [prevInitialRecords, setPrevInitialRecords] = useState(initialRecords)
@@ -53,6 +58,11 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
     setPrevInitialRecords(initialRecords)
     setRecords(initialRecords)
   }
+
+  useEffect(() => {
+    if (!openId) return
+    if (initialRecords.some((r) => r.id === openId)) { setEditingId(openId); setDialogOpen(true) }
+  }, [openId])
 
   const table = useClientTable({
     rows: records,
@@ -85,13 +95,13 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">{records.length} record{records.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" onClick={() => { setEditingId(null); setDialogOpen(true) }}>Add Service Record</Button>
+        <p className="text-sm text-muted-foreground">{records.length} {isPerson ? "visit" : "record"}{records.length !== 1 ? "s" : ""}</p>
+        <Button size="sm" onClick={() => { setEditingId(null); setDialogOpen(true) }}>{isPerson ? "Add Visit" : "Add Service Record"}</Button>
       </div>
 
       {records.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No service records yet.
+          {isPerson ? "No visits yet." : "No service records yet."}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
@@ -121,7 +131,7 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
                       onClick={() => { setEditingId(record.id); setDialogOpen(true) }}
                     >
                       <TableCell className="text-muted-foreground whitespace-nowrap">
-                        {new Date(record.date).toLocaleDateString()}
+                        {new Date(record.date).toLocaleDateString(undefined, { timeZone: "UTC" })}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{record.title}</div>
@@ -224,6 +234,8 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
         equipmentOptions={equipment}
         propertyName={propertyName}
         meterUnit={meterUnit}
+        providerOptions={providerOptions}
+        conditionOptions={conditionOptions}
       />
     </>
   )

@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge"
 import { Paperclip, Trash2, Upload, FileText, Image } from "lucide-react"
 import { toast } from "sonner"
 import { deleteAttachment } from "@/lib/actions/attachments"
-import type { Attachment } from "@/app/generated/prisma/client"
+import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
 
 interface Props {
   recordId: string
-  recordType: "SERVICE" | "WARRANTY" | "MAINTENANCE"
+  recordType: AttachmentRecordType
   attachments: Attachment[]
 }
 
@@ -54,7 +54,7 @@ export function AttachmentList({ recordId, recordType, attachments: initial }: P
   async function handleDelete(id: string, originalName: string) {
     if (!confirm(`Remove "${originalName}"?`)) return
     startTransition(async () => {
-      await deleteAttachment(id, recordId, recordType)
+      await deleteAttachment(id)
       setAttachments((prev) => prev.filter((a) => a.id !== id))
       toast.success("Attachment removed.")
     })

@@ -3,16 +3,15 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
-import { assetHref } from "@/lib/assets"
+import { ASSET_TYPES, assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
-import { rm } from "fs/promises"
-import path from "path"
+import { removeUploadDir } from "@/lib/upload-fs"
 import { z } from "zod"
 
 const schema = z.object({
   assetId: z.string().min(1),
-  assetType: z.enum(["PROPERTY", "VEHICLE", "EQUIPMENT"]),
+  assetType: z.enum(ASSET_TYPES),
   productName: z.string().min(1, "Product name is required"),
   purchaseDate: z.string().optional(),
   expirationDate: z.string().optional(),
@@ -66,14 +65,12 @@ export async function deleteWarranty(id: string, assetType: AssetType, assetId: 
   const session = await auth()
   if (!session) redirect("/login")
 
-  const attachments = await prisma.attachment.findMany({ where: { warrantyId: id } })
-  const uploadDir = process.env.UPLOAD_DIR ?? "./uploads"
-  for (const a of attachments) {
-    await rm(path.join(uploadDir, "warranty", id, a.filename), { force: true })
-  }
-  await rm(path.join(uploadDir, "warranty", id), { recursive: true, force: true })
+  const warranty = await prisma.warranty.findUnique({ where: { id }, select: { id: true } })
+  if (!warranty) return { error: "Not found" }
 
-  await prisma.warranty.delete({ where: { id } })
+  await prisma.warranty.delete({ where: { id: warranty.id } })
+  await removeUploadDir("warranty", warranty.id)
+
   revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/warranties")
   return { success: true }

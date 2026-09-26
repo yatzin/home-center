@@ -31,6 +31,7 @@ const ASSET_TYPE_FILTERS: { value: AssetType; label: string }[] = [
   { value: "PROPERTY", label: "Properties" },
   { value: "VEHICLE", label: "Vehicles" },
   { value: "EQUIPMENT", label: "Equipment" },
+  { value: "PERSON", label: "People" },
 ]
 
 const GRANULARITY_FILTERS: { value: Granularity; label: string }[] = [
@@ -38,6 +39,8 @@ const GRANULARITY_FILTERS: { value: Granularity; label: string }[] = [
   { value: "quarter", label: "Quarterly" },
   { value: "year", label: "Yearly" },
 ]
+
+const serviceTab = (assetType: AssetType) => (assetType === "PERSON" ? "visits" : "service")
 
 export default async function CostsPage({
   searchParams,
@@ -352,7 +355,7 @@ function BiggestRow({
   return (
     <li>
       <Link
-        href={assetHref(row.assetType, row.assetId)}
+        href={`${assetHref(row.assetType, row.assetId)}?tab=${serviceTab(row.assetType)}&open=${row.id}`}
         className="relative flex items-center gap-2 overflow-hidden rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-muted/60"
       >
         {/* A thin rule along the bottom edge rather than a wash behind the text:

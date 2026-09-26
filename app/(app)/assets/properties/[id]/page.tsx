@@ -14,8 +14,15 @@ const typeLabel: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
 }
 
-export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PropertyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string; open?: string }>
+}) {
   const { id } = await params
+  const { tab, open } = await searchParams
   const property = await prisma.property.findUnique({ where: { id } })
   if (!property) notFound()
 
@@ -96,20 +103,20 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           </div>
         </div>
 
-        <Tabs defaultValue="service">
+        <Tabs defaultValue={tab ?? "service"}>
           <TabsList variant="line" className="w-full justify-start border-b">
             <TabsTrigger value="service">Service ({serviceRecords.length})</TabsTrigger>
             <TabsTrigger value="warranties">Warranties ({warranties.length})</TabsTrigger>
             <TabsTrigger value="maintenance">Maintenance Reminders ({maintenanceSchedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="service" className="mt-4">
-            <ServiceRecordList records={serviceRecords} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
+            <ServiceRecordList records={serviceRecords} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} openId={tab === "service" ? open : undefined} />
           </TabsContent>
           <TabsContent value="warranties" className="mt-4">
-            <WarrantyList warranties={warranties} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
+            <WarrantyList warranties={warranties} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} openId={tab === "warranties" ? open : undefined} />
           </TabsContent>
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} />
+            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} openId={tab === "maintenance" ? open : undefined} />
           </TabsContent>
         </Tabs>
       </div>

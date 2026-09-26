@@ -5,15 +5,20 @@ import { Sidebar, MobileSidebarTrigger } from "@/components/sidebar"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { resolveNotificationHrefs } from "@/lib/notification-links"
 import packageJson from "@/package.json"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
 
-  const unreadCount = await prisma.notification.count({
-    where: { userId: session.user.id, isRead: false },
+  const notifications = await prisma.notification.findMany({
+    where: { userId: session.user.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
   })
+  const hrefs = await resolveNotificationHrefs(notifications)
+  const notificationItems = notifications.map((n) => ({ ...n, href: hrefs.get(n.id) ?? "/notifications" }))
 
   return (
     <div className="flex h-svh overflow-hidden">
@@ -23,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <MobileSidebarTrigger />
           <div className="flex items-center gap-2 ml-auto">
             <ThemeToggle />
-            <NotificationBell unreadCount={unreadCount} />
+            <NotificationBell notifications={notificationItems} />
             <UserMenu name={session.user.name ?? "User"} email={session.user.email ?? ""} />
           </div>
         </header>

@@ -11,8 +11,15 @@ import { VehicleEditButton } from "@/components/vehicles/vehicle-edit-button"
 import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 import { meterUnitNoun, meterUnitShort } from "@/lib/maintenance-due"
 
-export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VehicleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ tab?: string; open?: string }>
+}) {
   const { id } = await params
+  const { tab, open } = await searchParams
   const vehicle = await prisma.vehicle.findUnique({ where: { id } })
   if (!vehicle) notFound()
 
@@ -73,20 +80,20 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
 
-        <Tabs defaultValue="service">
+        <Tabs defaultValue={tab ?? "service"}>
           <TabsList variant="line" className="w-full justify-start border-b">
             <TabsTrigger value="service">Service ({serviceRecords.length})</TabsTrigger>
             <TabsTrigger value="warranties">Warranties ({warranties.length})</TabsTrigger>
             <TabsTrigger value="maintenance">Maintenance Reminders ({maintenanceSchedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="service" className="mt-4">
-            <ServiceRecordList records={serviceRecords} assetId={id} assetType="VEHICLE" meterUnit={vehicle.meterUnit} />
+            <ServiceRecordList records={serviceRecords} assetId={id} assetType="VEHICLE" meterUnit={vehicle.meterUnit} openId={tab === "service" ? open : undefined} />
           </TabsContent>
           <TabsContent value="warranties" className="mt-4">
-            <WarrantyList warranties={warranties} assetId={id} assetType="VEHICLE" />
+            <WarrantyList warranties={warranties} assetId={id} assetType="VEHICLE" openId={tab === "warranties" ? open : undefined} />
           </TabsContent>
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="VEHICLE" currentMileage={vehicle.currentMileage} meterUnit={vehicle.meterUnit} />
+            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="VEHICLE" currentMileage={vehicle.currentMileage} meterUnit={vehicle.meterUnit} openId={tab === "maintenance" ? open : undefined} />
           </TabsContent>
         </Tabs>
       </div>

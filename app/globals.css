@@ -93,6 +93,13 @@
   --cost-inspection: #eda100;
   --cost-parts: #e87ba4;
   --cost-other: #008300;
+  --cost-office-visit: #0f8fa8;
+  --cost-prescription: #9c4fd6;
+  --cost-lab: #a0522d;
+  --cost-dental: #6f8f00;
+  --cost-vision: #c43c8c;
+  --cost-procedure: #c2362f;
+  --cost-therapy: #5a6fa0;
   /* An absence, not a hue: grey keeps it from reading as a seventh kind of spend. */
   --cost-uncategorized: var(--muted-foreground);
   /* Single hue for nominal bars (assets, vendors), where length already encodes
@@ -155,6 +162,13 @@
   --cost-inspection: #c98500;
   --cost-parts: #d55181;
   --cost-other: #008300;
+  --cost-office-visit: #22a6bf;
+  --cost-prescription: #b06ee6;
+  --cost-lab: #c0703f;
+  --cost-dental: #8aad10;
+  --cost-vision: #dc5aa6;
+  --cost-procedure: #e0544c;
+  --cost-therapy: #7a8fc4;
   --cost-uncategorized: var(--muted-foreground);
   /* --primary itself measures only 1.99:1 on the dark card, below the 3:1 floor
      for marks, so the bar hue is lightened here to 4.24:1. */
@@ -254,6 +268,13 @@
   --cat-INSPECTION: #eda100;
   --cat-PARTS: #e87ba4;
   --cat-OTHER: #008300;
+  --cat-OFFICE_VISIT: #0f8fa8;
+  --cat-PRESCRIPTION: #9c4fd6;
+  --cat-LAB: #a0522d;
+  --cat-DENTAL: #6f8f00;
+  --cat-VISION: #c43c8c;
+  --cat-PROCEDURE: #c2362f;
+  --cat-THERAPY: #5a6fa0;
   --cat-UNCATEGORIZED: #8a8a8a;
 
   background: var(--paper);

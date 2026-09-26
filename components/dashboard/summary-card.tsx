@@ -9,7 +9,37 @@ import { cn } from "@/lib/utils"
 import { assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 
-type Thumbnail = { assetType: AssetType; assetId: string; imageFilename: string; name: string }
+type Thumbnail = { assetType: AssetType; assetId: string; imageFilename: string | null; name: string }
+
+// Deterministic per-asset, so the same property or person always lands on the
+// same hue instead of flickering between colors on every render.
+function hashString(s: string) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return "?"
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function softColorOf(seed: string) {
+  const hue = hashString(seed) % 360
+  return { background: `hsl(${hue} 60% 88%)`, color: `hsl(${hue} 45% 32%)` }
+}
+
+// A soft-colored initials tile in place of a photo, for anything without one —
+// used everywhere a thumbnail would otherwise be, not just the hero rows.
+function InitialsTile({ thumbnail, className }: { thumbnail: Thumbnail; className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center", className)} style={softColorOf(thumbnail.assetId)}>
+      {initialsOf(thumbnail.name)}
+    </div>
+  )
+}
 
 function ThumbnailLink({
   thumbnail,
@@ -27,12 +57,16 @@ function ThumbnailLink({
       className="block shrink-0"
       style={style}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route */}
-      <img
-        src={assetImageSrc(thumbnail.assetType, thumbnail.assetId, thumbnail.imageFilename)}
-        alt={thumbnail.name}
-        className={cn("h-full w-full border-card object-cover transition-transform duration-150 hover:scale-105", className)}
-      />
+      {thumbnail.imageFilename ? (
+        // eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route
+        <img
+          src={assetImageSrc(thumbnail.assetType, thumbnail.assetId, thumbnail.imageFilename)}
+          alt={thumbnail.name}
+          className={cn("h-full w-full border-card object-cover transition-transform duration-150 hover:scale-105", className)}
+        />
+      ) : (
+        <InitialsTile thumbnail={thumbnail} className={cn("h-full w-full", className)} />
+      )}
     </Link>
   )
 }
@@ -87,11 +121,15 @@ const THUMB_OVERLAP_STYLE: React.CSSProperties = {
   marginLeft: "calc(var(--thumb-step) - var(--thumb-size))",
 }
 
-export function SummaryCard({ icon, label, value, href, urgent, thumbnails, compact }: {
+export function SummaryCard({ icon, label, value, href, urgent, thumbnails, compact, hero }: {
   icon: React.ReactElement<{ className?: string; strokeWidth?: number }>
   label: string; value: number | string; href?: string; urgent?: boolean
   thumbnails?: Thumbnail[]
   compact?: boolean
+  /** Demo alternative to the thumbnail-strip treatment: the most recent photo
+   * fills the top of the card as a real photo instead of a small corner strip,
+   * with the count/label as its own row underneath. */
+  hero?: boolean
 }) {
   const router = useRouter()
 
@@ -106,6 +144,85 @@ export function SummaryCard({ icon, label, value, href, urgent, thumbnails, comp
     href ? "cursor-pointer hover:-translate-y-1 hover:bg-muted hover:shadow-md" : "opacity-70",
     compact ? "py-2.5" : "py-5"
   )
+
+  if (hero && thumbnails && thumbnails.length > 0) {
+    // Large cards get a mosaic (one big tile plus a stacked column or 2x2
+    // grid); compact, full-width cards like Equipment instead get a single
+    // row — up to 8 equal tiles, cropped to fill whatever width each gets,
+    // so a handful of items still fill the row instead of floating at a
+    // fixed small size. Either way, a count badge lands on the last tile
+    // when there are more photos than are shown.
+    const shown = thumbnails.slice(0, compact ? 8 : 4)
+    const remaining = thumbnails.length - shown.length
+    const mosaicClass = compact
+      ? undefined
+      : shown.length <= 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2"
+    const mosaicStyle = compact ? { gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` } : undefined
+
+    return (
+      <Card className={cn(cardClassName, "gap-0 py-0")}>
+        <div
+          className={cn(
+            "grid gap-0.5 overflow-hidden rounded-t-xl bg-card",
+            compact ? "h-30" : "h-64",
+            mosaicClass
+          )}
+          style={mosaicStyle}
+        >
+          {shown.map((t, i) => (
+            <Link
+              key={t.assetId}
+              href={assetHref(t.assetType, t.assetId)}
+              className={cn("group relative block overflow-hidden", !compact && shown.length === 3 && i === 0 && "row-span-2")}
+            >
+              {t.imageFilename ? (
+                // eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route
+                <img
+                  src={assetImageSrc(t.assetType, t.assetId, t.imageFilename)}
+                  alt={t.name}
+                  className="h-full w-full object-cover transition-transform duration-150 group-hover:scale-105"
+                />
+              ) : (
+                <InitialsTile thumbnail={t} className={cn("h-full w-full", compact ? "text-base" : "text-2xl")} />
+              )}
+              {i === shown.length - 1 && remaining > 0 && (
+                <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                  +{remaining} more
+                </span>
+              )}
+            </Link>
+          ))}
+        </div>
+        {(() => {
+          const statRow = (
+            <>
+              <div>
+                <div className={cn(compact ? "text-lg font-semibold leading-none tabular-nums" : "text-[28px] font-semibold leading-none tabular-nums", urgent && "text-destructive")}>
+                  {value}
+                </div>
+                <div className={cn("font-medium uppercase tracking-wide text-muted-foreground", compact ? "mt-1 text-[10px]" : "mt-2 text-xs")}>{label}</div>
+              </div>
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-center rounded-lg",
+                  compact ? "h-6 w-6" : "h-8 w-8",
+                  urgent ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"
+                )}
+              >
+                {isValidElement(icon) && cloneElement(icon, { className: compact ? "h-3.5 w-3.5" : "h-4 w-4", strokeWidth: 1.75 })}
+              </div>
+            </>
+          )
+          const rowClassName = cn("flex items-center justify-between gap-3", compact ? "px-4 py-1" : "px-5 py-1")
+          return href ? (
+            <Link href={href} className={cn(rowClassName, "transition-colors duration-150 hover:bg-muted")}>{statRow}</Link>
+          ) : (
+            <div className={rowClassName}>{statRow}</div>
+          )
+        })()}
+      </Card>
+    )
+  }
 
   // @container makes CardContent the reference for the 100cqw in the thumbnail
   // sizes, so the strip and the text padding both measure the same width.

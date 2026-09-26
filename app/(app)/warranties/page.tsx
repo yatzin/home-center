@@ -144,7 +144,11 @@ export default async function WarrantiesPage({
                           {assetName ?? <span className="text-muted-foreground italic">Unknown</span>}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 font-medium">{w.productName}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <Link href={`${assetHref(w.assetType, w.assetId)}?tab=warranties&open=${w.id}`} className="hover:underline">
+                          {w.productName}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{w.vendor ?? "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {w.expirationDate ? new Date(w.expirationDate).toLocaleDateString() : "—"}

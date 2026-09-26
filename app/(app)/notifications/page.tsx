@@ -1,15 +1,20 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
+import { resolveNotificationHrefs } from "@/lib/notification-links"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bell, Wrench, ShieldCheck } from "lucide-react"
+import { Bell, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const typeIcon: Record<string, React.ElementType> = {
   MAINTENANCE_DUE: Wrench,
   WARRANTY_EXPIRING: ShieldCheck,
+  MEDICATION_REFILL: Pill,
+  IMMUNIZATION_DUE: Syringe,
+  INSURANCE_EXPIRING: ShieldPlus,
   CUSTOM: Bell,
 }
 
@@ -24,6 +29,7 @@ export default async function NotificationsPage() {
   })
 
   const unread = notifications.filter((n) => !n.isRead).length
+  const hrefs = await resolveNotificationHrefs(notifications)
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -59,14 +65,14 @@ export default async function NotificationsPage() {
                 )}
               >
                 <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
-                <div className="flex-1 min-w-0">
+                <Link href={hrefs.get(n.id) ?? "#"} className="flex-1 min-w-0 hover:underline">
                   <div className="flex items-center gap-2">
                     <p className={cn("text-sm font-medium", !n.isRead && "text-foreground")}>{n.title}</p>
                     {!n.isRead && <Badge variant="secondary" className="h-4 px-1.5 text-xs">New</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
                   <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleString()}</p>
-                </div>
+                </Link>
                 {!n.isRead && (
                   <form action={markNotificationRead.bind(null, n.id)}>
                     <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" type="submit">
