@@ -1,0 +1,123 @@
+import { prisma } from "@/lib/prisma"
+import { notFound } from "next/navigation"
+import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Cake, Download, Droplet, FileText, Stethoscope, Users, User } from "lucide-react"
+import { ServiceRecordList } from "@/components/service-records/service-record-list"
+import { MaintenanceList } from "@/components/maintenance/maintenance-list"
+import { AssetImageUploader } from "@/components/asset-image-uploader"
+import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
+import { PersonEditButton } from "@/components/people/person-edit-button"
+import { AllergyCallout } from "@/components/health/allergy-callout"
+import { AllergiesSection } from "@/components/health/allergies-section"
+import { ImmunizationsSection } from "@/components/health/immunizations-section"
+import { ageFrom, formatDay, labelFor, RELATIONSHIPS } from "@/lib/health"
+
+export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const person = await prisma.person.findUnique({
+    where: { id },
+    include: {
+      primaryProvider: { select: { id: true, name: true } },
+      allergies: { orderBy: [{ severity: "desc" }, { substance: "asc" }] },
+      immunizations: { orderBy: { dateGiven: "desc" } },
+    },
+  })
+  if (!person) notFound()
+
+  const where = { assetId: id, assetType: "PERSON" as const }
+  const [visits, schedules, providers] = await Promise.all([
+    prisma.serviceRecord.findMany({ where, include: { attachments: true }, orderBy: { date: "desc" } }),
+    prisma.maintenanceSchedule.findMany({ where: { ...where, isActive: true }, orderBy: { nextDueDate: "asc" } }),
+    prisma.provider.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ])
+
+  const age = person.dateOfBirth ? ageFrom(person.dateOfBirth, new Date()) : null
+
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <aside className="space-y-4 lg:w-72 lg:shrink-0">
+        <AssetImageUploader assetType="PERSON" assetId={id} imageFilename={person.imageFilename} alt={person.name} />
+
+        <AllergyCallout allergies={person.allergies} />
+
+        <div className="space-y-2">
+          <Stat icon={Users} label="Relationship" value={labelFor(RELATIONSHIPS, person.relationship)} />
+          {person.dateOfBirth && (
+            <Stat icon={Cake} label="Born" value={`${formatDay(person.dateOfBirth)} (${age})`} />
+          )}
+          {person.sex && <Stat icon={User} label="Sex" value={person.sex} />}
+          {person.bloodType && <Stat icon={Droplet} label="Blood type" value={person.bloodType} />}
+          {person.primaryProvider && (
+            <Stat
+              icon={Stethoscope}
+              label="Primary care"
+              value={<Link href="/providers" className="hover:underline">{person.primaryProvider.name}</Link>}
+            />
+          )}
+        </div>
+
+        <AssetCostPanel assetType="PERSON" assetId={id} purchasePrice={null} />
+
+        {person.notes && (
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">{person.notes}</div>
+        )}
+      </aside>
+
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="font-heading text-2xl font-semibold">{person.name}</h1>
+          <div className="flex shrink-0 items-center gap-2">
+            <PersonEditButton person={person} providers={providers} />
+            <Link
+              href={`/reports/people/${id}`}
+              target="_blank"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <FileText className="h-3.5 w-3.5" /> Medical summary
+            </Link>
+            <a
+              href={`/api/assets/people/${id}/download`}
+              download
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" /> Download all files
+            </a>
+          </div>
+        </div>
+
+        <Tabs defaultValue="visits">
+          <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
+            <TabsTrigger value="visits">Visits &amp; Expenses ({visits.length})</TabsTrigger>
+            <TabsTrigger value="immunizations">Immunizations ({person.immunizations.length})</TabsTrigger>
+            <TabsTrigger value="allergies">Allergies ({person.allergies.length})</TabsTrigger>
+            <TabsTrigger value="reminders">Reminders ({schedules.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="visits" className="mt-4">
+            <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} />
+          </TabsContent>
+          <TabsContent value="immunizations" className="mt-4">
+            <ImmunizationsSection personId={id} immunizations={person.immunizations} />
+          </TabsContent>
+          <TabsContent value="allergies" className="mt-4">
+            <AllergiesSection personId={id} allergies={person.allergies} />
+          </TabsContent>
+          <TabsContent value="reminders" className="mt-4">
+            <MaintenanceList schedules={schedules} assetId={id} assetType="PERSON" currentMileage={null} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
+}
+
+function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+        <Icon className="h-3.5 w-3.5" /> {label}
+      </div>
+      <div className="font-semibold text-sm text-right">{value}</div>
+    </div>
+  )
+}
