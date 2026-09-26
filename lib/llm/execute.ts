@@ -62,12 +62,14 @@ function resolveWhere(entity: EntityKey, filters: Filter[] | undefined, ctx: Too
 }
 
 async function attachChildren(entity: EntityKey, rows: Row[], children: { relation: string; entity: EntityKey }[]) {
+  if (!rows.length) return
   const assetType = ENTITIES[entity].assetType
   for (const child of children) {
     const kids = await delegate(child.entity).findMany({
       where: { assetType, assetId: { in: rows.map((r) => r.id) } },
       select: selectFor(child.entity),
       orderBy: compileSort(child.entity),
+      take: CHILD_LIMIT * rows.length,
     })
     for (const row of rows) row[child.relation] = kids.filter((k) => k.assetId === row.id).slice(0, CHILD_LIMIT)
   }
