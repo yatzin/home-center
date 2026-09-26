@@ -11,6 +11,8 @@ import { PersonEditButton } from "@/components/people/person-edit-button"
 import { AllergyCallout } from "@/components/health/allergy-callout"
 import { AllergiesSection } from "@/components/health/allergies-section"
 import { ImmunizationsSection } from "@/components/health/immunizations-section"
+import { ConditionsSection } from "@/components/health/conditions-section"
+import { MedicationsSection } from "@/components/health/medications-section"
 import { ageFrom, formatDay, labelFor, RELATIONSHIPS } from "@/lib/health"
 
 export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +23,15 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
       primaryProvider: { select: { id: true, name: true } },
       allergies: { orderBy: [{ severity: "desc" }, { substance: "asc" }] },
       immunizations: { orderBy: { dateGiven: "desc" } },
+      conditions: {
+        include: { attachments: true, provider: { select: { name: true } } },
+        // ACTIVE < MANAGED < RESOLVED alphabetically, which is also the order that matters.
+        orderBy: [{ status: "asc" }, { name: "asc" }],
+      },
+      medications: {
+        include: { prescriber: { select: { name: true } }, condition: { select: { name: true } } },
+        orderBy: { name: "asc" },
+      },
     },
   })
   if (!person) notFound()
@@ -33,6 +44,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
   ])
 
   const age = person.dateOfBirth ? ageFrom(person.dateOfBirth, new Date()) : null
+  const conditionOptions = person.conditions.map((c) => ({ id: c.id, name: c.name }))
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -89,12 +101,20 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
         <Tabs defaultValue="visits">
           <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
             <TabsTrigger value="visits">Visits &amp; Expenses ({visits.length})</TabsTrigger>
+            <TabsTrigger value="conditions">Conditions ({person.conditions.length})</TabsTrigger>
+            <TabsTrigger value="medications">Medications ({person.medications.length})</TabsTrigger>
             <TabsTrigger value="immunizations">Immunizations ({person.immunizations.length})</TabsTrigger>
             <TabsTrigger value="allergies">Allergies ({person.allergies.length})</TabsTrigger>
             <TabsTrigger value="reminders">Reminders ({schedules.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="visits" className="mt-4">
-            <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} />
+            <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} conditionOptions={conditionOptions} />
+          </TabsContent>
+          <TabsContent value="conditions" className="mt-4">
+            <ConditionsSection personId={id} conditions={person.conditions} providers={providers} />
+          </TabsContent>
+          <TabsContent value="medications" className="mt-4">
+            <MedicationsSection personId={id} medications={person.medications} providers={providers} conditions={conditionOptions} />
           </TabsContent>
           <TabsContent value="immunizations" className="mt-4">
             <ImmunizationsSection personId={id} immunizations={person.immunizations} />
