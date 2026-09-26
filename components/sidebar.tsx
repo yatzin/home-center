@@ -2,20 +2,25 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
-  Calendar, Bell, Settings, Menu, PiggyBank,
+  Calendar, Bell, Settings, Menu, PiggyBank, HeartPulse, Stethoscope, ShieldPlus,
 } from "lucide-react"
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: React.ElementType; section?: string }
+
+const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assets/properties", label: "Properties", icon: Building2 },
   { href: "/assets/vehicles", label: "Vehicles", icon: Car },
   { href: "/assets/equipment", label: "Equipment", icon: Refrigerator },
-  { href: "/records", label: "Service Records", icon: Wrench },
+  { href: "/assets/people", label: "People", icon: HeartPulse, section: "Health" },
+  { href: "/providers", label: "Providers", icon: Stethoscope },
+  { href: "/insurance", label: "Insurance", icon: ShieldPlus },
+  { href: "/records", label: "Service Records", icon: Wrench, section: "Activity" },
   { href: "/costs", label: "Costs", icon: PiggyBank },
   { href: "/warranties", label: "Warranties", icon: ShieldCheck },
   { href: "/maintenance", label: "Maintenance", icon: Calendar },
@@ -59,7 +64,14 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <span className="font-heading font-semibold tracking-tight">HomeCenter</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {navItems.map((item) => <NavLink key={item.href} {...item} onClick={onNavClick} />)}
+        {navItems.map(({ section, ...item }) => (
+          <Fragment key={item.href}>
+            {section && (
+              <p className="mt-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">{section}</p>
+            )}
+            <NavLink {...item} onClick={onNavClick} />
+          </Fragment>
+        ))}
       </nav>
       <nav className="flex flex-col gap-1 border-t pt-3 mt-3">
         {bottomItems.map((item) => <NavLink key={item.href} {...item} onClick={onNavClick} />)}
