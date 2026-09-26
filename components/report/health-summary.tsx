@@ -1,0 +1,141 @@
+import { Empty, SectionTitle } from "./report-parts"
+import { formatMoney } from "@/lib/costs"
+import {
+  ALLERGY_SEVERITIES, CONDITION_STATUSES, formatDay, INSURANCE_KINDS, isMedicationActive, labelFor,
+} from "@/lib/health"
+import type { ReportHealth } from "@/lib/report-server"
+
+// Ordered the way a clinician reads a chart: what could hurt them, what they
+// have, what they take, what they've had, who pays, who treats them.
+export function HealthSummary({ health, now }: { health: ReportHealth; now: Date }) {
+  const { person, careTeam } = health
+  const conditions = person.conditions.filter((c) => c.status !== "RESOLVED")
+  const resolved = person.conditions.length - conditions.length
+  const medications = person.medications.filter((m) => isMedicationActive(m, now))
+
+  return (
+    <>
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Allergies</SectionTitle>
+        {person.allergies.length === 0 ? (
+          <Empty>No allergies recorded.</Empty>
+        ) : (
+          <Rows
+            head={["Substance", "Severity", "Reaction"]}
+            rows={person.allergies.map((a) => [
+              a.substance,
+              // Spelled out in capitals, not coloured: it has to survive a monochrome printer.
+              a.severity === "SEVERE" ? <strong key="s">SEVERE</strong> : labelFor(ALLERGY_SEVERITIES, a.severity),
+              a.reaction ?? "—",
+            ])}
+          />
+        )}
+      </section>
+
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Active conditions</SectionTitle>
+        {conditions.length === 0 ? (
+          <Empty>No active conditions recorded.</Empty>
+        ) : (
+          <Rows
+            head={["Condition", "Status", "Since", "Provider"]}
+            rows={conditions.map((c) => [c.name, labelFor(CONDITION_STATUSES, c.status), formatDay(c.diagnosedDate), c.provider?.name ?? "—"])}
+          />
+        )}
+        {resolved > 0 && <Empty>{resolved} resolved condition{resolved === 1 ? "" : "s"} not shown.</Empty>}
+      </section>
+
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Current medications</SectionTitle>
+        {medications.length === 0 ? (
+          <Empty>No current medications.</Empty>
+        ) : (
+          <Rows
+            head={["Medication", "Dose", "Prescriber", "Since"]}
+            rows={medications.map((m) => [
+              m.name,
+              [m.dosage, m.frequency].filter(Boolean).join(" · ") || "—",
+              m.prescriber?.name ?? "—",
+              formatDay(m.startDate),
+            ])}
+          />
+        )}
+      </section>
+
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Immunizations</SectionTitle>
+        {person.immunizations.length === 0 ? (
+          <Empty>No immunizations recorded.</Empty>
+        ) : (
+          <Rows
+            head={["Vaccine", "Given", "Next due"]}
+            rows={person.immunizations.map((i) => [i.dose ? `${i.vaccine} (${i.dose})` : i.vaccine, formatDay(i.dateGiven), formatDay(i.nextDueDate)])}
+          />
+        )}
+      </section>
+
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Insurance</SectionTitle>
+        {person.insurancePolicies.length === 0 ? (
+          <Empty>No insurance on file.</Empty>
+        ) : (
+          <Rows
+            head={["Carrier", "Type", "Member ID", "Group", "Phone", "Deductible"]}
+            rows={person.insurancePolicies.map((p) => [
+              p.planName ? `${p.carrier} · ${p.planName}` : p.carrier,
+              labelFor(INSURANCE_KINDS, p.kind),
+              p.memberId ?? "—",
+              p.groupNumber ?? "—",
+              p.phone ?? "—",
+              p.deductible != null ? formatMoney(p.deductible) : "—",
+            ])}
+          />
+        )}
+      </section>
+
+      <section className="report-section report-break-avoid mt-7">
+        <SectionTitle>Care team</SectionTitle>
+        {careTeam.length === 0 ? (
+          <Empty>No providers linked.</Empty>
+        ) : (
+          <Rows
+            head={["Provider", "Specialty", "Practice", "Phone"]}
+            rows={careTeam.map((p) => [p.name, p.specialty ?? "—", p.practice ?? "—", p.phone ?? "—"])}
+          />
+        )}
+      </section>
+    </>
+  )
+}
+
+function Rows({ head, rows }: { head: string[]; rows: React.ReactNode[][] }) {
+  return (
+    <table className="mt-1 w-full border-collapse text-[10pt]">
+      <thead>
+        <tr>
+          {head.map((h) => (
+            <th
+              key={h}
+              className="border-b py-1.5 pr-3 text-left text-[8.5pt] font-semibold uppercase tracking-wide"
+              style={{ borderColor: "var(--rule-strong)", color: "var(--ink-faint)" }}
+              data-print-color=""
+            >
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {row.map((cell, j) => (
+              <td key={j} className="border-b py-1.5 pr-3 align-top" style={{ borderColor: "var(--rule)" }} data-print-color="">
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

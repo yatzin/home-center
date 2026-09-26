@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import { categoryLabel as equipmentCategoryLabel } from "@/components/equipment/categories"
-import type { AssetType, MeterUnit, Prisma } from "@/app/generated/prisma/client"
+import type { AssetType, MeterUnit, Prisma, Provider } from "@/app/generated/prisma/client"
 import type { CostRow } from "@/lib/costs"
+import { ageFrom, formatDay, labelFor, RELATIONSHIPS } from "@/lib/health"
 
 // Everything the printable asset report needs, in one place.
 //
@@ -46,6 +47,21 @@ export type ReportService = Prisma.ServiceRecordGetPayload<{ include: typeof wit
 export type ReportWarranty = Prisma.WarrantyGetPayload<{ include: typeof withAttachments }>
 export type ReportSchedule = Prisma.MaintenanceScheduleGetPayload<{ include: typeof withAttachments }>
 
+const healthInclude = {
+  primaryProvider: true,
+  allergies: { orderBy: [{ severity: "desc" }, { substance: "asc" }] },
+  conditions: {
+    include: { provider: { select: { name: true } } },
+    orderBy: [{ status: "asc" }, { name: "asc" }],
+  },
+  medications: { include: { prescriber: { select: { name: true } } }, orderBy: { name: "asc" } },
+  immunizations: { orderBy: { dateGiven: "desc" } },
+  insurancePolicies: { orderBy: { carrier: "asc" } },
+} satisfies Prisma.PersonInclude
+
+export type ReportPerson = Prisma.PersonGetPayload<{ include: typeof healthInclude }>
+export type ReportHealth = { person: ReportPerson; careTeam: Provider[] }
+
 export type ReportData = {
   asset: ReportAsset
   /// Oldest first. A printed service history reads as a history — it starts at
@@ -55,6 +71,7 @@ export type ReportData = {
   warranties: ReportWarranty[]
   schedules: ReportSchedule[]
   costRows: CostRow[]
+  health: ReportHealth | null
   generatedAt: Date
 }
 
@@ -113,12 +130,59 @@ export async function loadReport(assetType: AssetType, assetId: string): Promise
       mileageAtService: s.mileageAtService,
     }))
 
-  return { asset, services, warranties, schedules, costRows, generatedAt: new Date() }
+  const health = assetType === "PERSON" ? await loadHealth(assetId) : null
+
+  return { asset, services, warranties, schedules, costRows, health, generatedAt: new Date() }
+}
+
+async function loadHealth(personId: string): Promise<ReportHealth | null> {
+  const [person, careTeam] = await Promise.all([
+    prisma.person.findUnique({ where: { id: personId }, include: healthInclude }),
+    // Everyone involved in this person's care, from any direction.
+    prisma.provider.findMany({
+      where: {
+        OR: [
+          { primaryFor: { some: { id: personId } } },
+          { conditions: { some: { personId } } },
+          { prescriptions: { some: { personId } } },
+          { serviceRecords: { some: { assetType: "PERSON", assetId: personId } } },
+        ],
+      },
+      orderBy: { name: "asc" },
+    }),
+  ])
+  return person ? { person, careTeam } : null
 }
 
 async function loadAsset(assetType: AssetType, assetId: string): Promise<ReportAsset | null> {
-  // People get their own branch in Task 16; until then the report 404s for them.
-  if (assetType === "PERSON") return null
+  if (assetType === "PERSON") {
+    const p = await prisma.person.findUnique({
+      where: { id: assetId },
+      include: { primaryProvider: { select: { name: true } } },
+    })
+    if (!p) return null
+    const relationship = labelFor(RELATIONSHIPS, p.relationship)
+    const age = p.dateOfBirth ? ageFrom(p.dateOfBirth, new Date()) : null
+    return {
+      type: "PERSON",
+      id: p.id,
+      name: p.name,
+      subtitle: age != null ? `${relationship} · Age ${age}` : relationship,
+      imageFilename: p.imageFilename,
+      purchaseDate: null,
+      purchasePrice: null,
+      notes: p.notes,
+      meterUnit: null,
+      currentMeter: null,
+      details: [
+        { label: "Relationship", value: relationship },
+        ...(p.dateOfBirth ? [{ label: "Date of birth", value: formatDay(p.dateOfBirth) }] : []),
+        ...(p.sex ? [{ label: "Sex", value: p.sex }] : []),
+        ...(p.bloodType ? [{ label: "Blood type", value: p.bloodType }] : []),
+        ...(p.primaryProvider ? [{ label: "Primary care", value: p.primaryProvider.name }] : []),
+      ],
+    }
+  }
 
   if (assetType === "PROPERTY") {
     const p = await prisma.property.findUnique({

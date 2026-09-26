@@ -4,6 +4,8 @@ import { averagePerMonth, categoryLabel, costPerMeter, formatMoney, sum, UNCATEG
 import { meterUnitShort, meterUnitWord, scheduleDue, type MileageIndex } from "@/lib/maintenance-due"
 import type { ReportData, ReportSchedule, ReportService, ReportWarranty } from "@/lib/report-server"
 import type { ServiceCategory } from "@/app/generated/prisma/client"
+import { Empty, SectionTitle } from "./report-parts"
+import { HealthSummary } from "./health-summary"
 
 // The printable asset report. A document, not a screen: one column, real
 // headings, tables where things line up, and no interactive affordance anywhere
@@ -11,6 +13,7 @@ import type { ServiceCategory } from "@/app/generated/prisma/client"
 
 export function AssetReport({ data }: { data: ReportData }) {
   const { asset, services, warranties, schedules, costRows, generatedAt } = data
+  const isPerson = asset.type === "PERSON"
 
   const lifetime = sum(costRows)
   const perMeter = asset.meterUnit ? costPerMeter(costRows) : null
@@ -34,13 +37,13 @@ export function AssetReport({ data }: { data: ReportData }) {
       <Masthead
         title={asset.name}
         subtitle={asset.subtitle}
-        kind={assetLabel[asset.type]}
+        kind={isPerson ? "Medical summary" : assetLabel[asset.type]}
         generatedAt={generatedAt}
       />
 
       <section className="report-section mt-7 grid grid-cols-[1.6fr_1fr] gap-7">
         <div>
-          <SectionTitle>Asset details</SectionTitle>
+          <SectionTitle>{isPerson ? "Personal details" : "Asset details"}</SectionTitle>
           <dl className="mt-3">
             {asset.details.map((row) => (
               <div
@@ -72,6 +75,7 @@ export function AssetReport({ data }: { data: ReportData }) {
           ) : null}
         </div>
       </section>
+      {data.health && <HealthSummary health={data.health} now={now} />}
 
       <section className="report-section mt-7">
         <SectionTitle>Summary</SectionTitle>
@@ -80,9 +84,9 @@ export function AssetReport({ data }: { data: ReportData }) {
           style={{ borderColor: "var(--rule-strong)", background: "var(--rule)" }}
           data-print-color=""
         >
-          <Stat label="Service cost to date" value={formatMoney(lifetime)} />
+          <Stat label={isPerson ? "Medical spend to date" : "Service cost to date"} value={formatMoney(lifetime)} />
           <Stat
-            label="Service records"
+            label={isPerson ? "Visits" : "Service records"}
             value={String(services.length)}
             note={
               first && last
@@ -90,11 +94,18 @@ export function AssetReport({ data }: { data: ReportData }) {
                 : undefined
             }
           />
-          <Stat
-            label="Warranties"
-            value={`${activeWarranties} active`}
-            note={warranties.length > activeWarranties ? `${warranties.length} on file` : undefined}
-          />
+          {isPerson ? (
+            <Stat
+              label="Active conditions"
+              value={String(data.health?.person.conditions.filter((c) => c.status !== "RESOLVED").length ?? 0)}
+            />
+          ) : (
+            <Stat
+              label="Warranties"
+              value={`${activeWarranties} active`}
+              note={warranties.length > activeWarranties ? `${warranties.length} on file` : undefined}
+            />
+          )}
           {perMeter != null ? (
             <Stat
               label={`Cost per ${meterUnitWord(asset.meterUnit!)}`}
@@ -126,7 +137,7 @@ export function AssetReport({ data }: { data: ReportData }) {
       ) : null}
 
       <ServiceHistory services={services} asset={data.asset} total={lifetime} />
-      <Warranties warranties={warranties} now={now} />
+      {!isPerson && <Warranties warranties={warranties} now={now} />}
       <Maintenance schedules={schedules} mileage={mileage} asset={data.asset} now={now} />
 
       <footer
@@ -136,7 +147,7 @@ export function AssetReport({ data }: { data: ReportData }) {
       >
         <div className="flex justify-between gap-6">
           <span>
-            {asset.name} · {assetLabel[asset.type]} report · generated{" "}
+            {asset.name} · {isPerson ? "medical summary" : `${assetLabel[asset.type]} report`} · generated{" "}
             {generatedAt.toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })}
           </span>
           <span>HomeCenter</span>
@@ -180,18 +191,6 @@ function Masthead({
         </p>
       ) : null}
     </header>
-  )
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h2
-      className="border-b pb-1.5 text-[9pt] font-semibold uppercase tracking-[0.12em]"
-      style={{ borderColor: "var(--rule-strong)", color: "var(--accent)" }}
-      data-print-color=""
-    >
-      {children}
-    </h2>
   )
 }
 
@@ -252,9 +251,9 @@ function ServiceHistory({
 
   return (
     <section className="report-section mt-7">
-      <SectionTitle>Service history</SectionTitle>
+      <SectionTitle>{asset.type === "PERSON" ? "Visits & expenses" : "Service history"}</SectionTitle>
       {services.length === 0 ? (
-        <Empty>No service has been recorded for this asset.</Empty>
+        <Empty>{asset.type === "PERSON" ? "No visits have been recorded." : "No service has been recorded for this asset."}</Empty>
       ) : (
         <table className="mt-1 w-full border-collapse text-[10pt]">
           {/* Repeated at the top of every printed page by the browser, which is
@@ -405,7 +404,7 @@ function Maintenance({
 
   return (
     <section className="report-section mt-7">
-      <SectionTitle>Maintenance schedule</SectionTitle>
+      <SectionTitle>{asset.type === "PERSON" ? "Health reminders" : "Maintenance schedule"}</SectionTitle>
       {schedules.length === 0 ? (
         <Empty>No recurring maintenance is scheduled for this asset.</Empty>
       ) : (
@@ -534,13 +533,5 @@ function StatusTag({ tone, label }: { tone: "good" | "warn" | "bad" | "spent"; l
     >
       {label}
     </span>
-  )
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-3 text-[9.5pt] italic" style={{ color: "var(--ink-faint)" }}>
-      {children}
-    </p>
   )
 }

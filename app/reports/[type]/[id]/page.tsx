@@ -23,7 +23,7 @@ export async function generateMetadata({
   const data = await loadReport(assetType, id)
   // The document title is what the browser puts on the printed page and offers
   // as the PDF's filename, so it is worth getting right.
-  return { title: data ? `${data.asset.name} — Asset Report` : "Report" }
+  return { title: data ? `${data.asset.name} — ${assetType === "PERSON" ? "Medical Summary" : "Asset Report"}` : "Report" }
 }
 
 export default async function ReportPage({
