@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Cake, Download, Droplet, FileText, Stethoscope, Users, User } from "lucide-react"
+import { Cake, Download, Droplet, FileText, ShieldPlus, Stethoscope, Users, User } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
@@ -13,7 +13,7 @@ import { AllergiesSection } from "@/components/health/allergies-section"
 import { ImmunizationsSection } from "@/components/health/immunizations-section"
 import { ConditionsSection } from "@/components/health/conditions-section"
 import { MedicationsSection } from "@/components/health/medications-section"
-import { ageFrom, formatDay, labelFor, RELATIONSHIPS } from "@/lib/health"
+import { ageFrom, formatDay, INSURANCE_KINDS, labelFor, RELATIONSHIPS } from "@/lib/health"
 
 export default async function PersonDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -32,6 +32,7 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
         include: { prescriber: { select: { name: true } }, condition: { select: { name: true } } },
         orderBy: { name: "asc" },
       },
+      insurancePolicies: { select: { id: true, carrier: true, planName: true, kind: true, memberId: true }, orderBy: { carrier: "asc" } },
     },
   })
   if (!person) notFound()
@@ -68,6 +69,24 @@ export default async function PersonDetailPage({ params }: { params: Promise<{ i
             />
           )}
         </div>
+
+        {person.insurancePolicies.length > 0 && (
+          <div className="rounded-lg border bg-card p-3 text-sm">
+            <div className="flex items-center gap-1.5 font-semibold">
+              <ShieldPlus className="h-4 w-4" aria-hidden="true" /> Insurance
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {person.insurancePolicies.map((p) => (
+                <li key={p.id} className="flex items-baseline justify-between gap-2">
+                  <Link href="/insurance" className="hover:underline">{p.carrier}{p.planName ? ` · ${p.planName}` : ""}</Link>
+                  <span className="text-right text-xs text-muted-foreground">
+                    {labelFor(INSURANCE_KINDS, p.kind)}{p.memberId ? ` · ${p.memberId}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <AssetCostPanel assetType="PERSON" assetId={id} purchasePrice={null} />
 
