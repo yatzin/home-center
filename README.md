@@ -13,6 +13,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Multiple users** — admin and standard accounts
 - **Local login** — no third-party account required, your data stays on your hardware
 - **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
+- **AI assistant** — optional chat that answers questions about your data ("what did we spend on the truck last year?", "which meds need refills?") using any OpenAI-compatible model, including local ones via Ollama or LM Studio
 
 ## Screenshots
 
@@ -147,6 +148,21 @@ docker compose up -d
 The container sets up its database and admin account automatically on first boot.
 
 **5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3.
+
+### AI assistant (optional)
+
+Sign in as an admin and go to **Settings → Assistant**. Pick a provider (OpenAI,
+Ollama, LM Studio, OpenRouter or any OpenAI-compatible server), enter the model
+name and, if the provider needs one, an API key (stored encrypted). Use **Test
+connection** to confirm the model supports tool calling — the assistant needs it.
+
+Questions, and the records needed to answer them, are sent to that server —
+including health records. Point it at a local model if that matters to you. When
+HomeCenter runs in Docker, `localhost` means the container: use the host's
+address (e.g. `http://host.docker.internal:11434/v1`) for a model running on the
+host.
+
+Chats stay in your browser tab and are never stored on the server.
 
 ## Updating
 
