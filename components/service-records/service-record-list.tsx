@@ -39,9 +39,13 @@ interface Props {
   propertyName?: string
   /** Vehicle's odometer unit, for the Mileage column header/suffix. Defaults to miles. */
   meterUnit?: MeterUnit
+  /** People only: the provider directory and this person's conditions. */
+  providerOptions?: { id: string; name: string }[]
+  conditionOptions?: { id: string; name: string }[]
 }
 
-export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES" }: Props) {
+export function ServiceRecordList({ records: initialRecords, assetId, assetType, equipment, propertyName, meterUnit = "MILES", providerOptions, conditionOptions }: Props) {
+  const isPerson = assetType === "PERSON"
   const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
   const [records, setRecords] = useState(initialRecords)
   const [prevInitialRecords, setPrevInitialRecords] = useState(initialRecords)
@@ -85,13 +89,13 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
   return (
     <>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">{records.length} record{records.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" onClick={() => { setEditingId(null); setDialogOpen(true) }}>Add Service Record</Button>
+        <p className="text-sm text-muted-foreground">{records.length} {isPerson ? "visit" : "record"}{records.length !== 1 ? "s" : ""}</p>
+        <Button size="sm" onClick={() => { setEditingId(null); setDialogOpen(true) }}>{isPerson ? "Add Visit" : "Add Service Record"}</Button>
       </div>
 
       {records.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No service records yet.
+          {isPerson ? "No visits yet." : "No service records yet."}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
@@ -224,6 +228,8 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
         equipmentOptions={equipment}
         propertyName={propertyName}
         meterUnit={meterUnit}
+        providerOptions={providerOptions}
+        conditionOptions={conditionOptions}
       />
     </>
   )

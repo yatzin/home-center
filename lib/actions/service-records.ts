@@ -21,6 +21,8 @@ const schema = z.object({
   cost: z.coerce.number().optional().or(z.literal("")),
   category: z.enum(SERVICE_CATEGORY_VALUES).optional().or(z.literal("")),
   mileageAtService: z.coerce.number().int().min(0).optional().or(z.literal("")),
+  providerId: z.string().optional(),
+  conditionId: z.string().optional(),
 })
 
 function clean(v: z.infer<typeof schema>, userId: string) {
@@ -34,8 +36,18 @@ function clean(v: z.infer<typeof schema>, userId: string) {
     cost: v.cost === "" || v.cost === undefined ? null : Number(v.cost),
     category: v.category === "" || v.category === undefined ? null : v.category,
     mileageAtService: v.mileageAtService === "" || v.mileageAtService === undefined ? null : Number(v.mileageAtService),
+    providerId: v.providerId || null,
+    conditionId: v.conditionId || null,
     createdById: userId,
   }
+}
+
+// A visit linked to a provider but with no facility typed still has a payee,
+// so the cost reports' vendor ranking works for medical spend too.
+async function withProviderVendor<T extends { providerId: string | null; vendor: string | null }>(data: T): Promise<T> {
+  if (!data.providerId || data.vendor) return data
+  const provider = await prisma.provider.findUnique({ where: { id: data.providerId }, select: { name: true } })
+  return { ...data, vendor: provider?.name ?? null }
 }
 
 export async function createServiceRecord(data: z.infer<typeof schema>) {
@@ -45,7 +57,7 @@ export async function createServiceRecord(data: z.infer<typeof schema>) {
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
-  const record = await prisma.serviceRecord.create({ data: clean(parsed.data, session.user.id) })
+  const record = await prisma.serviceRecord.create({ data: await withProviderVendor(clean(parsed.data, session.user.id)) })
   revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/records")
   return { success: true, id: record.id }
@@ -58,7 +70,7 @@ export async function updateServiceRecord(id: string, data: z.infer<typeof schem
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
-  await prisma.serviceRecord.update({ where: { id }, data: clean(parsed.data, session.user.id) })
+  await prisma.serviceRecord.update({ where: { id }, data: await withProviderVendor(clean(parsed.data, session.user.id)) })
   revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/records")
   return { success: true }
