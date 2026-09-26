@@ -107,6 +107,16 @@ export function ChatThread({ className }: { className?: string }) {
             </Button>
           </div>
         )}
+        {/* A reload mid-turn leaves the question unanswered, with no error to retry from. */}
+        {!chat.busy && !chat.error && chat.messages.at(-1)?.role === "user" && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>No answer yet.</span>
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={chat.retry}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 

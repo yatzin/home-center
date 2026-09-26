@@ -1,4 +1,4 @@
-import { MAX_MESSAGE_CHARS } from "./request-schema"
+import { MAX_MESSAGE_CHARS, MAX_TOTAL_CHARS } from "./request-schema"
 import type { HistoryMessage } from "./types"
 
 // The chat thread lives only in this tab's sessionStorage — never on the
@@ -46,11 +46,28 @@ export function clearThread(storage: ThreadStorage, userId: string) {
   }
 }
 
-/** What to send: the recent tail, starting on a user turn, each message within the server's cap. */
+const startOnUser = (ms: HistoryMessage[]) => {
+  const i = ms.findIndex((m) => m.role === "user")
+  return i < 0 ? [] : ms.slice(i)
+}
+
+/**
+ * What to send, within the server's limits: the recent tail, alternating roles
+ * (adjacent same-role messages — e.g. a retried question — are merged), each
+ * message and the total capped, starting on a user turn.
+ */
 export function requestMessages(thread: HistoryMessage[]): HistoryMessage[] {
-  let tail = thread.slice(-SEND_LIMIT)
-  while (tail.length && tail[0].role !== "user") tail = tail.slice(1)
-  return tail.map((m) => ({ role: m.role, content: m.content.slice(0, MAX_MESSAGE_CHARS) }))
+  const merged: HistoryMessage[] = []
+  for (const m of startOnUser(thread.slice(-SEND_LIMIT))) {
+    const content = m.content.slice(0, MAX_MESSAGE_CHARS)
+    const prev = merged.at(-1)
+    // Merged text keeps its end: the newest words matter most.
+    if (prev?.role === m.role) prev.content = `${prev.content}\n\n${content}`.slice(-MAX_MESSAGE_CHARS)
+    else merged.push({ role: m.role, content })
+  }
+  let total = merged.reduce((n, m) => n + m.content.length, 0)
+  while (merged.length > 1 && total > MAX_TOTAL_CHARS) total -= merged.shift()!.content.length
+  return startOnUser(merged)
 }
 
 /** A turn that started before "New chat" must not write into the new thread. */

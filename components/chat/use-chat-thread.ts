@@ -13,6 +13,9 @@ function storage() {
   }
 }
 
+const SESSION_EXPIRED = "Your session has expired — sign in again."
+const CUT_OFF = "The answer was cut off — try again."
+
 export function useChatThread(userId: string) {
   const [messages, setMessages] = useState<HistoryMessage[]>([])
   /** The in-flight assistant text; null when no turn is running. */
@@ -47,7 +50,7 @@ export function useChatThread(userId: string) {
       setDraft("")
       setStatusLabel(null)
 
-      const turn = { text: "", failure: null as string | null }
+      const turn = { text: "", failure: null as string | null, done: false }
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -55,13 +58,13 @@ export function useChatThread(userId: string) {
           body: JSON.stringify({ messages: requestMessages(thread) }),
           signal: controller.signal,
         })
+        // First: a redirect to the login page can end on a non-OK response too.
+        if (res.redirected) throw new Error(SESSION_EXPIRED)
         if (!res.ok || !res.body) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
           throw new Error(body?.error ?? `Request failed (${res.status}).`)
         }
-        if (res.redirected || !res.headers.get("content-type")?.includes("application/x-ndjson")) {
-          throw new Error("Your session has expired — sign in again.")
-        }
+        if (!res.headers.get("content-type")?.includes("application/x-ndjson")) throw new Error(SESSION_EXPIRED)
         const reader = createNdjsonReader<AgentEvent>((event) => {
           if (event.type === "delta") {
             turn.text += event.text
@@ -73,6 +76,8 @@ export function useChatThread(userId: string) {
             setStatusLabel(event.label)
           } else if (event.type === "error") {
             turn.failure = event.message
+          } else if (event.type === "done") {
+            turn.done = true
           }
         })
         const stream = res.body.pipeThrough(new TextDecoderStream()).getReader()
@@ -83,6 +88,8 @@ export function useChatThread(userId: string) {
         }
         reader.flush()
         if (turn.failure) throw new Error(turn.failure)
+        // A stream that ends without "done" was cut off; its partial text isn't kept.
+        if (!turn.done && !controller.signal.aborted) throw new Error(CUT_OFF)
         if (turn.text.trim() && shouldPersist(started, generation.current)) {
           persist([...thread, { role: "assistant", content: turn.text }])
         }

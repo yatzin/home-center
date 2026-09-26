@@ -79,6 +79,35 @@ describe("requestMessages", () => {
   })
 })
 
+describe("requestMessages limits", () => {
+  it("keeps the total within 64,000 chars, starting on a user and ending on the last user message", () => {
+    const thread: HistoryMessage[] = Array.from({ length: 20 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `${i}`.padEnd(7000, "x"),
+    }))
+    thread.push({ role: "user", content: "last" })
+    const out = requestMessages(thread)
+    expect(out.reduce((n, m) => n + m.content.length, 0)).toBeLessThanOrEqual(64000)
+    expect(out[0].role).toBe("user")
+    expect(out.at(-1)).toEqual({ role: "user", content: "last" })
+  })
+
+  it("merges adjacent same-role messages so roles alternate", () => {
+    const out = requestMessages([
+      { role: "user", content: "first try" },
+      { role: "user", content: "again" },
+      { role: "assistant", content: "a" },
+      { role: "assistant", content: "b" },
+      { role: "user", content: "q" },
+    ])
+    expect(out).toEqual([
+      { role: "user", content: "first try\n\nagain" },
+      { role: "assistant", content: "a\n\nb" },
+      { role: "user", content: "q" },
+    ])
+  })
+})
+
 describe("shouldPersist", () => {
   it("only persists a turn from the current thread generation", () => {
     expect(shouldPersist(3, 3)).toBe(true)
