@@ -452,6 +452,28 @@ model MailSettings {
   updatedAt   DateTime @updatedAt
 }
 
+// ─── LLM settings ─────────────────────────────────────────────────────────────
+
+/// Single row (id is always "singleton"). Configured from Settings only — no
+/// environment fallback. Any OpenAI-compatible Chat Completions server works.
+model LlmSettings {
+  id           String   @id @default("singleton")
+  enabled      Boolean  @default(false)
+  /// e.g. https://api.openai.com/v1 or http://localhost:11434/v1 — no trailing slash.
+  baseUrl      String?
+  /// AES-256-GCM via lib/secret-box.ts. Optional: local servers need none.
+  /// Never leaves the server; the UI is only told whether one is stored.
+  apiKeyEnc    String?
+  model        String?
+  /// null = provider default.
+  temperature  Float?
+  /// Cap on each completion; null = provider default.
+  maxTokens    Int?
+  /// Appended to the built-in system prompt.
+  systemPrompt String?
+  updatedAt    DateTime @updatedAt
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 model Notification {
