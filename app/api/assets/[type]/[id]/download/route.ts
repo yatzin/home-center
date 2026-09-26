@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { zipSync, strToU8 } from "fflate"
 import { readFileSync, existsSync } from "fs"
-import path from "path"
+import { resolveUploadPath } from "@/lib/upload-path"
 
 export async function GET(
   _request: NextRequest,
@@ -31,14 +31,12 @@ export async function GET(
     }),
   ])
 
-  const uploadDir = path.resolve(process.env.UPLOAD_DIR ?? "./uploads")
-
   const files: Record<string, Uint8Array> = {}
 
   for (const a of serviceAttachments) {
     const date = a.serviceRecord?.date ? new Date(a.serviceRecord.date).toISOString().split("T")[0] : "unknown"
     const title = (a.serviceRecord?.title ?? "service").replace(/[^a-z0-9]/gi, "_")
-    const filePath = path.join(uploadDir, "service", a.serviceRecordId!, a.filename)
+    const filePath = resolveUploadPath("service", a.serviceRecordId!, a.filename)
     if (existsSync(filePath)) {
       files[`service/${date}_${title}/${a.originalName}`] = new Uint8Array(readFileSync(filePath))
     }
@@ -46,7 +44,7 @@ export async function GET(
 
   for (const a of warrantyAttachments) {
     const name = (a.warranty?.productName ?? "warranty").replace(/[^a-z0-9]/gi, "_")
-    const filePath = path.join(uploadDir, "warranty", a.warrantyId!, a.filename)
+    const filePath = resolveUploadPath("warranty", a.warrantyId!, a.filename)
     if (existsSync(filePath)) {
       files[`warranties/${name}/${a.originalName}`] = new Uint8Array(readFileSync(filePath))
     }

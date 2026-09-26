@@ -125,7 +125,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
   async function handleDeleteExisting(attachment: Attachment) {
     if (!confirm(`Remove "${attachment.originalName}"?`)) return
     if (!record) return
-    const result = await deleteAttachment(attachment.id, record.id, "SERVICE")
+    const result = await deleteAttachment(attachment.id)
     if (result?.error) { toast.error(result.error); return }
     setRemovedIds((prev) => new Set(prev).add(attachment.id))
     onAttachmentDeleted?.(record.id, attachment.id)

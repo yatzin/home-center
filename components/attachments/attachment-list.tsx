@@ -54,7 +54,7 @@ export function AttachmentList({ recordId, recordType, attachments: initial }: P
   async function handleDelete(id: string, originalName: string) {
     if (!confirm(`Remove "${originalName}"?`)) return
     startTransition(async () => {
-      await deleteAttachment(id, recordId, recordType)
+      await deleteAttachment(id)
       setAttachments((prev) => prev.filter((a) => a.id !== id))
       toast.success("Attachment removed.")
     })

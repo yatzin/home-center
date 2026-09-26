@@ -109,7 +109,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
   async function handleDeleteExisting(attachment: Attachment) {
     if (!confirm(`Remove "${attachment.originalName}"?`)) return
     if (!warranty) return
-    const result = await deleteAttachment(attachment.id, warranty.id, "WARRANTY")
+    const result = await deleteAttachment(attachment.id)
     if (result?.error) { toast.error(result.error); return }
     setRemovedIds((prev) => new Set(prev).add(attachment.id))
     onAttachmentDeleted?.(warranty.id, attachment.id)

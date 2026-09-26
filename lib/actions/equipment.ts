@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 import { rm } from "fs/promises"
-import path from "path"
+import { resolveUploadPath } from "@/lib/upload-path"
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -69,8 +69,7 @@ export async function deleteEquipment(id: string) {
 
   await prisma.equipment.delete({ where: { id } })
 
-  const uploadDir = process.env.UPLOAD_DIR ?? "./uploads"
-  await rm(path.join(uploadDir, "equipment", id), { recursive: true, force: true })
+  await rm(resolveUploadPath("equipment", id), { recursive: true, force: true })
 
   revalidatePath("/assets/equipment")
   return { success: true }

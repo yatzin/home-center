@@ -3,16 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { readFile } from "fs/promises"
 import { existsSync } from "fs"
 import path from "path"
-
-const MIME: Record<string, string> = {
-  ".pdf": "application/pdf",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".heic": "image/heic",
-  ".heif": "image/heif",
-}
+import { resolveUploadPath } from "@/lib/upload-path"
+import { UPLOAD_TYPES } from "@/lib/upload-types"
 
 export async function GET(
   request: NextRequest,
@@ -22,11 +14,10 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { path: segments } = await params
-  const uploadDir = path.resolve(process.env.UPLOAD_DIR ?? "./uploads")
-  const filePath = path.resolve(path.join(uploadDir, ...segments))
-
-  // Prevent path traversal
-  if (!filePath.startsWith(uploadDir + path.sep) && filePath !== uploadDir) {
+  let filePath: string
+  try {
+    filePath = resolveUploadPath(...segments)
+  } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -34,12 +25,15 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const ext = path.extname(filePath).toLowerCase()
+  const mime = UPLOAD_TYPES[path.extname(filePath).toLowerCase()]
   const buffer = await readFile(filePath)
 
   return new NextResponse(buffer, {
     headers: {
-      "Content-Type": MIME[ext] ?? "application/octet-stream",
+      "Content-Type": mime ?? "application/octet-stream",
+      // Anything not on the allow-list is handed over as a download, never rendered.
+      "Content-Disposition": mime ? "inline" : "attachment",
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, max-age=3600",
     },
   })

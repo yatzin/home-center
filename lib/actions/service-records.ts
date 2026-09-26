@@ -7,7 +7,7 @@ import { assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
 import { rm } from "fs/promises"
-import path from "path"
+import { resolveUploadPath } from "@/lib/upload-path"
 import { z } from "zod"
 
 const schema = z.object({
@@ -67,17 +67,14 @@ export async function deleteServiceRecord(id: string, assetType: AssetType, asse
   const session = await auth()
   if (!session) redirect("/login")
 
-  // Delete attached files from disk before cascading DB delete
-  const attachments = await prisma.attachment.findMany({ where: { serviceRecordId: id } })
-  const uploadDir = process.env.UPLOAD_DIR ?? "./uploads"
-  for (const a of attachments) {
-    const filePath = path.join(uploadDir, "service", id, a.filename)
-    await rm(filePath, { force: true })
-  }
-  const dirPath = path.join(uploadDir, "service", id)
-  await rm(dirPath, { recursive: true, force: true })
+  // Look the record up first: the id arrives from the client and must be proven
+  // real before it is used to build a directory path.
+  const record = await prisma.serviceRecord.findUnique({ where: { id }, select: { id: true } })
+  if (!record) return { error: "Not found" }
 
-  await prisma.serviceRecord.delete({ where: { id } })
+  await prisma.serviceRecord.delete({ where: { id: record.id } })
+  await rm(resolveUploadPath("service", record.id), { recursive: true, force: true })
+
   revalidatePath(assetHref(assetType, assetId))
   revalidatePath("/records")
   return { success: true }
