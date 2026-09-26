@@ -167,7 +167,7 @@ Descriptions tell the model to prefer these.
 | Tool | Args | Returns | Reuses |
 |---|---|---|---|
 | `search` | `query`, `entities?` | Name matches across all named entities: `{entity, id, name, href, summary}` | `loadAssetIndex` plus provider / condition / medication / insurance names |
-| `cost_summary` | `assetType?`, `assetIds?`, `personIds?`, `from?`, `to?`, `category?`, `groupBy` (1–2 of `asset`, `year`, `quarter`, `month`, `category`, `vendor`) | Buckets with total and count, grand total — comparisons across assets or years in one call | `loadCostRecords`, `rollup`, `cents` |
+| `cost_summary` | `assetType?`, `assetIds?` (people are assets too), `from?`, `to?`, `category?`, `groupBy` (1–2 of `asset`, `year`, `quarter`, `month`, `category`, `vendor`) | Buckets with total and count, grand total — comparisons across assets or years in one call | `loadCostRecords`, `rollup`, `cents` |
 | `asset_history` | `assetType`, `assetId`, `from?`, `to?` | Chronological timeline for one asset or person: service records, warranty start/expiry, maintenance completions; for a person also conditions diagnosed/resolved, immunizations, medication start/end | `loadReport` |
 | `maintenance_status` | `assetType?`, `assetId?`, `status?` (`overdue`, `due_soon`, `all`), `withinDays?` | Schedules with next due date/mileage and due state, including mileage-based due | `scheduleDue`, `loadVehicleMileage`, `dueCandidateFilter` |
 | `health_alerts` | `personId?` | Refills due, immunizations due, insurance expiring | `refillDue`, `immunizationDue`, `insuranceExpiring`, `HEALTH_WINDOWS` |
