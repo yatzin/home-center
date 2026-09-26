@@ -2,6 +2,7 @@ import type { ToolContext } from "./query"
 import { EMPTY_ANSWER, FINAL_NUDGE } from "./prompt"
 import { runToolCall, toOpenAiTools, toolLabel, type RegisteredTool } from "./tools/registry"
 import type { AgentEvent, ChatFn, ChatMessage, HistoryMessage } from "./types"
+import type { ChatRequest, ChatResult } from "./types"
 
 export const MAX_TOOL_ROUNDS = 5
 export const HISTORY_LIMIT = 20
@@ -19,6 +20,33 @@ export type AgentOptions = {
 }
 
 /**
+ * Runs one streamed chat call and tracks whether text was emitted.
+ */
+async function runStreamedCall(chat: ChatFn, req: ChatRequest, emit: (e: AgentEvent) => void, signal: AbortSignal): Promise<{ result: ChatResult; streamed: boolean }> {
+  let streamed = false
+  const result = await chat(
+    req,
+    (text) => {
+      streamed = true
+      emit({ type: "delta", text })
+    },
+    signal
+  )
+  return { result, streamed }
+}
+
+/**
+ * Finishes a turn: if content is blank and was streamed, reset; emit EMPTY_ANSWER; emit done.
+ */
+function finishTurn(emit: (e: AgentEvent) => void, content: string, streamed: boolean, rounds: number, model: string): void {
+  if (!content.trim()) {
+    if (streamed) emit({ type: "reset" })
+    emit({ type: "delta", text: EMPTY_ANSWER })
+  }
+  emit({ type: "done", rounds, model })
+}
+
+/**
  * Up to maxRounds of "model picks tools → we run them", stopping early as soon
  * as a round comes back with text only. If the model still wants tools after
  * the last round, one more call with tool_choice "none" forces an answer from
@@ -30,22 +58,10 @@ export async function runAgent(o: AgentOptions): Promise<void> {
   const messages: ChatMessage[] = [{ role: "system", content: o.systemPrompt }, ...o.history.slice(-HISTORY_LIMIT)]
 
   for (let round = 1; round <= maxRounds; round++) {
-    let streamed = false
-    const result = await o.chat(
-      { messages, tools, toolChoice: "auto" },
-      (text) => {
-        streamed = true
-        o.emit({ type: "delta", text })
-      },
-      o.signal
-    )
+    const { result, streamed } = await runStreamedCall(o.chat, { messages, tools, toolChoice: "auto" }, o.emit, o.signal)
 
     if (result.toolCalls.length === 0) {
-      if (!result.content.trim()) {
-        if (streamed) o.emit({ type: "reset" })
-        o.emit({ type: "delta", text: EMPTY_ANSWER })
-      }
-      o.emit({ type: "done", rounds: round, model: o.model })
+      finishTurn(o.emit, result.content, streamed, round, o.model)
       return
     }
 
@@ -68,18 +84,6 @@ export async function runAgent(o: AgentOptions): Promise<void> {
   }
 
   messages.push({ role: "system", content: FINAL_NUDGE })
-  let streamed = false
-  const final = await o.chat(
-    { messages, tools, toolChoice: "none" },
-    (text) => {
-      streamed = true
-      o.emit({ type: "delta", text })
-    },
-    o.signal
-  )
-  if (!final.content.trim()) {
-    if (streamed) o.emit({ type: "reset" })
-    o.emit({ type: "delta", text: EMPTY_ANSWER })
-  }
-  o.emit({ type: "done", rounds: maxRounds + 1, model: o.model })
+  const { result: final, streamed } = await runStreamedCall(o.chat, { messages, tools, toolChoice: "none" }, o.emit, o.signal)
+  finishTurn(o.emit, final.content, streamed, maxRounds + 1, o.model)
 }
