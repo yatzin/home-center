@@ -29,7 +29,14 @@ export function serializeRow(entity: EntityKey, row: Row): Row {
     if (v === null || v === undefined) continue
     const rel = def.relations[k]
     if (!rel || rel.kind === "asset") {
-      out[k] = rel ? v : serializeValue(v)
+      if (rel) {
+        out[k] = v
+        continue
+      }
+      // Fields the ontology declares as "date" are stored days: always
+      // YYYY-MM-DD, even when the underlying value has a non-midnight time
+      // (e.g. seeded data). Everything else keeps serializeValue's ISO form.
+      out[k] = def.fields[k]?.type === "date" && v instanceof Date ? toDay(v) : serializeValue(v)
       continue
     }
     out[k] = Array.isArray(v) ? v.map((r) => serializeRow(rel.entity, r as Row)) : serializeRow(rel.entity, v as Row)

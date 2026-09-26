@@ -39,6 +39,12 @@ describe("serializeRow", () => {
     })
   })
 
+  it("formats a stored day as YYYY-MM-DD even with a non-midnight time", () => {
+    expect(
+      serializeRow("medication", { id: "m1", name: "X", personId: "p1", nextRefillDate: new Date("2026-09-30T14:00:00Z") })
+    ).toEqual({ id: "m1", name: "X", personId: "p1", nextRefillDate: "2026-09-30", href: "/assets/people/p1" })
+  })
+
   it("keeps an attached asset ref as-is", () => {
     const asset = { type: "VEHICLE", id: "v1", name: "Civic", href: "/assets/vehicles/v1" }
     expect(serializeRow("serviceRecord", { id: "s1", title: "Oil", assetType: "VEHICLE", assetId: "v1", asset })).toEqual({

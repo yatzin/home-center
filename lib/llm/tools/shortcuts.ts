@@ -26,6 +26,8 @@ import { defineTool } from "./registry"
 const assetTypeField = ENTITIES.serviceRecord.fields.assetType
 const toAssetType = (v: string) => coerceValue(assetTypeField, "assetType", v) as AssetType
 const optionalDay = (v: string | undefined, name: string) => (v ? requireDay(v, name) : null)
+/** Stored dates go to the model as YYYY-MM-DD even when the value has a non-midnight time. */
+const dayOrNull = (d: Date | null | undefined) => (d ? toDay(d) : null)
 
 const SEARCHABLE: EntityKey[] = [
   "property", "vehicle", "equipment", "person", "provider", "insurancePolicy", "healthCondition",
@@ -175,12 +177,12 @@ export const maintenanceStatusTool = defineTool({
           title: s.title,
           state,
           asset: assetRef(index, s.assetType, s.assetId),
-          nextDueDate: s.nextDueDate,
+          nextDueDate: dayOrNull(s.nextDueDate),
           nextDueMeter: s.nextDueMileage,
           daysLeft: due.daysLeft,
           meterLeft: due.milesLeft,
           meterUnit: due.meterUnit,
-          lastCompletedDate: s.lastCompletedDate,
+          lastCompletedDate: dayOrNull(s.lastCompletedDate),
           intervalDays: s.intervalDays,
           intervalMeter: s.intervalMiles,
           href: assetHref(s.assetType, s.assetId),
@@ -214,13 +216,13 @@ export const healthAlertsTool = defineTool({
       asOf: toDay(ctx.now),
       refillsDue: meds
         .filter((m) => refillDue(m, ctx.now))
-        .map((m) => compact({ id: m.id, medication: m.name, dosage: m.dosage, pharmacy: m.pharmacy, nextRefillDate: m.nextRefillDate, daysUntil: daysUntil(m.nextRefillDate!, ctx.now), person: personRef(m.person) })),
+        .map((m) => compact({ id: m.id, medication: m.name, dosage: m.dosage, pharmacy: m.pharmacy, nextRefillDate: dayOrNull(m.nextRefillDate), daysUntil: daysUntil(m.nextRefillDate!, ctx.now), person: personRef(m.person) })),
       immunizationsDue: imms
         .filter((i) => immunizationDue(i, ctx.now) && !isSupersededImmunization(i, imms))
-        .map((i) => compact({ id: i.id, vaccine: i.vaccine, nextDueDate: i.nextDueDate, daysUntil: daysUntil(i.nextDueDate!, ctx.now), person: personRef(i.person) })),
+        .map((i) => compact({ id: i.id, vaccine: i.vaccine, nextDueDate: dayOrNull(i.nextDueDate), daysUntil: daysUntil(i.nextDueDate!, ctx.now), person: personRef(i.person) })),
       insuranceExpiring: policies
         .filter((p) => insuranceExpiring(p, ctx.now))
-        .map((p) => compact({ id: p.id, carrier: p.carrier, planName: p.planName, kind: p.kind, endDate: p.endDate, daysUntil: daysUntil(p.endDate!, ctx.now), members: p.members.map(personRef), href: "/insurance" })),
+        .map((p) => compact({ id: p.id, carrier: p.carrier, planName: p.planName, kind: p.kind, endDate: dayOrNull(p.endDate), daysUntil: daysUntil(p.endDate!, ctx.now), members: p.members.map(personRef), href: "/insurance" })),
     }
   },
 })
