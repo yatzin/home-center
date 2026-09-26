@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   ageFrom, daysUntil, formatDay, immunizationDue, insuranceExpiring, isMedicationActive,
-  labelFor, nextRefillFrom, refillDue, RELATIONSHIPS, toDateInput,
+  isSupersededImmunization, labelFor, nextRefillFrom, refillDue, RELATIONSHIPS, toDateInput,
 } from "./health"
 
 const d = (s: string) => new Date(s)
@@ -66,6 +66,31 @@ describe("immunizationDue / insuranceExpiring", () => {
     expect(insuranceExpiring({ endDate: d("2026-11-01") }, now)).toBe(true)
     expect(insuranceExpiring({ endDate: d("2026-09-01") }, now)).toBe(false)
     expect(insuranceExpiring({ endDate: null }, now)).toBe(false)
+  })
+})
+
+describe("isSupersededImmunization", () => {
+  const older = { personId: "p1", vaccine: "Tdap", dateGiven: d("2020-01-01") }
+  const newer = { personId: "p1", vaccine: "Tdap", dateGiven: d("2026-01-01") }
+
+  it("marks an older dose superseded when a later dose of the same vaccine exists", () => {
+    expect(isSupersededImmunization(older, [older, newer])).toBe(true)
+  })
+  it("does not mark the latest dose superseded", () => {
+    expect(isSupersededImmunization(newer, [older, newer])).toBe(false)
+  })
+  it("does not supersede across different vaccines", () => {
+    const flu = { personId: "p1", vaccine: "Flu", dateGiven: d("2026-06-01") }
+    expect(isSupersededImmunization(older, [older, flu])).toBe(false)
+  })
+  it("does not supersede across different people", () => {
+    const otherPerson = { personId: "p2", vaccine: "Tdap", dateGiven: d("2026-01-01") }
+    expect(isSupersededImmunization(older, [older, otherPerson])).toBe(false)
+  })
+  it("matches vaccine names case-insensitively and trimmed", () => {
+    const messyOlder = { personId: "p1", vaccine: "  tdap ", dateGiven: d("2020-01-01") }
+    const cleanNewer = { personId: "p1", vaccine: "TDAP", dateGiven: d("2026-01-01") }
+    expect(isSupersededImmunization(messyOlder, [messyOlder, cleanNewer])).toBe(true)
   })
 })
 

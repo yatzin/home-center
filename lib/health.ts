@@ -85,6 +85,23 @@ export function immunizationDue(
   return !!i.nextDueDate && daysUntil(i.nextDueDate, now) <= windowDays
 }
 
+/// A dose is superseded once the same person has a later dose of the same
+/// vaccine (matched case-insensitively, trimmed): the older row is history, not
+/// something to nag about.
+export function isSupersededImmunization<T extends { personId: string; vaccine: string; dateGiven: Date }>(
+  i: T,
+  all: T[]
+): boolean {
+  const vaccine = i.vaccine.trim().toLowerCase()
+  const given = new Date(i.dateGiven).getTime()
+  return all.some(
+    (o) =>
+      o.personId === i.personId &&
+      o.vaccine.trim().toLowerCase() === vaccine &&
+      new Date(o.dateGiven).getTime() > given
+  )
+}
+
 export function insuranceExpiring(
   p: { endDate: Date | null },
   now: Date,

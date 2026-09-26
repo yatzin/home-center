@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { EntityFormDialog } from "@/components/forms/entity-form-dialog"
 import { EntityTable, type EntityColumn } from "@/components/forms/entity-table"
 import { createImmunization, deleteImmunization, updateImmunization } from "@/lib/actions/health"
-import { daysUntil, formatDay, HEALTH_WINDOWS, toDateInput } from "@/lib/health"
+import { daysUntil, formatDay, HEALTH_WINDOWS, isSupersededImmunization, toDateInput } from "@/lib/health"
 import type { FieldConfig, FormValues } from "@/lib/form-types"
 import type { Immunization } from "@/app/generated/prisma/client"
 
@@ -31,24 +31,27 @@ function initialFor(i: Immunization | null): FormValues {
   }
 }
 
-function DueBadge({ date }: { date: Date | null }) {
+function DueBadge({ date, superseded }: { date: Date | null; superseded: boolean }) {
   if (!date) return <span className="text-muted-foreground">—</span>
+  if (superseded) return <span className="text-muted-foreground">{formatDay(date)}</span>
   const days = daysUntil(date, new Date())
   if (days < 0) return <Badge variant="destructive">Overdue · {formatDay(date)}</Badge>
   if (days <= HEALTH_WINDOWS.immunizationDays) return <Badge variant="secondary">Due {formatDay(date)}</Badge>
   return <span className="text-muted-foreground">{formatDay(date)}</span>
 }
 
-const COLUMNS: EntityColumn<Immunization>[] = [
-  { key: "vaccine", label: "Vaccine", cell: (i) => <div><div className="font-medium">{i.vaccine}</div>{i.dose && <div className="text-xs text-muted-foreground">{i.dose}</div>}</div> },
-  { key: "given", label: "Given", className: "whitespace-nowrap text-muted-foreground", cell: (i) => formatDay(i.dateGiven) },
-  { key: "by", label: "Given by", className: "text-muted-foreground", cell: (i) => i.givenBy ?? "—" },
-  { key: "next", label: "Next due", className: "whitespace-nowrap", cell: (i) => <DueBadge date={i.nextDueDate} /> },
-]
-
 export function ImmunizationsSection({ personId, immunizations }: { personId: string; immunizations: Immunization[] }) {
   const [editing, setEditing] = useState<Immunization | null>(null)
   const [open, setOpen] = useState(false)
+
+  // Superseded doses (an older row for the same vaccine, now replaced by a
+  // later one) never nag — computed here since this is the full per-person list.
+  const COLUMNS: EntityColumn<Immunization>[] = [
+    { key: "vaccine", label: "Vaccine", cell: (i) => <div><div className="font-medium">{i.vaccine}</div>{i.dose && <div className="text-xs text-muted-foreground">{i.dose}</div>}</div> },
+    { key: "given", label: "Given", className: "whitespace-nowrap text-muted-foreground", cell: (i) => formatDay(i.dateGiven) },
+    { key: "by", label: "Given by", className: "text-muted-foreground", cell: (i) => i.givenBy ?? "—" },
+    { key: "next", label: "Next due", className: "whitespace-nowrap", cell: (i) => <DueBadge date={i.nextDueDate} superseded={isSupersededImmunization(i, immunizations)} /> },
+  ]
 
   async function handleDelete(i: Immunization) {
     if (!confirm(`Delete the ${i.vaccine} record from ${formatDay(i.dateGiven)}?`)) return

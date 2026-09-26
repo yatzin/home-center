@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { notificationService, type NotificationPayload } from "./channels"
 import { scheduleDue, dueCandidateFilter, meterUnitWord, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
-import { daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, refillDue } from "@/lib/health"
+import { daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, isSupersededImmunization, refillDue } from "@/lib/health"
 
 const WARRANTY_WARN_DAYS = 60
 const MAINTENANCE_WINDOW_DAYS = 30
@@ -79,6 +79,17 @@ export async function checkAndNotify(): Promise<number> {
     }),
   ])
 
+  // A later dose of the same vaccine supersedes an earlier one, so fetch every
+  // dose on file for the candidates' people to check that once instead of
+  // querying per row.
+  const immunizationPersonIds = [...new Set(immunizations.map((i) => i.personId))]
+  const immunizationsForCandidates = immunizationPersonIds.length
+    ? await prisma.immunization.findMany({
+        where: { personId: { in: immunizationPersonIds } },
+        select: { personId: true, vaccine: true, dateGiven: true },
+      })
+    : []
+
   // Build every notification this run would want to send, then filter against
   // what already exists. Asking the database per row per user instead cost one
   // sequential round-trip each, which grew with both counts.
@@ -131,7 +142,7 @@ export async function checkAndNotify(): Promise<number> {
   }
 
   for (const i of immunizations) {
-    if (!immunizationDue(i, now)) continue
+    if (!immunizationDue(i, now) || isSupersededImmunization(i, immunizationsForCandidates)) continue
     const days = daysUntil(i.nextDueDate!, now)
     for (const user of users) {
       wanted.push({
