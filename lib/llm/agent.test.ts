@@ -1,0 +1,176 @@
+import { describe, expect, it } from "vitest"
+import { z } from "zod/v4"
+import { runAgent, type AgentOptions } from "./agent"
+import { EMPTY_ANSWER, FINAL_NUDGE } from "./prompt"
+import { defineTool } from "./tools/registry"
+import type { AgentEvent, ChatFn, ChatRequest, ChatResult, HistoryMessage } from "./types"
+
+const ctx = { userId: "u1", now: new Date("2026-09-26T12:00:00Z") }
+
+type Scripted = ChatResult & { stream?: string[] }
+
+function scripted(responses: Scripted[]) {
+  const requests: ChatRequest[] = []
+  const chat: ChatFn = async (req, onText) => {
+    requests.push(structuredClone(req))
+    const r = responses.shift()
+    if (!r) throw new Error("unexpected extra call")
+    for (const t of r.stream ?? (r.content ? [r.content] : [])) onText(t)
+    return { content: r.content, toolCalls: r.toolCalls }
+  }
+  return { chat, requests }
+}
+
+const lookup = defineTool({
+  name: "lookup",
+  description: "Looks up q.",
+  schema: z.object({ q: z.string() }),
+  label: (a) => `Looking up ${a.q}…`,
+  run: async (a) => ({ rows: [a.q] }),
+})
+
+const toolCall = (id: string, q: string) => ({ id, name: "lookup", arguments: JSON.stringify({ q }) })
+
+async function run(chat: ChatFn, extra: Partial<AgentOptions> = {}) {
+  const events: AgentEvent[] = []
+  await runAgent({
+    history: [{ role: "user", content: "hi" }],
+    systemPrompt: "SYS",
+    chat,
+    tools: [lookup],
+    ctx,
+    emit: (e) => events.push(e),
+    signal: new AbortController().signal,
+    model: "m",
+    ...extra,
+  })
+  return events
+}
+
+describe("runAgent", () => {
+  it("answers directly when no tools are needed", async () => {
+    const { chat, requests } = scripted([{ content: "Hello", toolCalls: [] }])
+    expect(await run(chat)).toEqual([
+      { type: "delta", text: "Hello" },
+      { type: "done", rounds: 1, model: "m" },
+    ])
+    expect(requests).toHaveLength(1)
+    expect(requests[0].toolChoice).toBe("auto")
+    expect(requests[0].messages).toEqual([{ role: "system", content: "SYS" }, { role: "user", content: "hi" }])
+    expect(requests[0].tools?.[0].function.name).toBe("lookup")
+  })
+
+  it("runs tools, feeds results back, then answers", async () => {
+    const { chat, requests } = scripted([
+      { content: "", toolCalls: [toolCall("c1", "civic")] },
+      { content: "Civic done.", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(events).toEqual([
+      { type: "status", tool: "lookup", label: "Looking up civic…", round: 1 },
+      { type: "delta", text: "Civic done." },
+      { type: "done", rounds: 2, model: "m" },
+    ])
+    expect(requests[1].messages.slice(2)).toEqual([
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [{ id: "c1", type: "function", function: { name: "lookup", arguments: '{"q":"civic"}' } }],
+      },
+      { role: "tool", tool_call_id: "c1", content: '{"rows":["civic"]}' },
+    ])
+  })
+
+  it("runs parallel calls and keeps their order", async () => {
+    const { chat, requests } = scripted([
+      { content: "", toolCalls: [toolCall("a", "one"), toolCall("b", "two")] },
+      { content: "ok", toolCalls: [] },
+    ])
+    await run(chat)
+    const toolMessages = requests[1].messages.filter((m) => m.role === "tool")
+    expect(toolMessages).toEqual([
+      { role: "tool", tool_call_id: "a", content: '{"rows":["one"]}' },
+      { role: "tool", tool_call_id: "b", content: '{"rows":["two"]}' },
+    ])
+  })
+
+  it("resets text streamed before tool calls", async () => {
+    const { chat } = scripted([
+      { content: "Let me check.", toolCalls: [toolCall("c1", "x")] },
+      { content: "Done.", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(events.slice(0, 3)).toEqual([
+      { type: "delta", text: "Let me check." },
+      { type: "reset" },
+      { type: "status", tool: "lookup", label: "Looking up x…", round: 1 },
+    ])
+  })
+
+  it("forces a final answer after five tool rounds", async () => {
+    const rounds = Array.from({ length: 5 }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, `q${i}`)] }))
+    const { chat, requests } = scripted([...rounds, { content: "Best effort.", toolCalls: [] }])
+    const events = await run(chat)
+    expect(requests).toHaveLength(6)
+    expect(requests[5].toolChoice).toBe("none")
+    expect(requests[5].messages.at(-1)).toEqual({ role: "system", content: FINAL_NUDGE })
+    expect(events.at(-1)).toEqual({ type: "done", rounds: 6, model: "m" })
+    expect(events.filter((e) => e.type === "status")).toHaveLength(5)
+  })
+
+  it("falls back when the final answer is empty", async () => {
+    const rounds = Array.from({ length: 5 }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, "q")] }))
+    // A server that ignores tool_choice "none" and calls a tool anyway.
+    const { chat } = scripted([...rounds, { content: "", toolCalls: [toolCall("c9", "q")] }])
+    const events = await run(chat)
+    expect(events.slice(-2)).toEqual([
+      { type: "delta", text: EMPTY_ANSWER },
+      { type: "done", rounds: 6, model: "m" },
+    ])
+  })
+
+  it("falls back when a text-only round is blank", async () => {
+    const { chat } = scripted([{ content: "  ", toolCalls: [], stream: [] }])
+    expect(await run(chat)).toEqual([
+      { type: "delta", text: EMPTY_ANSWER },
+      { type: "done", rounds: 1, model: "m" },
+    ])
+  })
+
+  it("sends at most the last 20 history messages", async () => {
+    const history: HistoryMessage[] = Array.from({ length: 30 }, (_, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: `m${i}`,
+    }))
+    history.push({ role: "user", content: "last" })
+    const { chat, requests } = scripted([{ content: "ok", toolCalls: [] }])
+    await run(chat, { history })
+    expect(requests[0].messages).toHaveLength(21)
+    expect(requests[0].messages.at(-1)).toEqual({ role: "user", content: "last" })
+  })
+
+  it("stops without another call when aborted during tools", async () => {
+    const controller = new AbortController()
+    const aborting = defineTool({
+      name: "lookup",
+      description: "d",
+      schema: z.object({ q: z.string() }),
+      label: () => "…",
+      run: async () => {
+        controller.abort()
+        return {}
+      },
+    })
+    const { chat, requests } = scripted([{ content: "", toolCalls: [toolCall("c1", "x")] }])
+    const events = await run(chat, { tools: [aborting], signal: controller.signal })
+    expect(requests).toHaveLength(1)
+    expect(events.some((e) => e.type === "done")).toBe(false)
+  })
+
+  it("lets provider errors propagate", async () => {
+    const chat: ChatFn = async () => {
+      throw new Error("boom")
+    }
+    await expect(run(chat)).rejects.toThrow("boom")
+  })
+})
