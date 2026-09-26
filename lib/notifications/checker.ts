@@ -2,11 +2,21 @@ import { prisma } from "@/lib/prisma"
 import { notificationService, type NotificationPayload } from "./channels"
 import { scheduleDue, dueCandidateFilter, meterUnitWord, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
+import { daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, refillDue } from "@/lib/health"
 
 const WARRANTY_WARN_DAYS = 60
 const MAINTENANCE_WINDOW_DAYS = 30
 
 const plural = (n: number, unit: string) => `${n.toLocaleString()} ${unit}${n !== 1 ? "s" : ""}`
+
+const DAY = 86_400_000
+
+// "is due in 3 days" / "is due today" / "was due 2 days ago".
+function dueWhen(days: number) {
+  if (days < 0) return `was due ${plural(-days, "day")} ago`
+  if (days === 0) return "is due today"
+  return `is due in ${plural(days, "day")}`
+}
 
 // Says which of the two clocks ran out, so "due soon" on an oil change reads
 // "in 300 miles" rather than a date the owner may be nowhere near.
@@ -26,7 +36,7 @@ function dueMessage(title: string, due: Due) {
 const dedupKey = (userId: string, type: string, entityId: string) => `${userId}:${type}:${entityId}`
 
 /**
- * Creates in-app notifications for due maintenance and expiring warranties.
+ * Creates in-app notifications for due maintenance, expiring warranties, and health items (refills, vaccines, insurance).
  *
  * Called by the scheduler in ./scheduler.ts, which is the only caller — it
  * serialises runs, so the dedup read below can't race another pass writing the
@@ -40,7 +50,7 @@ export async function checkAndNotify(): Promise<number> {
 
   const now = new Date()
 
-  const [schedules, mileage, warranties] = await Promise.all([
+  const [schedules, mileage, warranties, medications, immunizations, policies] = await Promise.all([
     prisma.maintenanceSchedule.findMany({ where: dueCandidateFilter(MAINTENANCE_WINDOW_DAYS, now) }),
     loadVehicleMileage(),
     prisma.warranty.findMany({
@@ -50,6 +60,19 @@ export async function checkAndNotify(): Promise<number> {
           lte: new Date(now.getTime() + WARRANTY_WARN_DAYS * 86400000),
         },
       },
+    }),
+    // The date filters only narrow the read; refillDue / immunizationDue /
+    // insuranceExpiring below are the rules, shared with the UI badges.
+    prisma.medication.findMany({
+      where: { nextRefillDate: { lte: new Date(now.getTime() + HEALTH_WINDOWS.refillDays * DAY) } },
+      include: { person: { select: { name: true } } },
+    }),
+    prisma.immunization.findMany({
+      where: { nextDueDate: { lte: new Date(now.getTime() + HEALTH_WINDOWS.immunizationDays * DAY) } },
+      include: { person: { select: { name: true } } },
+    }),
+    prisma.insurancePolicy.findMany({
+      where: { endDate: { gte: now, lte: new Date(now.getTime() + HEALTH_WINDOWS.insuranceDays * DAY) } },
     }),
   ])
 
@@ -85,6 +108,52 @@ export async function checkAndNotify(): Promise<number> {
         message: `Warranty for "${w.productName}" expires in ${plural(daysLeft, "day")}.`,
         relatedEntityId: w.id,
         relatedEntityType: "Warranty",
+      })
+    }
+  }
+
+  for (const m of medications) {
+    if (!refillDue(m, now)) continue
+    const days = daysUntil(m.nextRefillDate!, now)
+    for (const user of users) {
+      wanted.push({
+        userId: user.id,
+        type: "MEDICATION_REFILL",
+        title: `Refill: ${m.name} (${m.person.name})`,
+        message: `${m.person.name}'s ${m.name} refill ${dueWhen(days)}.`,
+        relatedEntityId: m.id,
+        relatedEntityType: "Medication",
+      })
+    }
+  }
+
+  for (const i of immunizations) {
+    if (!immunizationDue(i, now)) continue
+    const days = daysUntil(i.nextDueDate!, now)
+    for (const user of users) {
+      wanted.push({
+        userId: user.id,
+        type: "IMMUNIZATION_DUE",
+        title: `Vaccine due: ${i.vaccine} (${i.person.name})`,
+        message: `${i.person.name}'s ${i.vaccine} ${dueWhen(days)}.`,
+        relatedEntityId: i.id,
+        relatedEntityType: "Immunization",
+      })
+    }
+  }
+
+  for (const p of policies) {
+    if (!insuranceExpiring(p, now)) continue
+    const days = daysUntil(p.endDate!, now)
+    const name = p.planName ? `${p.carrier} ${p.planName}` : p.carrier
+    for (const user of users) {
+      wanted.push({
+        userId: user.id,
+        type: "INSURANCE_EXPIRING",
+        title: `Insurance ending: ${name}`,
+        message: days === 0 ? `"${name}" coverage ends today.` : `"${name}" coverage ends in ${plural(days, "day")}.`,
+        relatedEntityId: p.id,
+        relatedEntityType: "InsurancePolicy",
       })
     }
   }

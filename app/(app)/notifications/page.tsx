@@ -4,12 +4,15 @@ import { redirect } from "next/navigation"
 import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bell, Wrench, ShieldCheck } from "lucide-react"
+import { Bell, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const typeIcon: Record<string, React.ElementType> = {
   MAINTENANCE_DUE: Wrench,
   WARRANTY_EXPIRING: ShieldCheck,
+  MEDICATION_REFILL: Pill,
+  IMMUNIZATION_DUE: Syringe,
+  INSURANCE_EXPIRING: ShieldPlus,
   CUSTOM: Bell,
 }
 
