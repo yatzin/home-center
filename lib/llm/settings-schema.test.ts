@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isLlmReady, LLM_PRESETS, parseLlmSettings, type LlmSettingsInput } from "./settings-schema"
+import { isLlmReady, LLM_PRESETS, originChanged, parseLlmSettings, type LlmSettingsInput } from "./settings-schema"
 
 const base: LlmSettingsInput = {
   enabled: true,
@@ -68,5 +68,15 @@ describe("isLlmReady", () => {
 describe("LLM_PRESETS", () => {
   it("has http(s) base URLs without trailing slashes", () => {
     for (const p of LLM_PRESETS) expect(p.baseUrl).toMatch(/^https?:\/\/.+[^/]$/)
+  })
+})
+
+describe("originChanged", () => {
+  it("is true only when both URLs are set and their origins differ", () => {
+    expect(originChanged("https://api.openai.com/v1", "https://api.openai.com/v2")).toBe(false)
+    expect(originChanged("https://api.openai.com/v1", "https://openrouter.ai/api/v1")).toBe(true)
+    expect(originChanged("http://localhost:11434/v1", "http://localhost:1234/v1")).toBe(true)
+    expect(originChanged(null, "https://openrouter.ai/api/v1")).toBe(false)
+    expect(originChanged("https://api.openai.com/v1", null)).toBe(false)
   })
 })

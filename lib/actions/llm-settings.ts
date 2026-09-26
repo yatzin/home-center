@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { encrypt } from "@/lib/secret-box"
 import { loadLlmConfig, LLM_SETTINGS_ID } from "@/lib/llm/config"
-import { parseLlmSettings, type LlmSettingsInput } from "@/lib/llm/settings-schema"
+import { originChanged, parseLlmSettings, type LlmSettingsInput } from "@/lib/llm/settings-schema"
 import { createChatClient } from "@/lib/llm/client"
 import { LlmError } from "@/lib/llm/errors"
 import type { OpenAiTool } from "@/lib/llm/types"
@@ -23,11 +23,16 @@ export async function updateLlmSettings(data: LlmSettingsInput): Promise<{ error
   const result = parseLlmSettings(data)
   if (!result.ok) return { error: result.error }
 
+  const saved = await prisma.llmSettings.findUnique({ where: { id: LLM_SETTINGS_ID }, select: { baseUrl: true } })
+  // A stored key never follows the settings to a different server.
+  const serverChanged = originChanged(saved?.baseUrl ?? null, result.value.baseUrl)
   const apiKeyEnc = data.clearApiKey
     ? null
     : data.apiKey
       ? encrypt(data.apiKey)
-      : undefined // undefined = keep the stored key
+      : serverChanged
+        ? null
+        : undefined // undefined = keep the stored key
 
   await prisma.llmSettings.upsert({
     where: { id: LLM_SETTINGS_ID },
@@ -64,7 +69,9 @@ export async function testLlmConnection(
   const baseUrl = parsed.value.baseUrl ?? saved.baseUrl
   const model = parsed.value.model ?? saved.model
   if (!baseUrl || !model) return { error: "Enter a base URL and model first." }
-  const apiKey = data.clearApiKey ? null : data.apiKey || saved.apiKey
+  // The saved key is only sent to the server it was saved for.
+  const savedKey = originChanged(saved.baseUrl, baseUrl) ? null : saved.apiKey
+  const apiKey = data.clearApiKey ? null : data.apiKey || savedKey
 
   const chat = createChatClient({ baseUrl, apiKey, model, temperature: null, maxTokens: null })
   try {

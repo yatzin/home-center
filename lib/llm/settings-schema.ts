@@ -80,3 +80,16 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 export function isLlmReady(c: { enabled: boolean; baseUrl: string | null; model: string | null; keyUnreadable: boolean }): boolean {
   return c.enabled && !!c.baseUrl && !!c.model && !c.keyUnreadable
 }
+
+/**
+ * A stored API key belongs to the server it was saved for. True when both URLs
+ * are set and point at different origins (so the key must not follow).
+ */
+export function originChanged(saved: string | null, next: string | null): boolean {
+  if (!saved || !next) return false
+  try {
+    return new URL(saved).origin !== new URL(next).origin
+  } catch {
+    return true
+  }
+}

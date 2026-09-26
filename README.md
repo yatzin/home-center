@@ -162,6 +162,12 @@ HomeCenter runs in Docker, `localhost` means the container: use the host's
 address (e.g. `http://host.docker.internal:11434/v1`) for a model running on the
 host.
 
+For Ollama, raise the context length — the default is too short for the tool
+definitions and results, so answers get cut off or ignore the data. Set
+`OLLAMA_CONTEXT_LENGTH=16384` (or more) on the Ollama server. Models of 7B
+parameters or larger are recommended; small models often call the tools wrongly
+or not at all.
+
 Chats stay in your browser tab and are never stored on the server.
 
 ## Updating

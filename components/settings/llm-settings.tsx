@@ -147,7 +147,7 @@ export function LlmSettings({
                     />
                   </FormControl>
                   <FormDescription className="text-xs">
-                    Stored encrypted.
+                    Stored encrypted, and only sent to the server it was saved for — a saved key is dropped when the base URL moves to another server.
                     {hasStoredKey && (
                       <button type="button" className="ml-1 underline hover:text-foreground" onClick={() => setClearApiKey((c) => !c)}>
                         {clearApiKey ? "Keep saved key" : "Remove saved key"}
