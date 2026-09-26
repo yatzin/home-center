@@ -1,5 +1,6 @@
 import type { ReportData } from "@/lib/report-server"
 import type { Row } from "./ontology"
+import { inDayRange } from "./query"
 import { compact, toDay } from "./serialize"
 
 // One chronological history for an asset or person, built from the same data
@@ -11,9 +12,8 @@ export function buildTimeline(report: ReportData, range: { from?: Date | null; t
   const events: (TimelineEvent & { at: number })[] = []
   const add = (when: Date | null | undefined, kind: string, title: string, extra: Row = {}) => {
     if (!when) return
+    if (!inDayRange(new Date(when), range)) return
     const at = new Date(when).getTime()
-    if (range.from && at < range.from.getTime()) return
-    if (range.to && at > range.to.getTime()) return
     events.push({ at, date: toDay(new Date(when)), kind, title, ...compact(extra) })
   }
 

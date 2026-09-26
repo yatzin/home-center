@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  compileInclude, compileLimit, compileSort, compileWhere, entityDef, requireDay, selectFor, ToolInputError,
+  compileInclude, compileLimit, compileSort, compileWhere, entityDef, inDayRange, requireDay, selectFor, ToolInputError,
 } from "./query"
 
 const ctx = { userId: "u1", now: new Date("2026-09-26T12:00:00Z") }
@@ -62,10 +62,37 @@ describe("compileWhere", () => {
     })
   })
 
-  it("turns dates into UTC days", () => {
-    expect(compileWhere("serviceRecord", [{ field: "date", op: "gte", value: "2025-01-01" }], ctx).where).toEqual({
-      AND: [{ date: { gte: new Date("2025-01-01T00:00:00.000Z") } }],
+  it("turns dates into whole UTC days, since stored dates can carry a time", () => {
+    const day = new Date("2025-01-01T00:00:00.000Z")
+    const next = new Date("2025-01-02T00:00:00.000Z")
+    const date = (op: "eq" | "ne" | "gt" | "gte" | "lt" | "lte") =>
+      compileWhere("serviceRecord", [{ field: "date", op, value: "2025-01-01" }], ctx).where
+    expect(date("eq")).toEqual({ AND: [{ date: { gte: day, lt: next } }] })
+    expect(date("ne")).toEqual({ AND: [{ NOT: { date: { gte: day, lt: next } } }] })
+    expect(date("lte")).toEqual({ AND: [{ date: { lt: next } }] })
+    expect(date("gt")).toEqual({ AND: [{ date: { gte: next } }] })
+    expect(date("gte")).toEqual({ AND: [{ date: { gte: day } }] })
+    expect(date("lt")).toEqual({ AND: [{ date: { lt: day } }] })
+    expect(() => compileWhere("serviceRecord", [{ field: "date", op: "in", value: ["2025-01-01"] }], ctx)).toThrow(ToolInputError)
+  })
+
+  it("matches strings exactly but ignoring case", () => {
+    const where = (op: "eq" | "ne" | "in", value: unknown) => compileWhere("vehicle", [{ field: "make", op, value }], ctx).where
+    expect(where("eq", "honda")).toEqual({ AND: [{ make: { startsWith: "honda", endsWith: "honda" } }] })
+    expect(where("ne", "honda")).toEqual({ AND: [{ NOT: { make: { startsWith: "honda", endsWith: "honda" } } }] })
+    expect(where("in", ["honda", "Ford"])).toEqual({
+      AND: [{ OR: [{ make: { startsWith: "honda", endsWith: "honda" } }, { make: { startsWith: "Ford", endsWith: "Ford" } }] }],
     })
+  })
+
+  it("allows eq/in on ids and foreign keys, exactly", () => {
+    expect(compileWhere("medication", [{ field: "personId", op: "eq", value: "p1" }], ctx).where).toEqual({
+      AND: [{ personId: { equals: "p1" } }],
+    })
+    expect(compileWhere("vehicle", [{ field: "id", op: "in", value: ["v1", "v2"] }], ctx).where).toEqual({
+      AND: [{ id: { in: ["v1", "v2"] } }],
+    })
+    expect(() => compileWhere("medication", [{ field: "personId", op: "contains", value: "p" }], ctx)).toThrow(/Allowed: eq, in/)
   })
 
   it("rejects bad enum values with the allowed list", () => {
@@ -98,7 +125,10 @@ describe("compileWhere", () => {
       AND: [{ person: { is: { name: { contains: "anna" } } } }],
     })
     expect(compileWhere("insurancePolicy", [{ field: "members.name", op: "eq", value: "Anna" }], ctx).where).toEqual({
-      AND: [{ members: { some: { name: { equals: "Anna" } } } }],
+      AND: [{ members: { some: { name: { startsWith: "Anna", endsWith: "Anna" } } } }],
+    })
+    expect(compileWhere("medication", [{ field: "person.name", op: "in", value: ["anna"] }], ctx).where).toEqual({
+      AND: [{ person: { is: { OR: [{ name: { startsWith: "anna", endsWith: "anna" } }] } } }],
     })
   })
 
@@ -164,5 +194,16 @@ describe("compileInclude", () => {
   it("treats asset as always-on and rejects unknown relations", () => {
     expect(compileInclude("serviceRecord", ["asset"]).children).toEqual([])
     expect(() => compileInclude("vehicle", ["owner"])).toThrow(/Relations on vehicle: serviceRecords, warranties, maintenanceSchedules/)
+  })
+})
+
+describe("inDayRange", () => {
+  it("includes the whole 'to' day, even with a time of day", () => {
+    const range = { from: new Date("2025-01-01T00:00:00Z"), to: new Date("2025-03-01T00:00:00Z") }
+    expect(inDayRange(new Date("2025-03-01T14:28:00Z"), range)).toBe(true)
+    expect(inDayRange(new Date("2025-03-02T00:00:00Z"), range)).toBe(false)
+    expect(inDayRange(new Date("2024-12-31T23:59:59Z"), range)).toBe(false)
+    expect(inDayRange(new Date("2025-01-01T00:00:00Z"), range)).toBe(true)
+    expect(inDayRange(new Date("1990-01-01T00:00:00Z"), {})).toBe(true)
   })
 })

@@ -1,7 +1,7 @@
 import { cents } from "@/lib/costs"
 import { ENTITIES, type EntityKey, type Row } from "./ontology"
 import { ToolInputError } from "./query"
-import { toDay } from "./serialize"
+import { compact, toDay } from "./serialize"
 
 // In-memory grouping for the aggregate and cost_summary tools. Same reasoning
 // as lib/costs-server.ts: SQLite can't group by an extracted year without raw
@@ -21,11 +21,19 @@ export function dateBucket(d: Date, b: DateBucket): string {
 
 export type MeasureInput = { op: "count" | "sum" | "avg" | "min" | "max"; field?: string }
 export type MeasureSpec = { op: MeasureInput["op"]; label: string; money: boolean; select: Row; pick: (row: Row) => number | null }
-export type GroupSpec = { label: string; select: Row; key: (row: Row) => string }
+export type GroupSpec = {
+  label: string
+  select: Row
+  /** Identity of the row's group. */
+  key: (row: Row) => string
+  /** What the group is shown as, when that differs from its identity (assets: the name, plus id and link). */
+  display?: (row: Row) => { name: string; assetId?: string; href?: string }
+}
+export type AggregateGroup = { key: string[]; value: number | null; count: number; assetId?: string; href?: string }
 export type AggregateResult = {
   measure: string
   groupBy: string[]
-  groups: { key: string[]; value: number | null; count: number }[]
+  groups: AggregateGroup[]
   total: { value: number | null; count: number }
   truncatedGroups?: number
 }
@@ -67,7 +75,20 @@ export function groupSpec(entity: EntityKey, raw: string): GroupSpec {
   const rel = def.relations[name]
   if (rel) {
     if (rel.kind === "asset") {
-      return { label: "asset", select: { assetType: true, assetId: true }, key: (row) => (row.asset as { name?: string } | undefined)?.name ?? NONE }
+      // Keyed by type and id: two assets can share a name ("Refrigerator").
+      type Ref = { type?: string; id?: string; name?: string; href?: string } | undefined
+      return {
+        label: "asset",
+        select: { assetType: true, assetId: true },
+        key: (row) => {
+          const a = row.asset as Ref
+          return a?.type && a.id ? `${a.type}:${a.id}` : NONE
+        },
+        display: (row) => {
+          const a = row.asset as Ref
+          return a?.type && a.id ? { name: a.name ?? NONE, assetId: a.id, href: a.href } : { name: NONE }
+        },
+      }
     }
     if (rel.kind === "one") {
       const nameField = ENTITIES[rel.entity].nameField
@@ -117,13 +138,22 @@ const compareKeys = (a: string[], b: string[]) => {
 }
 
 export function aggregateRows(rows: Row[], measure: MeasureSpec, groups: GroupSpec[], maxGroups = 200): AggregateResult {
-  const buckets = new Map<string, { key: string[]; rows: Row[] }>()
+  const buckets = new Map<string, { key: string[]; rows: Row[]; extra: { assetId?: string; href?: string } }>()
   for (const row of rows) {
-    const key = groups.map((g) => g.key(row))
-    const id = JSON.stringify(key)
+    const id = JSON.stringify(groups.map((g) => g.key(row)))
     const bucket = buckets.get(id)
-    if (bucket) bucket.rows.push(row)
-    else buckets.set(id, { key, rows: [row] })
+    if (bucket) {
+      bucket.rows.push(row)
+      continue
+    }
+    const extra: { assetId?: string; href?: string } = {}
+    const key = groups.map((g) => {
+      if (!g.display) return g.key(row)
+      const { name, ...ids } = g.display(row)
+      Object.assign(extra, compact(ids))
+      return name
+    })
+    buckets.set(id, { key, rows: [row], extra })
   }
 
   const valueOf = (rs: Row[]) =>
@@ -132,7 +162,7 @@ export function aggregateRows(rows: Row[], measure: MeasureSpec, groups: GroupSp
       : reduce(rs.map(measure.pick).filter((v): v is number => v !== null), measure.op, measure.money)
 
   const all = [...buckets.values()]
-    .map((b) => ({ key: b.key, value: valueOf(b.rows), count: b.rows.length }))
+    .map((b): AggregateGroup => ({ key: b.key, value: valueOf(b.rows), count: b.rows.length, ...b.extra }))
     .sort((a, b) => compareKeys(a.key, b.key))
 
   return {

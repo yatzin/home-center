@@ -39,7 +39,7 @@ export type EntityDef = {
   nameField: string
   /** Fields the search tool matches words against. */
   searchFields: string[]
-  /** Foreign keys always selected (for links and chaining), never filterable unless also in fields. */
+  /** Foreign keys always selected (for links and chaining); filterable with eq/in, but not sortable or listed in fields. */
   keys: string[]
   polymorphic?: boolean
   /** Set on the four asset entities; their assetChildren match on it. */

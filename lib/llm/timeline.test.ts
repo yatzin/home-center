@@ -32,6 +32,11 @@ describe("buildTimeline", () => {
     ])
   })
 
+  it("includes rows later in the day on the 'to' date", () => {
+    const late = { ...report, services: [{ date: new Date("2025-02-01T14:28:00Z"), title: "Brakes", cost: 400 }] } as unknown as ReportData
+    expect(buildTimeline(late, { from: d("2025-02-01"), to: d("2025-02-01") }).map((e) => e.title)).toEqual(["Brakes"])
+  })
+
   it("adds health history for a person", () => {
     const person = {
       ...report,

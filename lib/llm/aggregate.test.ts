@@ -3,8 +3,8 @@ import { aggregateRows, dateBucket, groupSpec, measureSpec, NONE } from "./aggre
 import { ToolInputError } from "./query"
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`)
-const civic = { name: "Civic" }
-const tacoma = { name: "Tacoma" }
+const civic = { type: "VEHICLE", id: "v1", name: "Civic", href: "/vehicles/v1" }
+const tacoma = { type: "VEHICLE", id: "v2", name: "Tacoma", href: "/vehicles/v2" }
 
 const records = [
   { id: "1", cost: 0.1, date: d("2024-02-01"), category: "ROUTINE", asset: civic },
@@ -33,8 +33,8 @@ describe("aggregateRows", () => {
       measure: "sum(cost)",
       groupBy: ["asset", "date:year"],
       groups: [
-        { key: ["Civic", "2024"], value: 0.3, count: 2 },
-        { key: ["Tacoma", "2025"], value: 100, count: 2 },
+        { key: ["Civic", "2024"], value: 0.3, count: 2, assetId: "v1", href: "/vehicles/v1" },
+        { key: ["Tacoma", "2025"], value: 100, count: 2, assetId: "v2", href: "/vehicles/v2" },
       ],
       total: { value: 100.3, count: 4 },
     })
@@ -57,6 +57,22 @@ describe("aggregateRows", () => {
     expect(max.total.value).toBe(100)
     const none = aggregateRows([], measureSpec("serviceRecord", { op: "min", field: "cost" }), [])
     expect(none.total).toEqual({ value: null, count: 0 })
+  })
+
+  it("keeps same-named assets apart, labelled by name with id and link", () => {
+    const fridge = (id: string) => ({ type: "EQUIPMENT", id, name: "Refrigerator", href: `/equipment/${id}` })
+    const rows = [
+      { id: "1", cost: 10, asset: fridge("e1") },
+      { id: "2", cost: 20, asset: fridge("e2") },
+      { id: "3", cost: 5, asset: fridge("e1") },
+      { id: "4", cost: 1 },
+    ]
+    const result = aggregateRows(rows, measureSpec("serviceRecord", { op: "sum", field: "cost" }), [groupSpec("serviceRecord", "asset")])
+    expect(result.groups).toEqual([
+      { key: [NONE], value: 1, count: 1 },
+      { key: ["Refrigerator"], value: 15, count: 2, assetId: "e1", href: "/equipment/e1" },
+      { key: ["Refrigerator"], value: 20, count: 1, assetId: "e2", href: "/equipment/e2" },
+    ])
   })
 
   it("groups by a one-relation's name", () => {

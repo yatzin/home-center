@@ -92,23 +92,80 @@ export function coerceValue(field: FieldDef, name: string, value: unknown): unkn
   throw new ToolInputError(`${name} expects a ${field.type} (got ${JSON.stringify(value)}).`)
 }
 
-function condition(field: FieldDef, name: string, op: Op, value: unknown): unknown {
-  const allowed = OPS_BY_TYPE[field.type]
+const DAY_MS = 86_400_000
+
+/** The UTC midnight after d. */
+export function nextDay(d: Date): Date {
+  return new Date(d.getTime() + DAY_MS)
+}
+
+/**
+ * Whether a stored date falls within [from, to] as whole UTC days. Stored values
+ * can carry a time of day (a service logged at 14:28), so "to" covers all of its day.
+ */
+export function inDayRange(when: Date, range: { from?: Date | null; to?: Date | null }): boolean {
+  const t = when.getTime()
+  return (!range.from || t >= range.from.getTime()) && (!range.to || t < nextDay(range.to).getTime())
+}
+
+function requireList(value: unknown, name: string): unknown[] {
+  if (!Array.isArray(value) || value.length === 0) throw new ToolInputError(`"in" on ${name} needs a non-empty array.`)
+  return value
+}
+
+/** Row ids and foreign keys (personId, assetId…) can be matched exactly, for chaining lookups. */
+const KEY_FIELD: FieldDef = { type: "string" }
+const KEY_OPS: Op[] = ["eq", "in"]
+
+function filterField(entity: EntityKey, name: string): { field: FieldDef; isKey: boolean } {
+  const def = ENTITIES[entity]
+  if (def.fields[name]) return { field: def.fields[name], isKey: false }
+  if (name === "id" || def.keys.includes(name)) return { field: KEY_FIELD, isKey: true }
+  const keys = ["id", ...def.keys].join(", ")
+  throw new ToolInputError(`Unknown field "${name}" on ${entity}. Valid fields: ${Object.keys(def.fields).join(", ")} (and ${keys} with eq or in).`)
+}
+
+/** A where fragment for one filter on column `key` (an object, since some ops need OR). */
+function fieldWhere(field: FieldDef, isKey: boolean, key: string, name: string, op: Op, value: unknown): Row {
+  const allowed = isKey ? KEY_OPS : OPS_BY_TYPE[field.type]
   if (!allowed.includes(op)) {
-    throw new ToolInputError(`Operator "${op}" can't be used on ${name} (${field.type}). Allowed: ${allowed.join(", ")}.`)
+    throw new ToolInputError(`Operator "${op}" can't be used on ${name} (${isKey ? "id" : field.type}). Allowed: ${allowed.join(", ")}.`)
   }
+  const coerce = (v: unknown) => coerceValue(field, name, v)
+
+  if (op === "isNull") return { [key]: value === false || value === "false" ? { not: null } : null }
+
+  if (field.type === "string" && !isKey && (op === "eq" || op === "ne" || op === "in")) {
+    // SQLite's = is case-sensitive but LIKE isn't, so an exact match that
+    // ignores case is "starts and ends with the value".
+    const exact = (v: unknown) => {
+      const s = coerce(v) as string
+      return s ? { startsWith: s, endsWith: s } : { equals: s }
+    }
+    if (op === "eq") return { [key]: exact(value) }
+    if (op === "ne") return { NOT: { [key]: exact(value) } }
+    return { OR: requireList(value, name).map((v) => ({ [key]: exact(v) })) }
+  }
+
+  if (field.type === "date" && (op === "eq" || op === "ne" || op === "lte" || op === "gt")) {
+    // Days, not instants: stored dates can carry a time of day.
+    const day = coerce(value) as Date
+    const next = nextDay(day)
+    if (op === "eq") return { [key]: { gte: day, lt: next } }
+    if (op === "ne") return { NOT: { [key]: { gte: day, lt: next } } }
+    if (op === "lte") return { [key]: { lt: next } }
+    return { [key]: { gte: next } }
+  }
+
   switch (op) {
-    case "isNull":
-      return value === false || value === "false" ? { not: null } : null
     case "in":
-      if (!Array.isArray(value) || value.length === 0) throw new ToolInputError(`"in" on ${name} needs a non-empty array.`)
-      return { in: value.map((v) => coerceValue(field, name, v)) }
+      return { [key]: { in: requireList(value, name).map(coerce) } }
     case "eq":
-      return { equals: coerceValue(field, name, value) }
+      return { [key]: { equals: coerce(value) } }
     case "ne":
-      return { not: coerceValue(field, name, value) }
+      return { [key]: { not: coerce(value) } }
     default:
-      return { [op]: coerceValue(field, name, value) }
+      return { [key]: { [op]: coerce(value) } }
   }
 }
 
@@ -126,7 +183,8 @@ export function compileWhere(
     if (rest.length) throw new ToolInputError(`Filters can follow one relation at most ("${f.field}").`)
 
     if (!tail) {
-      and.push({ [head]: condition(fieldDef(entity, head), head, f.op, f.value) })
+      const { field, isKey } = filterField(entity, head)
+      and.push(fieldWhere(field, isKey, head, head, f.op, f.value))
       continue
     }
 
@@ -143,7 +201,8 @@ export function compileWhere(
       throw new ToolInputError(`Can't filter ${entity} by ${head}; query ${rel.entity} with an asset.name filter instead.`)
     }
 
-    const cond = { [tail]: condition(fieldDef(rel.entity, tail), `${head}.${tail}`, f.op, f.value) }
+    const { field, isKey } = filterField(rel.entity, tail)
+    const cond = fieldWhere(field, isKey, tail, `${head}.${tail}`, f.op, f.value)
     and.push({ [head]: rel.kind === "many" ? { some: cond } : { is: cond } })
   }
 

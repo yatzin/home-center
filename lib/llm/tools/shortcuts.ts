@@ -12,11 +12,12 @@ import {
 } from "@/lib/health"
 import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
 import { ENTITIES, type EntityKey, type Row } from "../ontology"
-import { coerceValue, entityDef, requireDay, selectFor, ToolInputError } from "../query"
+import { coerceValue, entityDef, inDayRange, requireDay, selectFor, ToolInputError } from "../query"
 import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
 import { buildTimeline } from "../timeline"
+import { resolveAssetId } from "../asset-ids"
 import { defineTool } from "./registry"
 
 // Curated tools for the questions people ask most. Narrow arguments so small
@@ -95,13 +96,13 @@ export const costSummaryTool = defineTool({
       : null
 
     const [records, index] = await Promise.all([loadCostRecords(assetType ? { assetType } : undefined), loadAssetIndex()])
+    const assetIds = a.assetIds?.map((id) => resolveAssetId(index.names, id, assetType ? [assetType] : undefined))
     const rows: Row[] = records
       .filter(
         (r) =>
-          (!from || r.date >= from) &&
-          (!to || r.date <= to) &&
+          inDayRange(r.date, { from, to }) &&
           (!category || r.category === category) &&
-          (!a.assetIds?.length || a.assetIds.includes(r.assetId))
+          (!assetIds?.length || assetIds.includes(r.assetId))
       )
       .map((r) => ({ ...r }))
     attachAssets(index, rows)
@@ -155,13 +156,14 @@ export const maintenanceStatusTool = defineTool({
   label: () => "Checking maintenance…",
   async run(a, ctx) {
     const assetType = a.assetType ? toAssetType(a.assetType) : undefined
-    const [schedules, mileage, index] = await Promise.all([
+    const index = await loadAssetIndex()
+    const assetId = a.assetId ? resolveAssetId(index.names, a.assetId, assetType ? [assetType] : undefined) : undefined
+    const [schedules, mileage] = await Promise.all([
       prisma.maintenanceSchedule.findMany({
-        where: { isActive: true, ...(assetType ? { assetType } : {}), ...(a.assetId ? { assetId: a.assetId } : {}) },
+        where: { isActive: true, ...(assetType ? { assetType } : {}), ...(assetId ? { assetId } : {}) },
         orderBy: { nextDueDate: "asc" },
       }),
       loadVehicleMileage(),
-      loadAssetIndex(),
     ])
     const status = a.status ?? "all"
     const rows = schedules
@@ -170,7 +172,13 @@ export const maintenanceStatusTool = defineTool({
         return { s, due, state: due.overdue ? "overdue" : due.dueSoon ? "due_soon" : "ok" }
       })
       .filter(({ state }) => status === "all" || state === status)
-      .filter(({ due, state }) => a.withinDays == null || state === "overdue" || (due.daysLeft != null && due.daysLeft <= a.withinDays))
+      .filter(
+        ({ due, state }) =>
+          a.withinDays == null ||
+          state === "overdue" ||
+          // Mileage-only schedules have no daysLeft; their due_soon state is the best "within" signal.
+          (due.daysLeft == null ? state === "due_soon" : due.daysLeft <= a.withinDays)
+      )
       .map(({ s, due, state }) =>
         compact({
           id: s.id,
@@ -201,7 +209,8 @@ export const healthAlertsTool = defineTool({
     `insurance expiring within ${HEALTH_WINDOWS.insuranceDays} days. Optionally for one person.`,
   schema: z.object({ personId: z.string().optional() }),
   label: () => "Checking health reminders…",
-  async run({ personId }, ctx) {
+  async run(a, ctx) {
+    const personId = a.personId ? resolveAssetId((await loadAssetIndex()).names, a.personId, ["PERSON"]) : undefined
     const byPerson = personId ? { personId } : {}
     const person = { select: { id: true, name: true } } as const
     const [meds, imms, policies] = await Promise.all([
