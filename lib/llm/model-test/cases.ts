@@ -193,7 +193,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     category: "Conversation",
     title: "Doesn't look anything up for small talk",
     question: "Thanks so much, that's all I needed!",
-    check: all(calledNoTool(), answerMatches(/\S/, "says something back"), shortAnswer(200)),
+    check: all(calledNoTool(), answerMatches(/\S/, "something back"), shortAnswer(200)),
   },
   {
     id: "choice-followup-civic-cost-last-year",
@@ -304,7 +304,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
         }],
       },
     }],
-    check: all(answerMatches(/overdue/i, "says it's overdue"), answerIncludesAny(dateForms("2026-05-01"), "the due date")),
+    check: all(answerMatches(/overdue/i, "it's overdue"), answerIncludesAny(dateForms("2026-05-01"), "the due date")),
   },
   {
     id: "answer-maintenance-due-soon",
@@ -350,7 +350,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
         ],
       },
     }],
-    check: all(answerMatches(/active|still|yes|covered/i, "says it's covered"), answerExcludes(["expired"], "confused it with an expired warranty")),
+    check: all(answerMatches(/active|still|yes|covered/i, "it's covered"), answerExcludes(["expired"], "confused it with an expired warranty")),
   },
   {
     id: "answer-health-refill-link",
@@ -400,7 +400,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "What maintenance is overdue?",
     given: [{ name: "maintenance_status", args: { status: "overdue" }, result: { asOf: "2026-06-15", total: 0, rows: [] } }],
     check: all(
-      answerMatches(/no |none|nothing|isn'?t|is not|aren'?t|are not/i, "says nothing is overdue"),
+      answerMatches(/no |none|nothing|isn'?t|is not|aren'?t|are not/i, "nothing is overdue"),
       answerExcludes(["oil change", "furnace filter"], "invented an overdue item")
     ),
   },
@@ -419,7 +419,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
       },
     }],
     check: all(
-      answerMatches(/no |none|not found|don'?t have|couldn'?t find|doesn'?t/i, "says nothing matched"),
+      answerMatches(/no |none|not found|don'?t have|couldn'?t find|doesn'?t/i, "nothing matched"),
       answerExcludes(["tesla model", "2026 tesla"], "invented a vehicle")
     ),
   },
@@ -431,7 +431,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "What's the current mileage on the Civic?",
     given: [{ name: "get_record", args: { entity: "vehicle", id: CIVIC.id }, result: { error: "The lookup failed on the server." } }],
     check: all(
-      answerMatches(/couldn'?t|can'?t|cannot|unable|wasn'?t able|not able/i, "says it couldn't get the answer"),
+      answerMatches(/couldn'?t|can'?t|cannot|unable|wasn'?t able|not able/i, "it couldn't get the answer"),
       answerExcludes(["45000", "45,000 miles"], "invented a mileage figure")
     ),
   },
@@ -563,7 +563,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     fixtures: { maintenance_status: { asOf: "2026-06-15", total: 0, rows: [] } },
     check: all(
       calledTool("maintenance_status"),
-      answerMatches(/no |none|nothing|isn'?t|aren'?t/i, "says nothing is overdue"),
+      answerMatches(/no |none|nothing|isn'?t|aren'?t/i, "nothing is overdue"),
       answerExcludes(["oil change", "furnace filter"], "invented an overdue item")
     ),
   },
@@ -614,7 +614,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "What's the average cost per repair on the Civic?",
     fixtures: { search: { query: "civic", total: 1, rows: [{ entity: "vehicle", id: CIVIC.id, name: CIVIC.name, href: CIVIC.href }] } },
     check: all(
-      answerMatches(/couldn'?t|can'?t|cannot|unable|no data|not able|wasn'?t able/i, "says it couldn't get an answer"),
+      answerMatches(/couldn'?t|can'?t|cannot|unable|no data|not able|wasn'?t able/i, "it couldn't get an answer"),
       answerExcludes(["$"], "made up a dollar figure")
     ),
   },
