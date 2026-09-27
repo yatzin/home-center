@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -218,6 +219,9 @@ export function LlmSettings({
               <Button type="button" variant="outline" disabled={testing} onClick={runTest}>
                 {testing ? "Testing…" : "Test connection"}
               </Button>
+              <Link href="/settings/assistant-test" className={buttonVariants({ variant: "ghost" })}>
+                Run model tests →
+              </Link>
             </div>
             <p className="text-xs text-muted-foreground">
               The test uses what&apos;s typed above, so you can try settings before saving.
