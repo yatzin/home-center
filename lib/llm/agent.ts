@@ -78,7 +78,7 @@ export async function runAgent(o: AgentOptions): Promise<void> {
       // chance to look the records up, while rounds remain.
       if (bad.length && !rechecked && round < maxRounds) {
         rechecked = true
-        if (streamed) o.emit({ type: "reset" })
+        if (streamed) o.emit({ type: "reset", reason: "recheck" })
         o.emit({ type: "status", tool: "verify", label: "Double-checking the answer…", round })
         messages.push({ role: "assistant", content: result.content }, { role: "user", content: recheckNudge(bad) })
         continue

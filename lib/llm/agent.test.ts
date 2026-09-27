@@ -203,6 +203,7 @@ describe("runAgent link check", () => {
       { role: "assistant", content: "VIN is X, see [Truck](/assets/vehicles/fake9)." },
       { role: "user", content: recheckNudge(["/assets/vehicles/fake9"]) },
     ])
+    expect(events).toContainEqual({ type: "reset", reason: "recheck" })
     expect(events).toContainEqual({ type: "status", tool: "verify", label: "Double-checking the answer…", round: 1 })
     expect(events.at(-2)).toEqual({ type: "delta", text: "VIN is Y, see [Truck](/assets/vehicles/real1)." })
     expect(events.at(-1)).toEqual({ type: "done", rounds: 3, model: "m" })

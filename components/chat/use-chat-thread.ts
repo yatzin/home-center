@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createNdjsonReader } from "@/lib/llm/ndjson"
-import { clearThread, loadThread, requestMessages, saveThread, shouldPersist } from "@/lib/llm/thread-storage"
-import type { AgentEvent, HistoryMessage } from "@/lib/llm/types"
+import { clearThread, loadThread, requestMessages, saveThread, shouldPersist, type ThreadMessage } from "@/lib/llm/thread-storage"
+import type { AgentEvent } from "@/lib/llm/types"
 
 function storage() {
   try {
@@ -17,9 +17,11 @@ const SESSION_EXPIRED = "Your session has expired — sign in again."
 const CUT_OFF = "The answer was cut off — try again."
 
 export function useChatThread(userId: string) {
-  const [messages, setMessages] = useState<HistoryMessage[]>([])
+  const [messages, setMessages] = useState<ThreadMessage[]>([])
   /** The in-flight assistant text; null when no turn is running. */
   const [draft, setDraft] = useState<string | null>(null)
+  /** This turn's first answer, when the link check threw it out and a new one is coming. */
+  const [discarded, setDiscarded] = useState<string | null>(null)
   const [statusLabel, setStatusLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -33,7 +35,7 @@ export function useChatThread(userId: string) {
   }, [userId])
 
   const persist = useCallback(
-    (next: HistoryMessage[]) => {
+    (next: ThreadMessage[]) => {
       setMessages(next)
       saveThread(storage(), userId, next)
     },
@@ -41,16 +43,18 @@ export function useChatThread(userId: string) {
   )
 
   const run = useCallback(
-    async (thread: HistoryMessage[]) => {
+    async (thread: ThreadMessage[]) => {
       const started = generation.current
       const controller = new AbortController()
       abortRef.current = controller
       setBusy(true)
       setError(null)
       setDraft("")
+      setDiscarded(null)
       setStatusLabel(null)
 
-      const turn = { text: "", failure: null as string | null, done: false }
+      const turn = { text: "", discarded: null as string | null, failure: null as string | null, done: false }
+      const answer = (): ThreadMessage => ({ role: "assistant", content: turn.text, ...(turn.discarded ? { discarded: turn.discarded } : {}) })
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -70,6 +74,10 @@ export function useChatThread(userId: string) {
             turn.text += event.text
             setDraft(turn.text)
           } else if (event.type === "reset") {
+            if (event.reason === "recheck" && turn.text.trim()) {
+              turn.discarded = turn.text
+              setDiscarded(turn.text)
+            }
             turn.text = ""
             setDraft("")
           } else if (event.type === "status") {
@@ -91,13 +99,13 @@ export function useChatThread(userId: string) {
         // A stream that ends without "done" was cut off; its partial text isn't kept.
         if (!turn.done && !controller.signal.aborted) throw new Error(CUT_OFF)
         if (turn.text.trim() && shouldPersist(started, generation.current)) {
-          persist([...thread, { role: "assistant", content: turn.text }])
+          persist([...thread, answer()])
         }
       } catch (e) {
         if (!shouldPersist(started, generation.current)) return
         if (controller.signal.aborted) {
           // Stop keeps whatever arrived.
-          if (turn.text.trim()) persist([...thread, { role: "assistant", content: turn.text }])
+          if (turn.text.trim()) persist([...thread, answer()])
         } else {
           setError(e instanceof Error ? e.message : "Something went wrong.")
         }
@@ -106,6 +114,7 @@ export function useChatThread(userId: string) {
         if (shouldPersist(started, generation.current)) {
           setBusy(false)
           setDraft(null)
+          setDiscarded(null)
           setStatusLabel(null)
         }
       }
@@ -117,7 +126,7 @@ export function useChatThread(userId: string) {
     (text: string) => {
       const content = text.trim()
       if (!content || busy) return
-      const next: HistoryMessage[] = [...messages, { role: "user", content }]
+      const next: ThreadMessage[] = [...messages, { role: "user", content }]
       persist(next)
       void run(next)
     },
@@ -140,8 +149,9 @@ export function useChatThread(userId: string) {
     setError(null)
     setBusy(false)
     setDraft(null)
+    setDiscarded(null)
     setStatusLabel(null)
   }, [userId])
 
-  return { messages, draft, statusLabel, error, busy, send, retry, stop, reset }
+  return { messages, draft, discarded, statusLabel, error, busy, send, retry, stop, reset }
 }
