@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { resolveNotificationHrefs } from "@/lib/notification-links"
 import { loadLlmStatus } from "@/lib/llm/config"
 import { ChatProvider } from "@/components/chat/chat-provider"
-import { ChatPanel } from "@/components/chat/chat-panel"
+import { ChatDock, ChatToggle } from "@/components/chat/chat-panel"
 import packageJson from "@/package.json"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -38,15 +38,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <MobileSidebarTrigger showAssistant={showAssistant} />
             <div className="flex items-center gap-2 ml-auto">
               <ThemeToggle />
-              {showAssistant && <ChatPanel />}
+              {showAssistant && <ChatToggle />}
               <NotificationBell notifications={notificationItems} />
               <UserMenu name={session.user.name ?? "User"} email={session.user.email ?? ""} />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
-          <footer className="shrink-0 border-t border-border/60 px-4 py-2 text-center text-xs text-muted-foreground">
-            HomeCenter &middot; v{packageJson.version}
-          </footer>
+          {/* The page and the docked assistant sit side by side; opening the assistant narrows the page. */}
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <main className="flex-1 overflow-y-auto p-6">{children}</main>
+              <footer className="shrink-0 border-t border-border/60 px-4 py-2 text-center text-xs text-muted-foreground">
+                HomeCenter &middot; v{packageJson.version}
+              </footer>
+            </div>
+            {showAssistant && <ChatDock />}
+          </div>
         </div>
       </div>
     </ChatProvider>
