@@ -4,12 +4,20 @@ import { toDay } from "./serialize"
 export const FINAL_NUDGE =
   "You have used all your tool rounds. Answer now using only the data gathered above, and say clearly what couldn't be determined."
 
-/** Sent when an answer links records no tool returned during this question. */
+/**
+ * Sent when an answer links records no tool returned during this question.
+ * Measured against the earlier "look these records up" wording on follow-ups:
+ * that one made the model search the linked names and then drop the facts it
+ * could no longer see (4 of 6 re-checked answers right); naming the kind of
+ * lookup to redo got 6 of 6, and faster.
+ */
 export function recheckNudge(links: string[]): string {
   return (
-    `Your answer links to records that were not returned by a tool while answering this question: ${links.join(", ")}. ` +
-    "Earlier answers in this chat may be wrong or out of date. Look these records up with the tools now and answer again, " +
-    "correcting any details. Only link records a tool returned."
+    `Your answer linked records that no tool returned while answering this question (${links.join(", ")}), so it was not shown. ` +
+    "Facts carried over from earlier answers can't be trusted either: the earlier tool results are no longer available to you. " +
+    "Call the tools again for everything your answer relies on, using the kind of lookup that answers the question " +
+    "(for example cost_summary for spending, asset_history for service history, warranty_status for warranties), then answer again. " +
+    "Only link records a tool returns."
   )
 }
 

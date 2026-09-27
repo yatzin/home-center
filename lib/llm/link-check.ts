@@ -20,6 +20,18 @@ export function unverifiedLinks(text: string, toolOutputs: string[]): string[] {
   return [...bad]
 }
 
+/** A record page that can exist: an asset or person, optionally opening one of its tabs. */
+const RECORD_PAGE = /^\/assets\/(properties|vehicles|equipment|people)\/[A-Za-z0-9_-]+(\?[^\s]*)?$/
+
+/**
+ * Links whose path can't be any page in the app — /assets/medications/…,
+ * /assets/providers?…, /assets/serviceRecords/… — as opposed to a real-looking
+ * record link that simply wasn't returned by a tool.
+ */
+export function impossibleLinks(hrefs: string[]): string[] {
+  return hrefs.filter((h) => !FIXED_PAGES.has(h) && !RECORD_PAGE.test(h))
+}
+
 export function unlink(text: string, hrefs: string[]): string {
   return text.replace(INTERNAL_LINK, (whole, label: string, href: string) => (hrefs.includes(href) ? label : whole))
 }
