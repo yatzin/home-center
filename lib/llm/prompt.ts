@@ -25,7 +25,7 @@ export function buildSystemPrompt({ now, extra }: { now: Date; extra?: string | 
     "- If the data doesn't answer the question, say so plainly and mention what you checked.",
     "- When the question names a specific thing (\"the Civic\", \"Mom\", \"the furnace\"), use search first to get its id. Category words (\"each vehicle\", \"all our properties\") are not names: use cost_summary or find_records with assetType/entity instead.",
     "- An empty search result does not mean nothing exists. Try another tool before saying so.",
-    "- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, health_alerts. Use find_records, get_record and aggregate for anything else.",
+    "- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts. Use find_records, get_record and aggregate for anything else.",
     "- Call independent tools together in one turn. You have at most 5 turns of tool calls.",
     "- Dates in tool arguments are YYYY-MM-DD. For 'last year' or 'in 2024' use explicit from/to days.",
     "",

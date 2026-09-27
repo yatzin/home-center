@@ -18,6 +18,7 @@ import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
 import { buildTimeline, type TimelineEvent } from "../timeline"
 import { rollUpToProperty } from "../cost-rollup"
+import { warrantyState } from "../warranty-status"
 import { splitSearchQuery } from "../search-terms"
 import { resolveAssetId } from "../asset-ids"
 import { defineTool } from "./registry"
@@ -185,6 +186,48 @@ export const assetHistoryTool = defineTool({
       ...(equipment.length ? { note: "Includes service on equipment at this property." } : {}),
       rows: [...buildTimeline(report, range), ...equipmentEvents].sort((x, y) => x.date.localeCompare(y.date)),
     }
+  },
+})
+
+export const warrantyStatusTool = defineTool({
+  name: "warranty_status",
+  description:
+    "Warranties with their state worked out for you: expired, expiring (within withinDays, default 180 ≈ 6 months) or active. " +
+    "Use for 'which warranties expire soon', 'is the generator still under warranty', 'what has expired'.",
+  schema: z.object({
+    status: z.enum(["expiring", "expired", "active", "all"]).optional().describe("Default expiring."),
+    withinDays: z.coerce.number().int().min(0).max(3650).optional().describe("Window for 'expiring'. Default 180."),
+    assetType: z.string().optional(),
+    assetId: z.string().optional(),
+  }),
+  label: () => "Checking warranties…",
+  async run(a, ctx) {
+    const assetType = a.assetType ? toAssetType(a.assetType) : undefined
+    const index = await loadAssetIndex()
+    const assetId = a.assetId ? resolveAssetId(index.names, a.assetId, assetType ? [assetType] : undefined) : undefined
+    const warranties = await prisma.warranty.findMany({
+      where: { ...(assetType ? { assetType } : {}), ...(assetId ? { assetId } : {}) },
+      orderBy: { expirationDate: "asc" },
+    })
+    const status = a.status ?? "expiring"
+    const withinDays = a.withinDays ?? 180
+    const rows = warranties
+      .map((w) => ({ w, ...warrantyState(w.expirationDate, ctx.now, withinDays) }))
+      .filter(({ state }) => status === "all" || state === status)
+      .map(({ w, state, daysLeft }) =>
+        compact({
+          id: w.id,
+          product: w.productName,
+          state,
+          expirationDate: dayOrNull(w.expirationDate),
+          daysLeft,
+          vendor: w.vendor,
+          vendorPhone: w.vendorPhone,
+          asset: assetRef(index, w.assetType, w.assetId),
+          href: assetHref(w.assetType, w.assetId),
+        })
+      )
+    return { asOf: toDay(ctx.now), status, withinDays, total: rows.length, rows }
   },
 })
 
