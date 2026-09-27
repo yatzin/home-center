@@ -4,7 +4,7 @@ import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref } from "@/lib/assets"
 import { loadReport } from "@/lib/report-server"
 import { loadCostRecords } from "@/lib/costs-server"
-import { sum } from "@/lib/costs"
+import { cents, sum } from "@/lib/costs"
 import { scheduleDue } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import {
@@ -16,7 +16,8 @@ import { coerceValue, entityDef, inDayRange, requireDay, selectFor, ToolInputErr
 import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
-import { buildTimeline } from "../timeline"
+import { buildTimeline, type TimelineEvent } from "../timeline"
+import { rollUpToProperty } from "../cost-rollup"
 import { splitSearchQuery } from "../search-terms"
 import { resolveAssetId } from "../asset-ids"
 import { defineTool } from "./registry"
@@ -88,7 +89,8 @@ export const costSummaryTool = defineTool({
   name: "cost_summary",
   description:
     "Total spending from service records (repairs, maintenance, medical visits), grouped by asset, year, quarter, month, category or vendor. " +
-    "Use it for 'how much did we spend', comparisons between assets or people, and year-over-year questions. People are assets (assetType PERSON).",
+    "Use it for 'how much did we spend', comparisons between assets or people, and year-over-year questions. People are assets (assetType PERSON). " +
+    "A property's spending includes the equipment installed there.",
   schema: z.object({
     groupBy: z.array(z.enum(["asset", "year", "quarter", "month", "category", "vendor"])).min(1).max(2),
     assetType: z.string().optional().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
@@ -106,11 +108,23 @@ export const costSummaryTool = defineTool({
       ? (coerceValue(ENTITIES.serviceRecord.fields.category, "category", a.category) as ServiceCategory)
       : null
 
-    const [records, index] = await Promise.all([loadCostRecords(assetType ? { assetType } : undefined), loadAssetIndex()])
+    const [records, index, installed] = await Promise.all([
+      loadCostRecords(),
+      loadAssetIndex(),
+      prisma.equipment.findMany({ where: { propertyId: { not: null } }, select: { id: true, propertyId: true } }),
+    ])
     const assetIds = a.assetIds?.map((id) => resolveAssetId(index.names, id, assetType ? [assetType] : undefined))
-    const rows: Row[] = records
+    // Equipment spending counts toward its property whenever properties are what's being asked about.
+    const wanted = assetIds?.length ? new Set(assetIds) : null
+    const rolled = rollUpToProperty(
+      records,
+      new Map(installed.map((e) => [e.id, e.propertyId!])),
+      (propertyId) => (wanted ? wanted.has(propertyId) : assetType === "PROPERTY")
+    )
+    const rows: Row[] = rolled
       .filter(
         (r) =>
+          (!assetType || r.assetType === assetType) &&
           inDayRange(r.date, { from, to }) &&
           (!category || r.category === category) &&
           (!assetIds?.length || assetIds.includes(r.assetId))
@@ -120,6 +134,7 @@ export const costSummaryTool = defineTool({
 
     return {
       currency: "USD",
+      ...(rows.some((r) => r.viaEquipmentId) ? { note: "Property totals include spending on equipment at the property." } : {}),
       ...aggregateRows(
         rows,
         measureSpec("serviceRecord", { op: "sum", field: "cost" }),
@@ -145,10 +160,30 @@ export const assetHistoryTool = defineTool({
     const type = toAssetType(a.assetType)
     const report = await loadReport(type, a.assetId)
     if (!report) throw new ToolInputError(`No ${type.toLowerCase()} with id "${a.assetId}". Use search to find the id.`)
+    const range = { from: optionalDay(a.from, "from"), to: optionalDay(a.to, "to") }
+
+    // A property's history and spending include the equipment installed there.
+    const equipment = type === "PROPERTY"
+      ? await prisma.equipment.findMany({ where: { propertyId: a.assetId }, select: { id: true, name: true } })
+      : []
+    const equipmentName = new Map(equipment.map((e) => [e.id, e.name]))
+    const equipmentServices = equipment.length
+      ? await prisma.serviceRecord.findMany({ where: { assetType: "EQUIPMENT", assetId: { in: [...equipmentName.keys()] } } })
+      : []
+    const equipmentEvents: TimelineEvent[] = equipmentServices
+      .filter((s) => inDayRange(s.date, range))
+      .map((s) => ({
+        date: toDay(s.date),
+        kind: "service",
+        title: s.title,
+        ...compact({ equipment: equipmentName.get(s.assetId), vendor: s.vendor, cost: s.cost, category: s.category }),
+      }))
+
     return {
       asset: compact({ type, id: a.assetId, name: report.asset.name, subtitle: report.asset.subtitle, href: assetHref(type, a.assetId) }),
-      totalCost: sum(report.costRows),
-      rows: buildTimeline(report, { from: optionalDay(a.from, "from"), to: optionalDay(a.to, "to") }),
+      totalCost: cents(sum(report.costRows) + equipmentServices.reduce((total, s) => total + (s.cost ?? 0), 0)),
+      ...(equipment.length ? { note: "Includes service on equipment at this property." } : {}),
+      rows: [...buildTimeline(report, range), ...equipmentEvents].sort((x, y) => x.date.localeCompare(y.date)),
     }
   },
 })
