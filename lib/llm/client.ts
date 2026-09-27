@@ -19,9 +19,10 @@ export type ClientConfig = {
 }
 
 /**
- * A request fails only when the server goes quiet this long — not after a fixed
- * total — so a slow local model that keeps streaming (answer or reasoning) is
- * never cut off mid-answer. The per-question limit lives in the route.
+ * Once a reply has started streaming, it fails only if the server then goes
+ * quiet this long — not after a fixed total — so a slow local model that keeps
+ * streaming (answer or reasoning) is never cut off mid-answer. Waiting for the
+ * first byte counts only against the per-question limit in the route.
  */
 export const IDLE_TIMEOUT_MS = 60_000
 
@@ -55,7 +56,9 @@ export function createChatClient(config: ClientConfig, fetchImpl: typeof fetch =
       clearTimeout(timer)
       timer = setTimeout(() => idle.abort(new DOMException("No output from the server", "TimeoutError")), idleMs)
     }
-    touch()
+    // Armed by the first streamed chunk, not here: before the server starts
+    // answering (prompt processing, a cold model load) only the caller's
+    // per-question limit applies.
     try {
       return await send(req, onText, signal, idle.signal, touch)
     } catch (error) {

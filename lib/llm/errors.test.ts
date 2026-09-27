@@ -33,7 +33,7 @@ describe("agentErrorMessage", () => {
     expect(agentErrorMessage(new LlmError("Bad key"), false)).toBe("Bad key")
   })
   it("reports the wall-clock cap", () => {
-    expect(agentErrorMessage(new Error("aborted"), true)).toBe("That took too long — try a narrower question.")
+    expect(agentErrorMessage(new Error("aborted"), true)).toBe("That took longer than the time limit — the model may be busy or still loading. Try again, or raise the limit in Settings.")
   })
   it("hides anything else", () => {
     expect(agentErrorMessage(new Error("SQLITE_BUSY secret"), false)).toBe("Something went wrong answering that.")

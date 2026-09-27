@@ -168,9 +168,10 @@ definitions and results, so answers get cut off or ignore the data. Set
 parameters or larger are recommended; small models often call the tools wrongly
 or not at all.
 
-Slow local models: a reply stops only if the server sends nothing for 60
-seconds, and **Time limit per question** (default 180 seconds) caps the whole
-answer — raise it if answers time out. **Extra request JSON** passes
+Slow local models: **Time limit per question** (default 180 seconds) caps the
+whole answer, including waiting for the model to load or read the prompt —
+raise it if answers time out. Once a reply starts streaming, it also stops if
+the server then sends nothing for 60 seconds. **Extra request JSON** passes
 server-specific options with every request, e.g.
 `{"chat_template_kwargs": {"enable_thinking": true}}` to turn on a model's
 thinking in llama.cpp or vLLM, or `{"reasoning_effort": "low"}` for OpenAI

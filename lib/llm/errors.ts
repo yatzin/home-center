@@ -33,6 +33,6 @@ export function explainNetworkError(error: unknown, host: string): string {
 /** The one line the user sees when a chat turn fails. */
 export function agentErrorMessage(error: unknown, timedOut: boolean): string {
   if (error instanceof LlmError) return error.message
-  if (timedOut) return "That took too long — try a narrower question."
+  if (timedOut) return "That took longer than the time limit — the model may be busy or still loading. Try again, or raise the limit in Settings."
   return "Something went wrong answering that."
 }

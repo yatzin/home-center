@@ -181,7 +181,7 @@ export function LlmSettings({
                   <FormLabel>Time limit per question (seconds)</FormLabel>
                   <FormControl><Input type="number" min={30} max={900} placeholder={String(DEFAULT_TIMEOUT_SECONDS)} {...field} /></FormControl>
                   <FormDescription className="text-xs">
-                    Raise it for slow local models. A reply also stops if the server sends nothing for 60 seconds.
+                    Raise it for slow local models. Once a reply starts, it also stops if the server then sends nothing for 60 seconds.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -96,13 +96,32 @@ describe("createChatClient", () => {
       await expect(chat({ messages: [] }, () => {}, signal())).rejects.toThrow(/stopped responding/)
     })
 
-    it("fails when the server never answers", async () => {
+    it("waits past the no-output limit for the first byte", async () => {
+      const fetchImpl = vi.fn(async () => {
+        await wait(120) // prompt processing / model load: no bytes yet
+        return new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(chunk("hi"))
+              c.close()
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } }
+        )
+      })
+      const chat = createChatClient({ ...config, idleTimeoutMs: 50 }, fetchImpl as unknown as typeof fetch)
+      expect((await chat({ messages: [] }, () => {}, signal())).content).toBe("hi")
+    })
+
+    it("leaves a server that never answers to the caller's time limit", async () => {
       const fetchImpl = vi.fn(
         (_url: string, init: RequestInit) =>
           new Promise<Response>((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason)))
       )
       const chat = createChatClient({ ...config, idleTimeoutMs: 50 }, fetchImpl as unknown as typeof fetch)
-      await expect(chat({ messages: [] }, () => {}, signal())).rejects.toBeInstanceOf(LlmError)
+      const limit = AbortSignal.timeout(150)
+      await expect(chat({ messages: [] }, () => {}, limit)).rejects.not.toBeInstanceOf(LlmError)
+      expect(limit.aborted).toBe(true)
     })
   })
 
