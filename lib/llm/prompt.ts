@@ -4,6 +4,15 @@ import { toDay } from "./serialize"
 export const FINAL_NUDGE =
   "You have used all your tool rounds. Answer now using only the data gathered above, and say clearly what couldn't be determined."
 
+/** Sent when an answer links records no tool returned during this question. */
+export function recheckNudge(links: string[]): string {
+  return (
+    `Your answer links to records that were not returned by a tool while answering this question: ${links.join(", ")}. ` +
+    "Earlier answers in this chat may be wrong or out of date. Look these records up with the tools now and answer again, " +
+    "correcting any details. Only link records a tool returned."
+  )
+}
+
 export const EMPTY_ANSWER = "I couldn't put together an answer from the data I gathered. Try asking a narrower question."
 
 export function buildSystemPrompt({ now, extra }: { now: Date; extra?: string | null }): string {

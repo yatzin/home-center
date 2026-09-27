@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
 import { runAgent, type AgentOptions } from "./agent"
-import { EMPTY_ANSWER, FINAL_NUDGE } from "./prompt"
+import { EMPTY_ANSWER, FINAL_NUDGE, recheckNudge } from "./prompt"
 import { defineTool } from "./tools/registry"
 import type { AgentEvent, ChatFn, ChatRequest, ChatResult, HistoryMessage } from "./types"
 
@@ -188,5 +188,55 @@ describe("runAgent", () => {
       throw new Error("boom")
     }
     await expect(run(chat)).rejects.toThrow("boom")
+  })
+})
+
+describe("runAgent link check", () => {
+  it("asks the model again when an answer links a record no tool returned", async () => {
+    const { chat, requests } = scripted([
+      { content: "VIN is X, see [Truck](/assets/vehicles/fake9).", toolCalls: [] },
+      { content: "", toolCalls: [toolCall("c1", "/assets/vehicles/real1")] },
+      { content: "VIN is Y, see [Truck](/assets/vehicles/real1).", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(requests[1].messages.slice(-2)).toEqual([
+      { role: "assistant", content: "VIN is X, see [Truck](/assets/vehicles/fake9)." },
+      { role: "user", content: recheckNudge(["/assets/vehicles/fake9"]) },
+    ])
+    expect(events).toContainEqual({ type: "status", tool: "verify", label: "Double-checking the answer…", round: 1 })
+    expect(events.at(-2)).toEqual({ type: "delta", text: "VIN is Y, see [Truck](/assets/vehicles/real1)." })
+    expect(events.at(-1)).toEqual({ type: "done", rounds: 3, model: "m" })
+  })
+
+  it("re-checks only once, then unlinks what still doesn't check out", async () => {
+    const { chat } = scripted([
+      { content: "[A](/assets/people/x1)", toolCalls: [] },
+      { content: "Still [A](/assets/people/x1)", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(events.slice(-3)).toEqual([
+      { type: "reset" },
+      { type: "delta", text: "Still A" },
+      { type: "done", rounds: 2, model: "m" },
+    ])
+  })
+
+  it("unlinks instead of re-asking when no rounds are left", async () => {
+    const { chat, requests } = scripted([{ content: "[A](/assets/people/x1) ok", toolCalls: [] }])
+    const events = await run(chat, { maxRounds: 1 })
+    expect(requests).toHaveLength(1)
+    expect(events.slice(-2)).toEqual([
+      { type: "delta", text: "A ok" },
+      { type: "done", rounds: 1, model: "m" },
+    ])
+  })
+
+  it("leaves verified links alone", async () => {
+    const { chat } = scripted([
+      { content: "", toolCalls: [toolCall("c1", "/assets/vehicles/real1")] },
+      { content: "[A](/assets/vehicles/real1)", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(events.filter((e) => e.type === "reset")).toEqual([])
   })
 })
