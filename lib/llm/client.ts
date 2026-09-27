@@ -12,6 +12,8 @@ export type ClientConfig = {
   model: string
   temperature: number | null
   maxTokens: number | null
+  /** Provider-specific request fields, e.g. llama.cpp's chat_template_kwargs. Never overrides the core fields. */
+  extraBody?: Record<string, unknown> | null
 }
 
 export const REQUEST_TIMEOUT_MS = 60_000
@@ -38,6 +40,7 @@ export function createChatClient(config: ClientConfig, fetchImpl: typeof fetch =
 
   return async (req, onText, signal) => {
     const body = {
+      ...config.extraBody,
       model: config.model,
       messages: req.messages,
       stream: true,

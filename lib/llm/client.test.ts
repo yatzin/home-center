@@ -51,6 +51,17 @@ describe("createChatClient", () => {
     expect(JSON.parse(init.body as string).tools).toBeUndefined()
   })
 
+  it("merges extra body fields without letting them override the core request", async () => {
+    const fetchImpl = vi.fn(async () => sseResponse(["[DONE]"]))
+    const extraBody = { chat_template_kwargs: { enable_thinking: true }, model: "hijack", stream: false }
+    const chat = createChatClient({ ...config, extraBody }, fetchImpl as unknown as typeof fetch)
+    await chat({ messages: [] }, () => {}, signal())
+    const body = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: true })
+    expect(body.model).toBe("m")
+    expect(body.stream).toBe(true)
+  })
+
   it("streams text and assembles tool calls", async () => {
     const fetchImpl = vi.fn(async () =>
       sseResponse([
