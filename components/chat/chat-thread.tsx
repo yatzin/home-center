@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { ArrowUp, Loader2, RotateCcw, Square, SquarePen } from "lucide-react"
+import { ArrowUp, Loader2, RotateCcw, Square, SquarePen, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -16,7 +16,36 @@ const EXAMPLES = [
   "When was the furnace last serviced?",
 ]
 
-function Bubble({ role, content }: { role: "user" | "assistant"; content: string }) {
+/**
+ * A first answer the link check threw out: kept visible and struck through so
+ * text doesn't silently vanish. Plain text, so its unverified links can't be clicked.
+ */
+function DiscardedAnswer({ text, pending }: { text: string; pending: boolean }) {
+  const struck = <p className="whitespace-pre-wrap text-sm text-muted-foreground line-through decoration-muted-foreground/70">{text}</p>
+  const note = pending
+    ? "This answer linked to records the assistant hadn’t looked up, so it may be wrong. Checking and writing a new answer…"
+    : "The first answer linked to records the assistant hadn’t looked up, so it was replaced by the one below."
+  return (
+    <div className="mb-2 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-3 py-2">
+      <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+        <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {note}
+      </p>
+      {pending ? (
+        struck
+      ) : (
+        <details>
+          <summary className="cursor-pointer text-xs text-muted-foreground">Show the replaced answer</summary>
+          <div className="mt-1">{struck}</div>
+        </details>
+      )}
+    </div>
+  )
+}
+
+function Bubble({
+  role, content, discarded, pending = false,
+}: { role: "user" | "assistant"; content: string; discarded?: string | null; pending?: boolean }) {
   if (role === "user") {
     return (
       <div className="flex justify-end">
@@ -26,7 +55,8 @@ function Bubble({ role, content }: { role: "user" | "assistant"; content: string
   }
   return (
     <div className="max-w-full">
-      <Markdown>{content}</Markdown>
+      {discarded && <DiscardedAnswer text={discarded} pending={pending} />}
+      {content && <Markdown>{content}</Markdown>}
     </div>
   )
 }
@@ -56,7 +86,7 @@ export function ChatThread({ className }: { className?: string }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" })
-  }, [chat.messages, chat.draft, chat.statusLabel, chat.error])
+  }, [chat.messages, chat.draft, chat.discarded, chat.statusLabel, chat.error])
 
   if (!chat.available) return <Unavailable isAdmin={chat.isAdmin} className={className} />
 
@@ -89,9 +119,9 @@ export function ChatThread({ className }: { className?: string }) {
           </div>
         )}
         {chat.messages.map((m, i) => (
-          <Bubble key={i} role={m.role} content={m.content} />
+          <Bubble key={i} role={m.role} content={m.content} discarded={m.discarded} />
         ))}
-        {chat.draft ? <Bubble role="assistant" content={chat.draft} /> : null}
+        {chat.draft || chat.discarded ? <Bubble role="assistant" content={chat.draft ?? ""} discarded={chat.discarded} pending /> : null}
         {chat.busy && (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

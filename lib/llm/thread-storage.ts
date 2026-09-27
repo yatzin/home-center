@@ -9,28 +9,36 @@ type ThreadStorage = Pick<Storage, "getItem" | "setItem" | "removeItem"> | null
 
 export const SEND_LIMIT = 20
 
+/**
+ * A message as the page keeps it. `discarded` is a first answer that was
+ * thrown out by the link check; it is shown struck through and never sent.
+ */
+export type ThreadMessage = HistoryMessage & { discarded?: string }
+
 export function threadKey(userId: string) {
   return `hc.chat.${userId}`
 }
 
-function isMessage(m: unknown): m is HistoryMessage {
-  const v = m as HistoryMessage | null
+function isMessage(m: unknown): m is ThreadMessage {
+  const v = m as ThreadMessage | null
   return !!v && (v.role === "user" || v.role === "assistant") && typeof v.content === "string" && v.content.length > 0
 }
 
-export function loadThread(storage: ThreadStorage, userId: string): HistoryMessage[] {
+export function loadThread(storage: ThreadStorage, userId: string): ThreadMessage[] {
   try {
     const raw = storage?.getItem(threadKey(userId))
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isMessage).map((m) => ({ role: m.role, content: m.content }))
+    return parsed
+      .filter(isMessage)
+      .map((m) => ({ role: m.role, content: m.content, ...(typeof m.discarded === "string" && m.discarded ? { discarded: m.discarded } : {}) }))
   } catch {
     return []
   }
 }
 
-export function saveThread(storage: ThreadStorage, userId: string, messages: HistoryMessage[]) {
+export function saveThread(storage: ThreadStorage, userId: string, messages: ThreadMessage[]) {
   try {
     storage?.setItem(threadKey(userId), JSON.stringify(messages))
   } catch {
@@ -56,7 +64,7 @@ const startOnUser = (ms: HistoryMessage[]) => {
  * (adjacent same-role messages — e.g. a retried question — are merged), each
  * message and the total capped, starting on a user turn.
  */
-export function requestMessages(thread: HistoryMessage[]): HistoryMessage[] {
+export function requestMessages(thread: ThreadMessage[]): HistoryMessage[] {
   const merged: HistoryMessage[] = []
   for (const m of startOnUser(thread.slice(-SEND_LIMIT))) {
     const content = m.content.slice(0, MAX_MESSAGE_CHARS)

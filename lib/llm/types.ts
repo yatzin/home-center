@@ -30,7 +30,12 @@ export type HistoryMessage = { role: "user" | "assistant"; content: string }
 
 export type AgentEvent =
   | { type: "status"; tool: string; label: string; round: number }
-  | { type: "reset" }
+  /**
+   * Discard the streamed text. "recheck": the answer linked records no tool
+   * returned and is being redone — the page shows it struck through rather
+   * than making it vanish.
+   */
+  | { type: "reset"; reason?: "recheck" }
   | { type: "delta"; text: string }
   | { type: "done"; rounds: number; model: string }
   | { type: "error"; message: string }

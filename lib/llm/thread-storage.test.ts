@@ -39,6 +39,17 @@ describe("thread storage", () => {
     expect(loadThread(s, "u1")).toEqual([])
   })
 
+  it("keeps a replaced first answer for display but never sends it", () => {
+    const s = memory()
+    saveThread(s, "u1", [
+      { role: "user", content: "vin?" },
+      { role: "assistant", content: "VIN is Y", discarded: "VIN is X [T](/assets/vehicles/fake)" },
+    ])
+    const loaded = loadThread(s, "u1")
+    expect(loaded[1]).toEqual({ role: "assistant", content: "VIN is Y", discarded: "VIN is X [T](/assets/vehicles/fake)" })
+    expect(requestMessages(loaded)).toEqual([{ role: "user", content: "vin?" }, { role: "assistant", content: "VIN is Y" }])
+  })
+
   it("drops malformed data and junk entries", () => {
     expect(loadThread(memory({ [threadKey("u1")]: "{nope" }), "u1")).toEqual([])
     expect(loadThread(memory({ [threadKey("u1")]: '{"a":1}' }), "u1")).toEqual([])

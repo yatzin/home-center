@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { unlink, unverifiedLinks } from "./link-check"
+import { impossibleLinks, unlink, unverifiedLinks } from "./link-check"
 
 const seen = ['{"rows":[{"id":"real1","href":"/assets/vehicles/real1"},{"id":"m1","href":"/assets/people/p1"}]}']
 
@@ -17,6 +17,17 @@ describe("unverifiedLinks", () => {
   })
   it("reports each bad link once", () => {
     expect(unverifiedLinks("[a](/assets/people/x1) [b](/assets/people/x1)", [])).toEqual(["/assets/people/x1"])
+  })
+})
+
+describe("impossibleLinks", () => {
+  it("picks out paths no page in the app has", () => {
+    expect(
+      impossibleLinks([
+        "/assets/medications/m1", "/assets/providers?eq=Springfield", "/assets/serviceRecords/s1", "/assets/providers/p1",
+        "/assets/vehicles/v1", "/assets/people/p1?tab=observations&open=o1", "/providers", "/assets/vehicles",
+      ])
+    ).toEqual(["/assets/medications/m1", "/assets/providers?eq=Springfield", "/assets/serviceRecords/s1", "/assets/providers/p1"])
   })
 })
 

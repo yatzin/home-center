@@ -1,6 +1,6 @@
 import type { ToolContext } from "./query"
 import { EMPTY_ANSWER, FINAL_NUDGE, recheckNudge } from "./prompt"
-import { unlink, unverifiedLinks } from "./link-check"
+import { impossibleLinks, unlink, unverifiedLinks } from "./link-check"
 import { runToolCall, toOpenAiTools, toolLabel, type RegisteredTool } from "./tools/registry"
 import type { AgentEvent, ChatFn, ChatMessage, HistoryMessage } from "./types"
 import type { ChatRequest, ChatResult } from "./types"
@@ -73,12 +73,18 @@ export async function runAgent(o: AgentOptions): Promise<void> {
     const { result, streamed } = await runStreamedCall(o.chat, { messages, tools, toolChoice: "auto" }, o.emit, o.signal)
 
     if (result.toolCalls.length === 0) {
-      const bad = unverifiedLinks(result.content, toolOutputs)
-      // A made-up link usually means made-up facts around it: give the model one
-      // chance to look the records up, while rounds remain.
+      let bad = unverifiedLinks(result.content, toolOutputs)
+      // A link to a page type that doesn't exist (a medication, a provider, a
+      // service record), in an answer written after looking the data up, is a
+      // formatting slip — measured: the facts around it were right every time.
+      // Those links are just dropped when the turn finishes; re-asking costs a
+      // round for nothing.
+      if (toolOutputs.length) bad = bad.filter((h) => !impossibleLinks([h]).length)
+      // A made-up record link usually means made-up facts around it: give the
+      // model one chance to look the records up, while rounds remain.
       if (bad.length && !rechecked && round < maxRounds) {
         rechecked = true
-        if (streamed) o.emit({ type: "reset" })
+        if (streamed) o.emit({ type: "reset", reason: "recheck" })
         o.emit({ type: "status", tool: "verify", label: "Double-checking the answer…", round })
         messages.push({ role: "assistant", content: result.content }, { role: "user", content: recheckNudge(bad) })
         continue

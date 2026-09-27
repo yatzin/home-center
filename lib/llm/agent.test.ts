@@ -203,9 +203,35 @@ describe("runAgent link check", () => {
       { role: "assistant", content: "VIN is X, see [Truck](/assets/vehicles/fake9)." },
       { role: "user", content: recheckNudge(["/assets/vehicles/fake9"]) },
     ])
+    expect(events).toContainEqual({ type: "reset", reason: "recheck" })
     expect(events).toContainEqual({ type: "status", tool: "verify", label: "Double-checking the answer…", round: 1 })
     expect(events.at(-2)).toEqual({ type: "delta", text: "VIN is Y, see [Truck](/assets/vehicles/real1)." })
     expect(events.at(-1)).toEqual({ type: "done", rounds: 3, model: "m" })
+  })
+
+  it("drops a link to a page type that doesn't exist without re-asking, once data was looked up", async () => {
+    const { chat, requests } = scripted([
+      { content: "", toolCalls: [toolCall("c1", "/assets/people/p1")] },
+      { content: "Refill [Lisinopril](/assets/medications/m1) for [Sam](/assets/people/p1).", toolCalls: [] },
+    ])
+    const events = await run(chat)
+    expect(requests).toHaveLength(2)
+    expect(events.some((e) => e.type === "status" && e.tool === "verify")).toBe(false)
+    expect(events.slice(-3)).toEqual([
+      { type: "reset" },
+      { type: "delta", text: "Refill Lisinopril for [Sam](/assets/people/p1)." },
+      { type: "done", rounds: 2, model: "m" },
+    ])
+  })
+
+  it("still re-asks about an impossible link when nothing was looked up", async () => {
+    const { chat, requests } = scripted([
+      { content: "[Lisinopril](/assets/medications/m1)", toolCalls: [] },
+      { content: "Lisinopril", toolCalls: [] },
+    ])
+    await run(chat)
+    expect(requests).toHaveLength(2)
+    expect(requests[1].messages.at(-1)).toEqual({ role: "user", content: recheckNudge(["/assets/medications/m1"]) })
   })
 
   it("re-checks only once, then unlinks what still doesn't check out", async () => {
