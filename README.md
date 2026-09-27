@@ -168,6 +168,14 @@ definitions and results, so answers get cut off or ignore the data. Set
 parameters or larger are recommended; small models often call the tools wrongly
 or not at all.
 
+Slow local models: a reply stops only if the server sends nothing for 60
+seconds, and **Time limit per question** (default 180 seconds) caps the whole
+answer — raise it if answers time out. **Extra request JSON** passes
+server-specific options with every request, e.g.
+`{"chat_template_kwargs": {"enable_thinking": true}}` to turn on a model's
+thinking in llama.cpp or vLLM, or `{"reasoning_effort": "low"}` for OpenAI
+reasoning models.
+
 Chats stay in your browser tab and are never stored on the server.
 
 ## Updating

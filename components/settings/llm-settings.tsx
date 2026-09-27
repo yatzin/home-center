@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 import { testLlmConnection, updateLlmSettings } from "@/lib/actions/llm-settings"
-import { LLM_PRESETS } from "@/lib/llm/settings-schema"
+import { DEFAULT_TIMEOUT_SECONDS, LLM_PRESETS } from "@/lib/llm/settings-schema"
 
 type Values = {
   enabled: boolean
@@ -20,6 +20,8 @@ type Values = {
   temperature: string
   maxTokens: string
   systemPrompt: string
+  timeoutSeconds: string
+  extraBody: string
 }
 
 export function LlmSettings({
@@ -174,11 +176,36 @@ export function LlmSettings({
                 </FormItem>
               )} />
 
+              <FormField control={form.control} name="timeoutSeconds" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Time limit per question (seconds)</FormLabel>
+                  <FormControl><Input type="number" min={30} max={900} placeholder={String(DEFAULT_TIMEOUT_SECONDS)} {...field} /></FormControl>
+                  <FormDescription className="text-xs">
+                    Raise it for slow local models. A reply also stops if the server sends nothing for 60 seconds.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
               <FormField control={form.control} name="systemPrompt" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel>Extra instructions</FormLabel>
                   <FormControl><Textarea rows={3} maxLength={4000} placeholder="e.g. Keep answers short." {...field} /></FormControl>
                   <FormDescription className="text-xs">Added to the assistant&apos;s built-in instructions.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="extraBody" render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel>Extra request JSON</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} maxLength={2000} className="font-mono text-xs" placeholder='{"chat_template_kwargs": {"enable_thinking": true}}' {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    Optional fields sent with every request, for settings your server supports — for example turning on a
+                    model&apos;s thinking (llama.cpp, vLLM) or <code className="text-xs">reasoning_effort</code> (OpenAI). Leave blank if unsure.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />

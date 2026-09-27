@@ -8,7 +8,7 @@ import { LlmSettings } from "@/components/settings/llm-settings"
 import { loadMailConfig, SETTINGS_ID } from "@/lib/notifications/mail-config"
 import { isMailConfigured } from "@/lib/notifications/mailer"
 import { loadLlmConfig } from "@/lib/llm/config"
-import { isLlmReady } from "@/lib/llm/settings-schema"
+import { isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
 
 export default async function SettingsPage() {
   const session = await auth()
@@ -89,6 +89,8 @@ export default async function SettingsPage() {
             temperature: llm.temperature?.toString() ?? "",
             maxTokens: llm.maxTokens?.toString() ?? "",
             systemPrompt: llm.systemPrompt ?? "",
+            timeoutSeconds: llm.timeoutSeconds?.toString() ?? "",
+            extraBody: llm.extraBody ? JSON.stringify(parseExtraBody(llm.extraBody), null, 2) : "",
           }}
           hasStoredKey={llm.hasStoredKey}
           keyUnreadable={llm.keyUnreadable}

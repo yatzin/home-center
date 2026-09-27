@@ -62,6 +62,50 @@ describe("createChatClient", () => {
     expect(body.stream).toBe(true)
   })
 
+  describe("no-output timeout", () => {
+    const enc = new TextEncoder()
+    const chunk = (text: string) => enc.encode(`data: ${delta({ content: text })}\n\n`)
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+    it("keeps going while a slow stream keeps sending", async () => {
+      const fetchImpl = vi.fn(async () =>
+        new Response(
+          new ReadableStream({
+            async start(c) {
+              for (const t of ["a", "b", "c", "d"]) {
+                await wait(30)
+                c.enqueue(chunk(t))
+              }
+              c.close()
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } }
+        )
+      )
+      const chat = createChatClient({ ...config, idleTimeoutMs: 60 }, fetchImpl as unknown as typeof fetch)
+      expect((await chat({ messages: [] }, () => {}, signal())).content).toBe("abcd")
+    })
+
+    it("fails when the stream goes quiet", async () => {
+      const fetchImpl = vi.fn(async () =>
+        new Response(new ReadableStream({ start: (c) => c.enqueue(chunk("a")) }), {
+          headers: { "Content-Type": "text/event-stream" },
+        })
+      )
+      const chat = createChatClient({ ...config, idleTimeoutMs: 50 }, fetchImpl as unknown as typeof fetch)
+      await expect(chat({ messages: [] }, () => {}, signal())).rejects.toThrow(/stopped responding/)
+    })
+
+    it("fails when the server never answers", async () => {
+      const fetchImpl = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_, reject) => init.signal!.addEventListener("abort", () => reject(init.signal!.reason)))
+      )
+      const chat = createChatClient({ ...config, idleTimeoutMs: 50 }, fetchImpl as unknown as typeof fetch)
+      await expect(chat({ messages: [] }, () => {}, signal())).rejects.toBeInstanceOf(LlmError)
+    })
+  })
+
   it("streams text and assembles tool calls", async () => {
     const fetchImpl = vi.fn(async () =>
       sseResponse([

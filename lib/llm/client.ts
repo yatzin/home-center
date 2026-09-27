@@ -14,9 +14,16 @@ export type ClientConfig = {
   maxTokens: number | null
   /** Provider-specific request fields, e.g. llama.cpp's chat_template_kwargs. Never overrides the core fields. */
   extraBody?: Record<string, unknown> | null
+  /** Fail when the server sends nothing for this long; default IDLE_TIMEOUT_MS. */
+  idleTimeoutMs?: number
 }
 
-export const REQUEST_TIMEOUT_MS = 60_000
+/**
+ * A request fails only when the server goes quiet this long — not after a fixed
+ * total — so a slow local model that keeps streaming (answer or reasoning) is
+ * never cut off mid-answer. The per-question limit lives in the route.
+ */
+export const IDLE_TIMEOUT_MS = 60_000
 
 function hostOf(baseUrl: string) {
   try {
@@ -38,7 +45,34 @@ type JsonCompletion = {
 export function createChatClient(config: ClientConfig, fetchImpl: typeof fetch = fetch): ChatFn {
   const host = hostOf(config.baseUrl)
 
+  const idleMs = config.idleTimeoutMs ?? IDLE_TIMEOUT_MS
+  const stalled = () => new LlmError(`The LLM server stopped responding for ${Math.round(idleMs / 1000)} seconds — it may be busy. Try again.`)
+
   return async (req, onText, signal) => {
+    const idle = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const touch = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => idle.abort(new DOMException("No output from the server", "TimeoutError")), idleMs)
+    }
+    touch()
+    try {
+      return await send(req, onText, signal, idle.signal, touch)
+    } catch (error) {
+      if (!signal.aborted && idle.signal.aborted) throw stalled()
+      throw error
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  async function send(
+    req: Parameters<ChatFn>[0],
+    onText: Parameters<ChatFn>[1],
+    signal: AbortSignal,
+    idleSignal: AbortSignal,
+    touch: () => void
+  ): Promise<ChatResult> {
     const body = {
       ...config.extraBody,
       model: config.model,
@@ -58,10 +92,10 @@ export function createChatClient(config: ClientConfig, fetchImpl: typeof fetch =
           ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
+        signal: AbortSignal.any([signal, idleSignal]),
       })
     } catch (error) {
-      if (signal.aborted) throw error
+      if (signal.aborted || idleSignal.aborted) throw error
       throw new LlmError(explainNetworkError(error, host))
     }
 
@@ -94,16 +128,26 @@ export function createChatClient(config: ClientConfig, fetchImpl: typeof fetch =
       acc.push(data)
     })
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+    // Don't rely on the fetch signal reaching the body: stop reading ourselves.
+    const stop = () => void reader.cancel().catch(() => {})
+    idleSignal.addEventListener("abort", stop, { once: true })
+    signal.addEventListener("abort", stop, { once: true })
     try {
       for (;;) {
         const { value, done } = await reader.read()
         if (done) break
+        touch()
         parser.feed(value)
       }
+      if (signal.aborted) throw signal.reason
+      if (idleSignal.aborted) throw idleSignal.reason
       parser.flush()
     } catch (error) {
-      if (signal.aborted || error instanceof LlmError) throw error
+      if (signal.aborted || idleSignal.aborted || error instanceof LlmError) throw error
       throw new LlmError(explainNetworkError(error, host))
+    } finally {
+      idleSignal.removeEventListener("abort", stop)
+      signal.removeEventListener("abort", stop)
     }
     return acc.result()
   }

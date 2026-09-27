@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { encrypt } from "@/lib/secret-box"
 import { loadLlmConfig, LLM_SETTINGS_ID } from "@/lib/llm/config"
-import { originChanged, parseLlmSettings, type LlmSettingsInput } from "@/lib/llm/settings-schema"
+import { originChanged, parseLlmSettings, type LlmSettingsInput, parseExtraBody } from "@/lib/llm/settings-schema"
 import { createChatClient } from "@/lib/llm/client"
 import { LlmError } from "@/lib/llm/errors"
 import type { OpenAiTool } from "@/lib/llm/types"
@@ -73,7 +73,8 @@ export async function testLlmConnection(
   const savedKey = originChanged(saved.baseUrl, baseUrl) ? null : saved.apiKey
   const apiKey = data.clearApiKey ? null : data.apiKey || savedKey
 
-  const chat = createChatClient({ baseUrl, apiKey, model, temperature: null, maxTokens: null })
+  // The form is pre-filled with the saved JSON, so what's typed is what to test.
+  const chat = createChatClient({ baseUrl, apiKey, model, temperature: null, maxTokens: null, extraBody: parseExtraBody(parsed.value.extraBody) })
   try {
     const result = await chat(
       {

@@ -20,7 +20,14 @@ const schema = z.object({
   temperature: z.string().trim().optional(),
   maxTokens: z.string().trim().optional(),
   systemPrompt: z.string().trim().max(4000).optional(),
+  timeoutSeconds: z.string().trim().optional(),
+  extraBody: z.string().trim().max(2000).optional(),
 })
+
+export const DEFAULT_TIMEOUT_SECONDS = 180
+
+/** Request fields the assistant builds itself; extra JSON may not replace them. */
+const RESERVED_FIELDS = ["model", "messages", "stream", "tools", "tool_choice"]
 
 export type LlmSettingsInput = z.infer<typeof schema>
 
@@ -31,6 +38,10 @@ export type ParsedLlmSettings = {
   temperature: number | null
   maxTokens: number | null
   systemPrompt: string | null
+  /** Per-question time limit; null = DEFAULT_TIMEOUT_SECONDS. */
+  timeoutSeconds: number | null
+  /** Provider-specific request fields as normalised JSON, e.g. {"chat_template_kwargs":{"enable_thinking":true}}. */
+  extraBody: string | null
 }
 
 type Result = { ok: true; value: ParsedLlmSettings } | { ok: false; error: string }
@@ -66,6 +77,22 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
     maxTokens = n
   }
 
+  let timeoutSeconds: number | null = null
+  if (v.timeoutSeconds) {
+    const n = Number(v.timeoutSeconds)
+    if (!Number.isInteger(n) || n < 30 || n > 900) return { ok: false, error: "Time limit must be a whole number of seconds from 30 to 900." }
+    timeoutSeconds = n
+  }
+
+  let extraBody: string | null = null
+  if (v.extraBody) {
+    const obj = parseExtraBody(v.extraBody)
+    if (!obj) return { ok: false, error: "Extra request JSON must be a JSON object." }
+    const reserved = RESERVED_FIELDS.filter((f) => f in obj)
+    if (reserved.length) return { ok: false, error: `Extra request JSON can't set ${reserved.join(", ")} — the assistant sets those.` }
+    extraBody = JSON.stringify(obj)
+  }
+
   const model = v.model || null
   if ((opts.requireComplete ?? true) && v.enabled && (!baseUrl || !model)) {
     return { ok: false, error: "Base URL and model are required to turn the assistant on." }
@@ -73,7 +100,7 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 
   return {
     ok: true,
-    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null },
+    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, extraBody },
   }
 }
 
@@ -91,5 +118,16 @@ export function originChanged(saved: string | null, next: string | null): boolea
     return new URL(saved).origin !== new URL(next).origin
   } catch {
     return true
+  }
+}
+
+/** A stored or typed extra-request JSON object; null when blank or not an object. */
+export function parseExtraBody(raw: string | null | undefined): Record<string, unknown> | null {
+  if (!raw) return null
+  try {
+    const v: unknown = JSON.parse(raw)
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+  } catch {
+    return null
   }
 }

@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { loadLlmConfig } from "@/lib/llm/config"
-import { isLlmReady } from "@/lib/llm/settings-schema"
+import { DEFAULT_TIMEOUT_SECONDS, isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
 import { createChatClient } from "@/lib/llm/client"
 import { agentErrorMessage, LlmError } from "@/lib/llm/errors"
 import { runAgent } from "@/lib/llm/agent"
@@ -11,8 +11,6 @@ import { TOOLS } from "@/lib/llm/tools"
 import type { AgentEvent } from "@/lib/llm/types"
 
 export const runtime = "nodejs"
-
-const WALL_CLOCK_MS = 120_000
 
 // Streams one assistant turn as NDJSON. The thread arrives from the browser on
 // every request and is never stored. Logs carry tool names and timings only —
@@ -38,7 +36,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error }, { status: 503 })
   }
 
-  const timeout = AbortSignal.timeout(WALL_CLOCK_MS)
+  // Per-question limit from Settings; each model call separately fails only after
+  // a stretch with no output (see IDLE_TIMEOUT_MS in lib/llm/client.ts).
+  const timeout = AbortSignal.timeout((config.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS) * 1000)
   const signal = AbortSignal.any([request.signal, timeout])
   const chat = createChatClient({
     baseUrl: config.baseUrl,
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     model: config.model,
     temperature: config.temperature,
     maxTokens: config.maxTokens,
+    extraBody: parseExtraBody(config.extraBody),
   })
   const model = config.model
   const userId = session.user.id

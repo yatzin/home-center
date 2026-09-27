@@ -471,6 +471,10 @@ model LlmSettings {
   maxTokens    Int?
   /// Appended to the built-in system prompt.
   systemPrompt String?
+  /// Per-question time limit in seconds; null = the built-in default.
+  timeoutSeconds Int?
+  /// JSON object merged into every request, e.g. {"chat_template_kwargs":{"enable_thinking":true}}.
+  extraBody    String?
   updatedAt    DateTime @updatedAt
 }
 

@@ -21,6 +21,8 @@ export async function loadLlmConfig(): Promise<LlmConfig> {
     temperature: row?.temperature ?? null,
     maxTokens: row?.maxTokens ?? null,
     systemPrompt: row?.systemPrompt ?? null,
+    timeoutSeconds: row?.timeoutSeconds ?? null,
+    extraBody: row?.extraBody ?? null,
     apiKey,
     hasStoredKey: Boolean(row?.apiKeyEnc),
     keyUnreadable: Boolean(row?.apiKeyEnc) && apiKey === null,

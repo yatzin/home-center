@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isLlmReady, LLM_PRESETS, originChanged, parseLlmSettings, type LlmSettingsInput } from "./settings-schema"
+import { isLlmReady, LLM_PRESETS, originChanged, parseExtraBody, parseLlmSettings, type LlmSettingsInput } from "./settings-schema"
 
 const base: LlmSettingsInput = {
   enabled: true,
@@ -22,6 +22,8 @@ describe("parseLlmSettings", () => {
         temperature: 0.2,
         maxTokens: 1500,
         systemPrompt: "Be brief.",
+        timeoutSeconds: null,
+        extraBody: null,
       },
     })
   })
@@ -30,7 +32,10 @@ describe("parseLlmSettings", () => {
     const r = parseLlmSettings({ ...base, enabled: false, baseUrl: "", model: "" })
     expect(r).toEqual({
       ok: true,
-      value: { enabled: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null },
+      value: {
+        enabled: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
+        timeoutSeconds: null, extraBody: null,
+      },
     })
   })
 
@@ -78,5 +83,35 @@ describe("originChanged", () => {
     expect(originChanged("http://localhost:11434/v1", "http://localhost:1234/v1")).toBe(true)
     expect(originChanged(null, "https://openrouter.ai/api/v1")).toBe(false)
     expect(originChanged("https://api.openai.com/v1", null)).toBe(false)
+  })
+})
+
+describe("time limit and extra request JSON", () => {
+  it("accepts a time limit in range", () => {
+    expect(parseLlmSettings({ ...base, timeoutSeconds: "300" })).toMatchObject({ ok: true, value: { timeoutSeconds: 300 } })
+    expect(parseLlmSettings({ ...base, timeoutSeconds: "10" })).toEqual({
+      ok: false,
+      error: "Time limit must be a whole number of seconds from 30 to 900.",
+    })
+  })
+
+  it("normalises a JSON object and rejects anything else", () => {
+    const r = parseLlmSettings({ ...base, extraBody: ' { "chat_template_kwargs": { "enable_thinking": true } } ' })
+    expect(r).toMatchObject({ ok: true, value: { extraBody: '{"chat_template_kwargs":{"enable_thinking":true}}' } })
+    expect(parseLlmSettings({ ...base, extraBody: "{nope" })).toEqual({ ok: false, error: "Extra request JSON must be a JSON object." })
+    expect(parseLlmSettings({ ...base, extraBody: "[1]" })).toEqual({ ok: false, error: "Extra request JSON must be a JSON object." })
+  })
+
+  it("refuses fields the assistant sets itself", () => {
+    expect(parseLlmSettings({ ...base, extraBody: '{"model":"x","stream":false}' })).toEqual({
+      ok: false,
+      error: "Extra request JSON can't set model, stream — the assistant sets those.",
+    })
+  })
+
+  it("parseExtraBody reads stored JSON safely", () => {
+    expect(parseExtraBody('{"a":1}')).toEqual({ a: 1 })
+    expect(parseExtraBody(null)).toBeNull()
+    expect(parseExtraBody("garbage")).toBeNull()
   })
 })
