@@ -271,10 +271,10 @@ export const healthAlertsTool = defineTool({
       asOf: toDay(ctx.now),
       refillsDue: meds
         .filter((m) => refillDue(m, ctx.now))
-        .map((m) => compact({ id: m.id, medication: m.name, dosage: m.dosage, pharmacy: m.pharmacy, nextRefillDate: dayOrNull(m.nextRefillDate), daysUntil: daysUntil(m.nextRefillDate!, ctx.now), person: personRef(m.person) })),
+        .map((m) => compact({ id: m.id, medication: m.name, dosage: m.dosage, pharmacy: m.pharmacy, nextRefillDate: dayOrNull(m.nextRefillDate), daysUntil: daysUntil(m.nextRefillDate!, ctx.now), person: personRef(m.person), href: assetHref("PERSON", m.person.id) })),
       immunizationsDue: imms
         .filter((i) => immunizationDue(i, ctx.now) && !isSupersededImmunization(i, imms))
-        .map((i) => compact({ id: i.id, vaccine: i.vaccine, nextDueDate: dayOrNull(i.nextDueDate), daysUntil: daysUntil(i.nextDueDate!, ctx.now), person: personRef(i.person) })),
+        .map((i) => compact({ id: i.id, vaccine: i.vaccine, nextDueDate: dayOrNull(i.nextDueDate), daysUntil: daysUntil(i.nextDueDate!, ctx.now), person: personRef(i.person), href: assetHref("PERSON", i.person.id) })),
       insuranceExpiring: policies
         .filter((p) => insuranceExpiring(p, ctx.now))
         .map((p) => compact({ id: p.id, carrier: p.carrier, planName: p.planName, kind: p.kind, endDate: dayOrNull(p.endDate), daysUntil: daysUntil(p.endDate!, ctx.now), members: p.members.map(personRef), href: "/insurance" })),

@@ -32,7 +32,7 @@ export function buildSystemPrompt({ now, extra }: { now: Date; extra?: string | 
     "Answer format:",
     "- Concise markdown. Use a table when comparing more than two numbers.",
     "- Money as $1,234.56.",
-    "- Link records you mention using their href, e.g. [2019 Civic](/assets/vehicles/abc123).",
+    "- Link records you mention by copying the exact href from the tool results, e.g. [2019 Civic](/assets/vehicles/abc123). Never build a link yourself: only properties, vehicles, equipment and people have their own pages; medications, providers, service records, warranties and the like link to the page in their href.",
     "",
     "Data model — every row also has an id (entity: description, fields, relations):",
     describeOntology(),
