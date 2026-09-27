@@ -17,6 +17,7 @@ import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
 import { buildTimeline } from "../timeline"
+import { splitSearchQuery } from "../search-terms"
 import { resolveAssetId } from "../asset-ids"
 import { defineTool } from "./registry"
 
@@ -39,16 +40,17 @@ export const searchTool = defineTool({
   name: "search",
   description:
     "Find records by name anywhere in the household data — assets, people, providers, insurance, conditions, medications, allergies, vaccines, warranties, maintenance, service records. " +
-    "Use it first to turn a name into an id and link. Every word must match (in any searchable field).",
+    "Use it first to turn a name into an id and link. Every word must match (in any searchable field). " +
+    "A type word lists that type: 'vehicles' lists vehicles, 'powertrain warranty' searches warranties.",
   schema: z.object({
     query: z.string().min(1).describe("Words to look for, e.g. 'civic' or 'furnace filter'."),
     entities: z.array(z.string()).optional().describe("Only search these entities."),
   }),
   label: (a) => `Searching for “${a.query}”…`,
   async run({ query, entities }, ctx) {
-    const words = query.split(/\s+/).filter((w) => w.length >= 2).slice(0, 5)
-    if (!words.length) throw new ToolInputError("Search needs at least one word of two or more characters.")
-    const keys = entities?.length ? entities.map((e) => entityDef(e).key) : SEARCHABLE
+    const { words, types } = splitSearchQuery(query)
+    if (!words.length && !types.length) throw new ToolInputError("Search needs at least one word of two or more characters.")
+    const keys = types.length ? types : entities?.length ? entities.map((e) => entityDef(e).key) : SEARCHABLE
     const index = await loadAssetIndex()
     const found = await Promise.all(
       keys.map(async (key) => {
@@ -59,13 +61,22 @@ export const searchTool = defineTool({
             ...(def.scope ? [def.scope(ctx)] : []),
           ],
         }
-        const rows = await delegate(key).findMany({ where, select: selectFor(key), take: 10 })
+        // No name words means "list this type", so allow a fuller page.
+        const rows = await delegate(key).findMany({ where, select: selectFor(key), take: words.length ? 10 : 25 })
         if (def.polymorphic) attachAssets(index, rows)
         return rows.map((r) => ({ entity: key, ...serializeRow(key, r) }))
       })
     )
     const rows = found.flat()
-    return { query, total: rows.length, rows }
+    return {
+      query,
+      total: rows.length,
+      rows,
+      // An empty search reads to weak models as "nothing exists"; say where else to look.
+      ...(rows.length
+        ? {}
+        : { note: "No names matched. This does not mean there are none: for spending use cost_summary, to list a type use find_records." }),
+    }
   },
 })
 
