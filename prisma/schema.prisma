@@ -110,6 +110,7 @@ enum AttachmentRecordType {
   MAINTENANCE
   CONDITION
   INSURANCE
+  OBSERVATION
 }
 
 enum NotificationType {
@@ -138,6 +139,7 @@ model User {
 
   notifications  Notification[]
   serviceRecords ServiceRecord[]
+  observations   Observation[]
   attachments    Attachment[]
 }
 
@@ -220,6 +222,7 @@ model Person {
   allergies         Allergy[]
   immunizations     Immunization[]
   insurancePolicies InsurancePolicy[]
+  observations      Observation[]
 }
 
 /// Shared household directory, not owned by one person.
@@ -258,7 +261,39 @@ model HealthCondition {
 
   medications    Medication[]
   serviceRecords ServiceRecord[]
+  observations   Observation[]
   attachments    Attachment[]
+}
+
+/// Something noticed about a person on a day — a meltdown, a bad night, a
+/// symptom — logged by any household member and reviewed for patterns later.
+model Observation {
+  id              String   @id @default(cuid())
+  /// The day it happened (midnight UTC, like other health dates).
+  date            DateTime
+  /// Optional "HH:MM", 24-hour, local to the household.
+  time            String?
+  /// Free text, e.g. "Meltdown"; the form suggests types used before.
+  type            String
+  /// 1 (mild) to 5 (severe).
+  severity        Int?
+  durationMinutes Int?
+  notes           String?
+  /// Comma-separated, e.g. "school, tired".
+  tags            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  personId    String
+  person      Person           @relation(fields: [personId], references: [id], onDelete: Cascade)
+  conditionId String?
+  condition   HealthCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User             @relation(fields: [createdById], references: [id])
+
+  attachments Attachment[]
+
+  @@index([personId, date])
 }
 
 model Medication {
@@ -430,6 +465,9 @@ model Attachment {
 
   insurancePolicyId     String?
   insurancePolicy       InsurancePolicy?     @relation(fields: [insurancePolicyId], references: [id], onDelete: Cascade)
+
+  observationId         String?
+  observation           Observation?         @relation(fields: [observationId], references: [id], onDelete: Cascade)
 }
 
 // ─── Mail settings ────────────────────────────────────────────────────────────
@@ -450,6 +488,32 @@ model MailSettings {
   fromAddress String?
   digestHour  Int?
   updatedAt   DateTime @updatedAt
+}
+
+// ─── LLM settings ─────────────────────────────────────────────────────────────
+
+/// Single row (id is always "singleton"). Configured from Settings only — no
+/// environment fallback. Any OpenAI-compatible Chat Completions server works.
+model LlmSettings {
+  id           String   @id @default("singleton")
+  enabled      Boolean  @default(false)
+  /// e.g. https://api.openai.com/v1 or http://localhost:11434/v1 — no trailing slash.
+  baseUrl      String?
+  /// AES-256-GCM via lib/secret-box.ts. Optional: local servers need none.
+  /// Never leaves the server; the UI is only told whether one is stored.
+  apiKeyEnc    String?
+  model        String?
+  /// null = provider default.
+  temperature  Float?
+  /// Cap on each completion; null = provider default.
+  maxTokens    Int?
+  /// Appended to the built-in system prompt.
+  systemPrompt String?
+  /// Per-question time limit in seconds; null = the built-in default.
+  timeoutSeconds Int?
+  /// JSON object merged into every request, e.g. {"chat_template_kwargs":{"enable_thinking":true}}.
+  extraBody    String?
+  updatedAt    DateTime @updatedAt
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

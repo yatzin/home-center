@@ -11,6 +11,7 @@ import { AttachmentCount } from "@/components/attachments/attachment-count"
 import { createCondition, deleteCondition, updateCondition } from "@/lib/actions/health"
 import { CONDITION_STATUSES, formatDay, labelFor, toDateInput } from "@/lib/health"
 import type { FieldConfig, FormValues } from "@/lib/form-types"
+import { filterObservations, formatTime, type ObservationLike } from "@/lib/observations"
 import type { Attachment, HealthCondition } from "@/app/generated/prisma/client"
 
 export type ConditionRow = HealthCondition & { attachments: Attachment[]; provider: { name: string } | null }
@@ -40,9 +41,11 @@ interface Props {
   personId: string
   conditions: ConditionRow[]
   providers: { id: string; name: string }[]
+  /** Newest first; the expanded row shows the ones linked to each condition. */
+  observations?: ObservationLike[]
 }
 
-export function ConditionsSection({ personId, conditions, providers }: Props) {
+export function ConditionsSection({ personId, conditions, providers, observations = [] }: Props) {
   const [editing, setEditing] = useState<ConditionRow | null>(null)
   const [open, setOpen] = useState(false)
 
@@ -80,6 +83,7 @@ export function ConditionsSection({ personId, conditions, providers }: Props) {
           <div className="space-y-3">
             {c.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.notes}</p>}
             {c.resolvedDate && <p className="text-sm text-muted-foreground">Resolved {formatDay(c.resolvedDate)}</p>}
+            <LinkedObservations rows={observations.filter((o) => o.conditionId === c.id)} />
             <AttachmentList recordId={c.id} recordType="CONDITION" attachments={c.attachments} />
           </div>
         )}
@@ -96,5 +100,25 @@ export function ConditionsSection({ personId, conditions, providers }: Props) {
         onSubmit={(values) => (editing ? updateCondition(editing.id, values) : createCondition(personId, values))}
       />
     </>
+  )
+}
+
+function LinkedObservations({ rows }: { rows: ObservationLike[] }) {
+  if (!rows.length) return null
+  const recent = filterObservations(rows, { range: "30" }, new Date()).length
+  return (
+    <div className="text-sm">
+      <p className="text-muted-foreground">
+        {rows.length} observation{rows.length === 1 ? "" : "s"} linked · {recent} in the last 30 days (see the Observations tab)
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {rows.slice(0, 5).map((o, i) => (
+          <li key={i}>
+            {formatDay(o.date)}{o.time ? ` ${formatTime(o.time)}` : ""} — {o.type}
+            {o.severity ? <span className="text-muted-foreground"> ({o.severity}/5)</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

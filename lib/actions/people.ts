@@ -39,7 +39,7 @@ export async function deletePerson(id: string): Promise<ActionResult> {
 
   const person = await prisma.person.findUnique({
     where: { id },
-    select: { id: true, conditions: { select: { id: true } } },
+    select: { id: true, conditions: { select: { id: true } }, observations: { select: { id: true } } },
   })
   if (!person) return { error: "Not found" }
 
@@ -62,6 +62,7 @@ export async function deletePerson(id: string): Promise<ActionResult> {
     ...visits.map((v): [string, string] => ["service", v.id]),
     ...schedules.map((s): [string, string] => ["maintenance", s.id]),
     ...person.conditions.map((c): [string, string] => ["condition", c.id]),
+    ...person.observations.map((o): [string, string] => ["observation", o.id]),
   ]
   for (const dir of dirs) await removeUploadDir(...dir)
 

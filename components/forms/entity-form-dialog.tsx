@@ -168,14 +168,24 @@ function FieldInput({ field, value, onChange }: { field: FieldConfig; value: str
     )
   }
 
+  const listId = field.suggestions?.length ? `${id}-suggestions` : undefined
   return (
-    <Input
-      id={id}
-      type={field.kind}
-      step={field.kind === "number" ? "any" : undefined}
-      value={value}
-      placeholder={field.placeholder}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <>
+      <Input
+        id={id}
+        type={field.kind}
+        step={field.kind === "number" ? "any" : undefined}
+        value={value}
+        placeholder={field.placeholder}
+        list={listId}
+        autoComplete={listId ? "off" : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {listId && (
+        <datalist id={listId}>
+          {field.suggestions!.map((s) => <option key={s} value={s} />)}
+        </datalist>
+      )}
+    </>
   )
 }

@@ -4,10 +4,13 @@ import {
   ALLERGY_SEVERITIES, CONDITION_STATUSES, formatDay, INSURANCE_KINDS, isMedicationActive, labelFor,
 } from "@/lib/health"
 import type { ReportHealth } from "@/lib/report-server"
+import {
+  filterObservations, formatDuration, formatTime, summarizeObservations, type RangeValue,
+} from "@/lib/observations"
 
 // Ordered the way a clinician reads a chart: what could hurt them, what they
 // have, what they take, what they've had, who pays, who treats them.
-export function HealthSummary({ health, now }: { health: ReportHealth; now: Date }) {
+export function HealthSummary({ health, now, observationDays }: { health: ReportHealth; now: Date; observationDays: number | null }) {
   const { person, careTeam } = health
   const conditions = person.conditions.filter((c) => c.status !== "RESOLVED")
   const resolved = person.conditions.length - conditions.length
@@ -74,6 +77,8 @@ export function HealthSummary({ health, now }: { health: ReportHealth; now: Date
         )}
       </section>
 
+      {observationDays != null && <Observations rows={person.observations} days={observationDays} now={now} />}
+
       <section className="report-section report-break-avoid mt-7">
         <SectionTitle>Insurance</SectionTitle>
         {person.insurancePolicies.length === 0 ? (
@@ -105,6 +110,36 @@ export function HealthSummary({ health, now }: { health: ReportHealth; now: Date
         )}
       </section>
     </>
+  )
+}
+
+function Observations({ rows, days, now }: { rows: ReportHealth["person"]["observations"]; days: number; now: Date }) {
+  const shown = filterObservations(rows, { range: String(days) as RangeValue }, now)
+  const summary = summarizeObservations(shown)
+  return (
+    <section className="report-section mt-7">
+      <SectionTitle>Observations — last {days} days</SectionTitle>
+      {shown.length === 0 ? (
+        <Empty>Nothing logged in this period.</Empty>
+      ) : (
+        <>
+          <p className="mt-1 text-[10pt]">
+            {summary.byType.map((t) => `${t.type}: ${t.count}`).join(" · ")}
+            {summary.avgSeverity != null && ` · average severity ${summary.avgSeverity} / 5`}
+          </p>
+          <Rows
+            head={["When", "What", "Severity", "Duration", "Notes"]}
+            rows={shown.map((o) => [
+              `${formatDay(o.date)}${o.time ? ` ${formatTime(o.time)}` : ""}`,
+              o.condition ? `${o.type} (${o.condition.name})` : o.type,
+              o.severity ? `${o.severity} / 5` : "—",
+              formatDuration(o.durationMinutes),
+              [o.notes, o.tags ? `Tags: ${o.tags}` : null].filter(Boolean).join(" — ") || "—",
+            ])}
+          />
+        </>
+      )}
+    </section>
   )
 }
 

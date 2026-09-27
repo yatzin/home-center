@@ -13,6 +13,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Multiple users** — admin and standard accounts
 - **Local login** — no third-party account required, your data stays on your hardware
 - **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
+- **AI assistant** — optional chat that answers questions about your data ("what did we spend on the truck last year?", "which meds need refills?") using any OpenAI-compatible model, including local ones via Ollama or LM Studio
 
 ## Screenshots
 
@@ -147,6 +148,36 @@ docker compose up -d
 The container sets up its database and admin account automatically on first boot.
 
 **5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3.
+
+### AI assistant (optional)
+
+Sign in as an admin and go to **Settings → Assistant**. Pick a provider (OpenAI,
+Ollama, LM Studio, OpenRouter or any OpenAI-compatible server), enter the model
+name and, if the provider needs one, an API key (stored encrypted). Use **Test
+connection** to confirm the model supports tool calling — the assistant needs it.
+
+Questions, and the records needed to answer them, are sent to that server —
+including health records. Point it at a local model if that matters to you. When
+HomeCenter runs in Docker, `localhost` means the container: use the host's
+address (e.g. `http://host.docker.internal:11434/v1`) for a model running on the
+host.
+
+For Ollama, raise the context length — the default is too short for the tool
+definitions and results, so answers get cut off or ignore the data. Set
+`OLLAMA_CONTEXT_LENGTH=16384` (or more) on the Ollama server. Models of 7B
+parameters or larger are recommended; small models often call the tools wrongly
+or not at all.
+
+Slow local models: **Time limit per question** (default 180 seconds) caps the
+whole answer, including waiting for the model to load or read the prompt —
+raise it if answers time out. Once a reply starts streaming, it also stops if
+the server then sends nothing for 60 seconds. **Extra request JSON** passes
+server-specific options with every request, e.g.
+`{"chat_template_kwargs": {"enable_thinking": true}}` to turn on a model's
+thinking in llama.cpp or vLLM, or `{"reasoning_effort": "low"}` for OpenAI
+reasoning models.
+
+Chats stay in your browser tab and are never stored on the server.
 
 ## Updating
 

@@ -26,12 +26,23 @@ export async function generateMetadata({
   return { title: data ? `${data.asset.name} — ${assetType === "PERSON" ? "Medical Summary" : "Asset Report"}` : "Report" }
 }
 
+const OBSERVATION_CHOICES = [
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+  { value: "365", label: "12 months" },
+  { value: "none", label: "Leave out" },
+] as const
+
 export default async function ReportPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ type: string; id: string }>
+  searchParams: Promise<{ obs?: string }>
 }) {
   const { type, id } = await params
+  const { obs } = await searchParams
+  const obsChoice = OBSERVATION_CHOICES.find((c) => c.value === obs)?.value ?? "90"
   const assetType = parseAssetSegment(type)
   if (!assetType) notFound()
 
@@ -48,10 +59,31 @@ export default async function ReportPage({
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
           Back to {data.asset.name}
         </Link>
-        <PrintButton />
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {assetType === "PERSON" && (
+            <nav className="flex items-center gap-1 text-sm" aria-label="Observations to include">
+              <span className="text-muted-foreground">Observations:</span>
+              {OBSERVATION_CHOICES.map((c) => (
+                <Link
+                  key={c.value}
+                  href={`?obs=${c.value}`}
+                  aria-current={c.value === obsChoice ? "true" : undefined}
+                  className={
+                    c.value === obsChoice
+                      ? "rounded px-2 py-0.5 font-medium bg-foreground text-background"
+                      : "rounded px-2 py-0.5 text-muted-foreground hover:text-foreground"
+                  }
+                >
+                  {c.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+          <PrintButton />
+        </div>
       </div>
 
-      <AssetReport data={data} />
+      <AssetReport data={data} observationDays={obsChoice === "none" ? null : Number(obsChoice)} />
     </div>
   )
 }

@@ -7,13 +7,14 @@ import { cn } from "@/lib/utils"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
-  Calendar, Bell, Settings, Menu, PiggyBank, HeartPulse, Stethoscope, ShieldPlus,
+  Calendar, Bell, Settings, Menu, PiggyBank, HeartPulse, Stethoscope, ShieldPlus, Sparkles,
 } from "lucide-react"
 
 type NavItem = { href: string; label: string; icon: React.ElementType; section?: string }
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/chat", label: "Assistant", icon: Sparkles },
   { href: "/assets/properties", label: "Properties", icon: Building2, section: "Home" },
   { href: "/assets/vehicles", label: "Vehicles", icon: Car },
   { href: "/assets/equipment", label: "Equipment", icon: Refrigerator },
@@ -56,7 +57,7 @@ function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: st
   )
 }
 
-function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
+function SidebarContent({ onNavClick, showAssistant }: { onNavClick?: () => void; showAssistant: boolean }) {
   return (
     <div className="flex flex-col h-full px-3 py-4">
       <div className="mb-6 flex items-center gap-2 px-3">
@@ -64,7 +65,7 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
         <span className="font-heading font-semibold tracking-tight">HomeCenter</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {navItems.map(({ section, ...item }) => (
+        {navItems.filter((item) => showAssistant || item.href !== "/chat").map(({ section, ...item }) => (
           <Fragment key={item.href}>
             {section && (
               <p className="mt-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">{section}</p>
@@ -80,15 +81,15 @@ function SidebarContent({ onNavClick }: { onNavClick?: () => void }) {
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ showAssistant }: { showAssistant: boolean }) {
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-card">
-      <SidebarContent />
+      <SidebarContent showAssistant={showAssistant} />
     </aside>
   )
 }
 
-export function MobileSidebarTrigger() {
+export function MobileSidebarTrigger({ showAssistant }: { showAssistant: boolean }) {
   const [open, setOpen] = useState(false)
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -97,7 +98,7 @@ export function MobileSidebarTrigger() {
         <span className="sr-only">Menu</span>
       </SheetTrigger>
       <SheetContent side="left" className="w-56 p-0">
-        <SidebarContent onNavClick={() => setOpen(false)} />
+        <SidebarContent showAssistant={showAssistant} onNavClick={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )

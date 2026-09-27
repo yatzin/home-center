@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { attachmentDir } from "./attachment-location"
 
-const base = { serviceRecordId: null, warrantyId: null, maintenanceScheduleId: null, healthConditionId: null, insurancePolicyId: null }
+const base = { serviceRecordId: null, warrantyId: null, maintenanceScheduleId: null, healthConditionId: null, insurancePolicyId: null, observationId: null }
 
 describe("attachmentDir", () => {
   it("uses the foreign key that matches the record type", () => {
@@ -12,6 +12,10 @@ describe("attachmentDir", () => {
 
   it("returns null when the matching key is missing", () => {
     expect(attachmentDir({ ...base, recordType: "SERVICE", warrantyId: "w1" })).toBeNull()
+  })
+
+  it("locates observation files", () => {
+    expect(attachmentDir({ ...base, recordType: "OBSERVATION", observationId: "o1" })).toEqual(["observation", "o1"])
   })
 
   it("locates condition and insurance files", () => {

@@ -11,7 +11,8 @@ import { HealthSummary } from "./health-summary"
 // headings, tables where things line up, and no interactive affordance anywhere
 // inside it — the only control lives outside the sheet and is hidden in print.
 
-export function AssetReport({ data }: { data: ReportData }) {
+/** Days of observations to print on a medical summary; null leaves them out. */
+export function AssetReport({ data, observationDays = 90 }: { data: ReportData; observationDays?: number | null }) {
   const { asset, services, warranties, schedules, costRows, generatedAt } = data
   const isPerson = asset.type === "PERSON"
 
@@ -75,7 +76,7 @@ export function AssetReport({ data }: { data: ReportData }) {
           ) : null}
         </div>
       </section>
-      {data.health && <HealthSummary health={data.health} now={now} />}
+      {data.health && <HealthSummary health={data.health} now={now} observationDays={observationDays} />}
 
       <section className="report-section mt-7">
         <SectionTitle>Summary</SectionTitle>
