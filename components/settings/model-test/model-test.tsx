@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -117,12 +118,14 @@ export function ModelTest({
       <Card className="py-5">
         <CardHeader className="px-5">
           <CardTitle>Which tests</CardTitle>
-          <CardDescription>All groups run by default. Repeat a run to check how consistent the answers are.</CardDescription>
+          <CardDescription>
+            Everything runs by default. Untick a stage or pick topics to run just those. Repeat a run to check how consistent the answers are.
+          </CardDescription>
         </CardHeader>
         <CardContent className="px-5 space-y-4">
           <div className="grid gap-2 sm:grid-cols-3">
             {stages.map((stage) => {
-              const count = catalog.filter((c) => c.stage === stage.id).length
+              const count = catalog.filter((c) => c.stage === stage.id && t.inTopics(c)).length
               return (
                 <label
                   key={stage.id}
@@ -144,6 +147,30 @@ export function ModelTest({
                 </label>
               )
             })}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium" id="mt-topics-label">Topics</p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="mt-topics-label">
+              <TopicChip
+                label="All topics"
+                count={catalog.filter((c) => t.selectedStages.has(c.stage)).length}
+                pressed={t.selectedTopics.size === 0}
+                disabled={t.running}
+                onClick={t.clearTopics}
+              />
+              {t.topics.map((topic) => (
+                <TopicChip
+                  key={topic}
+                  label={topic}
+                  count={catalog.filter((c) => c.category === topic && t.selectedStages.has(c.stage)).length}
+                  pressed={t.selectedTopics.has(topic)}
+                  disabled={t.running}
+                  onClick={() => t.toggleTopic(topic)}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Pick one or more to run only those; pick “All topics” to go back to everything.</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -174,7 +201,7 @@ export function ModelTest({
           </Button>
         ) : (
           <Button type="button" size="lg" onClick={() => t.run()} disabled={!t.selectedCatalog.length}>
-            Run all tests
+            {t.selectedCatalog.length === catalog.length ? "Run all tests" : `Run ${t.selectedCatalog.length} test${t.selectedCatalog.length === 1 ? "" : "s"}`}
           </Button>
         )}
         {t.canRerunFailed && (
@@ -243,5 +270,22 @@ export function ModelTest({
 
       <RunHistory history={t.history} stages={stages} onUseSettings={t.useHistorySettings} onClear={t.clearHistory} />
     </div>
+  )
+}
+
+function TopicChip(props: { label: string; count: number; pressed: boolean; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={props.pressed}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      className={cn(
+        "rounded-full border px-3 py-1 text-sm transition-colors disabled:opacity-60",
+        props.pressed ? "border-primary bg-primary text-primary-foreground" : "border-border/60 hover:bg-muted"
+      )}
+    >
+      {props.label} <span className={props.pressed ? "opacity-80" : "text-muted-foreground"}>({props.count})</span>
+    </button>
   )
 }

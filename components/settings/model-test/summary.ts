@@ -65,6 +65,7 @@ export function buildHistoryEntry(args: {
   selectedIds: Set<string>
   stages: { id: Stage; label: string }[]
   stoppedEarly: boolean
+  topics?: string[]
 }): HistoryEntry {
   const finished = Object.values(args.results).filter((r) => r.status === "pass" || r.status === "fail")
   const passed = finished.filter((r) => r.status === "pass").length
@@ -87,6 +88,7 @@ export function buildHistoryEntry(args: {
     avgMs: Math.round(avgMs),
     perStage,
     stoppedEarly: args.stoppedEarly,
+    ...(args.topics?.length ? { topics: args.topics } : {}),
   }
 }
 
@@ -103,7 +105,8 @@ function isHistoryEntry(v: unknown): v is HistoryEntry {
     typeof e.scorePct === "number" &&
     typeof e.avgMs === "number" &&
     Array.isArray(e.perStage) &&
-    typeof e.stoppedEarly === "boolean"
+    typeof e.stoppedEarly === "boolean" &&
+    (e.topics === undefined || (Array.isArray(e.topics) && e.topics.every((t) => typeof t === "string")))
   )
 }
 

@@ -50,6 +50,9 @@ export function RunHistory({
                       <TableCell className="text-xs text-muted-foreground">{new Date(entry.at).toLocaleString()}</TableCell>
                       <TableCell className="max-w-40 truncate font-medium" title={entry.model}>
                         {entry.model}
+                        {entry.topics && (
+                          <span className="block text-xs font-normal text-muted-foreground">Only: {entry.topics.join(", ")}</span>
+                        )}
                       </TableCell>
                       <TableCell>{entry.temperature || "default"}</TableCell>
                       <TableCell className="max-w-48 truncate font-mono text-xs" title={entry.extraBody || undefined}>

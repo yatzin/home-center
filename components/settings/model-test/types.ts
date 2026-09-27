@@ -41,6 +41,8 @@ export type HistoryEntry = {
   avgMs: number
   perStage: { stage: Stage; passed: number; total: number }[]
   stoppedEarly: boolean
+  /** Topics the run was limited to; absent = every topic. */
+  topics?: string[]
 }
 
 export type ExtraPreset = { label: string; value: string }

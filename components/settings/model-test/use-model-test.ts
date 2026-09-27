@@ -54,7 +54,24 @@ export function useModelTest(args: {
     })
   }, [])
 
-  const selectedCatalog = useMemo(() => catalog.filter((c) => selectedStages.has(c.stage)), [catalog, selectedStages])
+  // Topics (Spending, Health…) narrow the run further; none picked = every topic.
+  const topics = useMemo(() => [...new Set(catalog.map((c) => c.category))].sort(), [catalog])
+  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(() => new Set())
+  const toggleTopic = useCallback((topic: string) => {
+    setSelectedTopics((prev) => {
+      const next = new Set(prev)
+      if (next.has(topic)) next.delete(topic)
+      else next.add(topic)
+      return next
+    })
+  }, [])
+  const clearTopics = useCallback(() => setSelectedTopics(new Set()), [])
+  const inTopics = useCallback((c: ModelTestCatalogEntry) => !selectedTopics.size || selectedTopics.has(c.category), [selectedTopics])
+
+  const selectedCatalog = useMemo(
+    () => catalog.filter((c) => selectedStages.has(c.stage) && inTopics(c)),
+    [catalog, selectedStages, inTopics]
+  )
 
   // --- run state -------------------------------------------------------
   const [results, setResults] = useState<Record<string, CaseRunState>>({})
@@ -112,6 +129,7 @@ export function useModelTest(args: {
       // Scoped to the cases actually in this run (a "re-run failed" pass only
       // covers a subset), not to whatever is currently checked on screen.
       const ranIds = new Set(Object.values(resultsRef.current).map((r) => r.id))
+      const ranTopics = [...new Set(catalog.filter((c) => ranIds.has(c.id)).map((c) => c.category))].sort()
       const entry = buildHistoryEntry({
         model: meta?.model ?? (model || savedModel),
         temperature: meta?.temperature ?? temperature,
@@ -122,11 +140,12 @@ export function useModelTest(args: {
         selectedIds: ranIds,
         stages,
         stoppedEarly,
+        topics: ranTopics.length < topics.length ? ranTopics : undefined,
       })
       setHistory(saveHistoryEntry(entry))
       setLastFailedIds([...new Set(Object.values(resultsRef.current).filter((r) => r.status === "fail").map((r) => r.id))])
     },
-    [catalog, extraBody, model, repeat, savedModel, stages, temperature]
+    [catalog, extraBody, model, repeat, savedModel, stages, temperature, topics]
   )
 
   const handleEvent = useCallback((event: ModelTestEvent) => {
@@ -279,6 +298,11 @@ export function useModelTest(args: {
     repeat,
     setRepeat,
     selectedCatalog,
+    topics,
+    selectedTopics,
+    toggleTopic,
+    clearTopics,
+    inTopics,
 
     // run
     running,
