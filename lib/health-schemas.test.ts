@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  normalizeTags, observationSchema,
   allergySchema, conditionSchema, immunizationSchema, insuranceSchema,
   medicationSchema, personSchema, providerSchema,
 } from "./health-schemas"
@@ -69,5 +70,42 @@ describe("numbers, emails and lists", () => {
   })
   it("rejects an unparseable date", () => {
     expect(immunizationSchema.safeParse({ vaccine: "Flu", dateGiven: "not-a-date" }).success).toBe(false)
+  })
+})
+
+describe("observationSchema", () => {
+  it("needs only a date and what was observed", () => {
+    const r = observationSchema.safeParse({ date: "2026-06-14", type: " Meltdown " })
+    expect(r.success && r.data).toEqual({
+      date: new Date("2026-06-14"), time: null, type: "Meltdown", severity: null, durationMinutes: null,
+      conditionId: null, tags: null, notes: null,
+    })
+  })
+
+  it("parses the optional details", () => {
+    const r = observationSchema.safeParse({
+      date: "2026-06-14", time: "07:45", type: "Meltdown", severity: "4", durationMinutes: "20",
+      conditionId: "c1", tags: "school, tired, School", notes: "Before the bus",
+    })
+    expect(r.success && r.data).toMatchObject({ time: "07:45", severity: 4, durationMinutes: 20, conditionId: "c1", tags: "school, tired" })
+  })
+
+  it("rejects bad times, severities and durations", () => {
+    const errors = (v: Record<string, string>) => {
+      const r = observationSchema.safeParse({ date: "2026-06-14", type: "x", ...v })
+      return r.success ? {} : r.error.flatten().fieldErrors
+    }
+    expect(errors({ time: "25:00" }).time).toEqual(["Enter a time like 14:30"])
+    expect(errors({ severity: "6" }).severity).toEqual(["Pick 1 to 5"])
+    expect(errors({ durationMinutes: "1.5" }).durationMinutes).toBeDefined()
+    expect(errors({ date: "" }).date).toContain("Date is required")
+  })
+})
+
+describe("normalizeTags", () => {
+  it("trims, drops blanks and case-insensitive repeats", () => {
+    expect(normalizeTags(" school ,, tired,School ")).toBe("school, tired")
+    expect(normalizeTags(" , ")).toBeNull()
+    expect(normalizeTags(undefined)).toBeNull()
   })
 })

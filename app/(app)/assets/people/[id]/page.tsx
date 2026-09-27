@@ -13,6 +13,9 @@ import { AllergiesSection } from "@/components/health/allergies-section"
 import { ImmunizationsSection } from "@/components/health/immunizations-section"
 import { ConditionsSection } from "@/components/health/conditions-section"
 import { MedicationsSection } from "@/components/health/medications-section"
+import { ObservationsSection } from "@/components/health/observations-section"
+import { LogObservationButton } from "@/components/health/observation-form"
+import { byNewest, typeSuggestions } from "@/lib/observations"
 import { ageFrom, formatDay, INSURANCE_KINDS, labelFor, RELATIONSHIPS } from "@/lib/health"
 
 export default async function PersonDetailPage({
@@ -40,6 +43,10 @@ export default async function PersonDetailPage({
         orderBy: { name: "asc" },
       },
       insurancePolicies: { select: { id: true, carrier: true, planName: true, kind: true, memberId: true }, orderBy: { carrier: "asc" } },
+      observations: {
+        include: { attachments: true, condition: { select: { name: true } }, createdBy: { select: { name: true } } },
+        orderBy: { date: "desc" },
+      },
     },
   })
   if (!person) notFound()
@@ -53,6 +60,8 @@ export default async function PersonDetailPage({
 
   const age = person.dateOfBirth ? ageFrom(person.dateOfBirth, new Date()) : null
   const conditionOptions = person.conditions.map((c) => ({ id: c.id, name: c.name }))
+  const observations = [...person.observations].sort(byNewest)
+  const observationTypes = typeSuggestions(observations)
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -105,7 +114,8 @@ export default async function PersonDetailPage({
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="font-heading text-2xl font-semibold">{person.name}</h1>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <LogObservationButton personId={id} typeOptions={observationTypes} conditions={conditionOptions} />
             <PersonEditButton person={person} providers={providers} />
             <Link
               href={`/reports/people/${id}`}
@@ -127,6 +137,7 @@ export default async function PersonDetailPage({
         <Tabs defaultValue={tab ?? "visits"}>
           <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
             <TabsTrigger value="visits">Visits &amp; Expenses ({visits.length})</TabsTrigger>
+            <TabsTrigger value="observations">Observations ({observations.length})</TabsTrigger>
             <TabsTrigger value="conditions">Conditions ({person.conditions.length})</TabsTrigger>
             <TabsTrigger value="medications">Medications ({person.medications.length})</TabsTrigger>
             <TabsTrigger value="immunizations">Immunizations ({person.immunizations.length})</TabsTrigger>
@@ -136,8 +147,11 @@ export default async function PersonDetailPage({
           <TabsContent value="visits" className="mt-4">
             <ServiceRecordList records={visits} assetId={id} assetType="PERSON" providerOptions={providers} conditionOptions={conditionOptions} openId={tab === "visits" ? open : undefined} />
           </TabsContent>
+          <TabsContent value="observations" className="mt-4">
+            <ObservationsSection personId={id} observations={observations} conditions={conditionOptions} openId={tab === "observations" ? open : undefined} />
+          </TabsContent>
           <TabsContent value="conditions" className="mt-4">
-            <ConditionsSection personId={id} conditions={person.conditions} providers={providers} />
+            <ConditionsSection personId={id} conditions={person.conditions} providers={providers} observations={observations} />
           </TabsContent>
           <TabsContent value="medications" className="mt-4">
             <MedicationsSection personId={id} medications={person.medications} providers={providers} conditions={conditionOptions} openId={tab === "medications" ? open : undefined} />

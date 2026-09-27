@@ -57,6 +57,7 @@ const healthInclude = {
   medications: { include: { prescriber: { select: { name: true } } }, orderBy: { name: "asc" } },
   immunizations: { orderBy: { dateGiven: "desc" } },
   insurancePolicies: { orderBy: { carrier: "asc" } },
+  observations: { include: { condition: { select: { name: true } } }, orderBy: [{ date: "desc" }, { time: "desc" }] },
 } satisfies Prisma.PersonInclude
 
 export type ReportPerson = Prisma.PersonGetPayload<{ include: typeof healthInclude }>

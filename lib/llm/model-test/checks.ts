@@ -12,6 +12,7 @@ const TOOL_WORDS: Record<string, string> = {
   maintenance_status: "maintenance status",
   warranty_status: "warranty status",
   health_alerts: "health reminders",
+  observation_log: "the observation log",
   find_records: "a list of records",
   get_record: "one record's details",
   aggregate: "a count or total",

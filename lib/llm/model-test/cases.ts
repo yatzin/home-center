@@ -2,6 +2,7 @@ import {
   all, answerExcludes, answerIncludes, answerIncludesAny, answerMatches, calledNoTool, calledOneOf, calledTool,
   linksOnly, moneyForms, notCalled, orSearchFirst, refuses, shortAnswer,
 } from "./checks"
+import { OBSERVATION_CASES } from "./cases-observations"
 import type { ModelTestCase } from "./types"
 
 // The test library. Every value is made up; "today" is MODEL_TEST_TODAY (2026-06-15).
@@ -699,6 +700,8 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     },
     check: all(calledTool("cost_summary"), answerIncludesAny(moneyForms(2450), "$2,450.00")),
   },
+
+  ...OBSERVATION_CASES,
 ]
 
 /** What the page needs to list the cases (checks and fixtures stay on the server). */

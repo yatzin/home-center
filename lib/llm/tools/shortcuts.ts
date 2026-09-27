@@ -21,6 +21,8 @@ import { rollUpToProperty } from "../cost-rollup"
 import { warrantyState } from "../warranty-status"
 import { splitSearchQuery } from "../search-terms"
 import { resolveAssetId } from "../asset-ids"
+import { analyzeObservations } from "../observation-log"
+import { observationHref } from "@/lib/observations"
 import { defineTool } from "./registry"
 
 // Curated tools for the questions people ask most. Narrow arguments so small
@@ -35,7 +37,7 @@ const dayOrNull = (d: Date | null | undefined) => (d ? toDay(d) : null)
 
 const SEARCHABLE: EntityKey[] = [
   "property", "vehicle", "equipment", "person", "provider", "insurancePolicy", "healthCondition",
-  "medication", "allergy", "immunization", "warranty", "maintenanceSchedule", "serviceRecord",
+  "medication", "allergy", "immunization", "warranty", "maintenanceSchedule", "serviceRecord", "observation",
 ]
 
 export const searchTool = defineTool({
@@ -149,7 +151,7 @@ export const assetHistoryTool = defineTool({
   name: "asset_history",
   description:
     "Full chronological history of one property, vehicle, equipment item or person: service records with costs, warranty start/expiry, maintenance completed, " +
-    "and for people conditions, medications and immunizations. Get the id from search first.",
+    "and for people conditions, medications and immunizations (logged observations like meltdowns are in observation_log). Get the id from search first.",
   schema: z.object({
     assetType: z.string().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
     assetId: z.string().min(1),
@@ -321,6 +323,40 @@ export const healthAlertsTool = defineTool({
       insuranceExpiring: policies
         .filter((p) => insuranceExpiring(p, ctx.now))
         .map((p) => compact({ id: p.id, carrier: p.carrier, planName: p.planName, kind: p.kind, endDate: dayOrNull(p.endDate), daysUntil: daysUntil(p.endDate!, ctx.now), members: p.members.map(personRef), href: "/insurance" })),
+    }
+  },
+})
+
+export const observationLogTool = defineTool({
+  name: "observation_log",
+  description:
+    "Observations the family logged about a person — meltdowns, bad nights, symptoms, moods — with counts by type, month, weekday, " +
+    "time of day and tag, average severity (1 mild to 5 severe), and the entries themselves with notes. " +
+    "Use it for 'how many meltdowns in May', 'when do they happen', 'what usually comes before one', 'show me the notes from last week'.",
+  schema: z.object({
+    personId: z.string().optional().describe("Person id from search (a person's exact name also works). Omit for everyone."),
+    type: z.string().optional().describe("Only entries whose type contains this, e.g. 'meltdown'. Omit for all types."),
+    from: z.string().optional().describe("YYYY-MM-DD, inclusive."),
+    to: z.string().optional().describe("YYYY-MM-DD, inclusive."),
+  }),
+  label: (a) => (a.type ? `Reading the ${a.type} log…` : "Reading the observation log…"),
+  async run(a, ctx) {
+    const personId = a.personId ? resolveAssetId((await loadAssetIndex()).names, a.personId, ["PERSON"]) : undefined
+    const range = { from: optionalDay(a.from, "from"), to: optionalDay(a.to, "to") }
+    const rows = await prisma.observation.findMany({
+      where: personId ? { personId } : {},
+      include: { condition: { select: { name: true } }, person: { select: { id: true, name: true } } },
+    })
+    const wanted = a.type?.trim().toLowerCase()
+    const entries = rows.filter((r) => (!wanted || r.type.toLowerCase().includes(wanted)) && inDayRange(r.date, range))
+    const people = new Set(entries.map((e) => e.person.id))
+    const knownTypes = [...new Set(rows.map((r) => r.type))]
+    return {
+      asOf: toDay(ctx.now),
+      ...(personId && rows[0] ? { person: personRef(rows[0].person) } : {}),
+      ...analyzeObservations(entries, { href: (e) => observationHref(e.person.id, e.id), manyPeople: people.size > 1 }),
+      // An empty result reads as "it never happened"; say what is logged instead.
+      ...(entries.length ? {} : { note: knownTypes.length ? `Nothing matched. Types logged: ${knownTypes.join(", ")}.` : "No observations are logged." }),
     }
   },
 })

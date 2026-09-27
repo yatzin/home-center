@@ -4,7 +4,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { allergySchema, conditionSchema, immunizationSchema, medicationSchema } from "@/lib/health-schemas"
+import { allergySchema, conditionSchema, immunizationSchema, medicationSchema, observationSchema } from "@/lib/health-schemas"
 import { nextRefillFrom } from "@/lib/health"
 import { removeUploadDir } from "@/lib/upload-fs"
 import type { ActionResult, FormValues } from "@/lib/form-types"
@@ -178,6 +178,53 @@ export async function deleteImmunization(id: string): Promise<ActionResult> {
   if (!existing) return NOT_FOUND
 
   await prisma.immunization.delete({ where: { id: existing.id } })
+  revalidatePerson(existing.personId)
+  return { success: true }
+}
+
+// ─── Observations ─────────────────────────────────────────────────────────────
+
+/** A linked condition must be one of this person's own. */
+async function conditionError(personId: string, conditionId: string | null): Promise<ActionResult | null> {
+  if (!conditionId) return null
+  const c = await prisma.healthCondition.findUnique({ where: { id: conditionId }, select: { personId: true } })
+  return c?.personId === personId ? null : { error: { conditionId: ["Pick one of this person's conditions"] } }
+}
+
+export async function createObservation(personId: string, values: FormValues): Promise<ActionResult> {
+  const session = await requireSession()
+  const parsed = observationSchema.safeParse(values)
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+  if (!(await personExists(personId))) return NOT_FOUND
+  const bad = await conditionError(personId, parsed.data.conditionId)
+  if (bad) return bad
+
+  const row = await prisma.observation.create({ data: { ...parsed.data, personId, createdById: session.user.id } })
+  revalidatePerson(personId)
+  return { success: true, id: row.id }
+}
+
+export async function updateObservation(id: string, values: FormValues): Promise<ActionResult> {
+  await requireSession()
+  const parsed = observationSchema.safeParse(values)
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+  const existing = await prisma.observation.findUnique({ where: { id }, select: { personId: true } })
+  if (!existing) return NOT_FOUND
+  const bad = await conditionError(existing.personId, parsed.data.conditionId)
+  if (bad) return bad
+
+  await prisma.observation.update({ where: { id }, data: parsed.data })
+  revalidatePerson(existing.personId)
+  return { success: true }
+}
+
+export async function deleteObservation(id: string): Promise<ActionResult> {
+  await requireSession()
+  const existing = await prisma.observation.findUnique({ where: { id }, select: { id: true, personId: true } })
+  if (!existing) return NOT_FOUND
+
+  await prisma.observation.delete({ where: { id: existing.id } })
+  await removeUploadDir("observation", existing.id)
   revalidatePerson(existing.personId)
   return { success: true }
 }

@@ -9,7 +9,7 @@ describe("buildSystemPrompt", () => {
     expect(p).toContain("Today is 2026-09-26")
     expect(p).toMatch(/only from data returned by your tools/)
     expect(p).toContain("- serviceRecord:")
-    expect(p).toContain("search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts")
+    expect(p).toContain("search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts, observation_log")
     expect(p).not.toMatch(/passwordHash/)
   })
 

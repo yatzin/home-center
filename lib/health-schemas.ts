@@ -110,6 +110,36 @@ export const immunizationSchema = z
   })
   .superRefine(notBefore("nextDueDate", "dateGiven", "Next due can't be before the date given"))
 
+/** "school, Tired ,school" → "school, Tired"; blank → null. */
+export function normalizeTags(raw: string | null | undefined): string | null {
+  const seen = new Map<string, string>()
+  for (const t of (raw ?? "").split(",")) {
+    const tag = t.trim().replace(/\s+/g, " ")
+    if (tag && !seen.has(tag.toLowerCase())) seen.set(tag.toLowerCase(), tag)
+  }
+  return seen.size ? [...seen.values()].join(", ") : null
+}
+
+export const observationSchema = z.object({
+  date: requiredDate("Date is required"),
+  time: z
+    .string()
+    .trim()
+    .optional()
+    .refine((v) => !v || /^([01]\d|2[0-3]):[0-5]\d$/.test(v), "Enter a time like 14:30")
+    .transform((v) => v || null),
+  type: requiredText("What was observed is required").pipe(z.string().max(60, "Keep it under 60 characters")),
+  severity: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^[1-5]$/.test(v), "Pick 1 to 5")
+    .transform((v) => (v ? Number(v) : null)),
+  durationMinutes: optionalWholeNumber.refine((v) => v === null || v <= 7 * 24 * 60, "That's longer than a week"),
+  conditionId: optionalId,
+  tags: z.string().optional().transform(normalizeTags),
+  notes: optionalText,
+})
+
 export const insuranceSchema = z
   .object({
     carrier: requiredText("Carrier is required"),

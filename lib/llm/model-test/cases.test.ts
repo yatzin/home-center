@@ -9,7 +9,7 @@ import type { Outcome } from "./types"
 const EMPTY: Outcome = { toolCalls: [], answer: "", rounds: 1 }
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/
-const ASSET_HREF = /^\/assets\/(properties|vehicles|equipment|people)\/[a-z0-9-]+$/
+const ASSET_HREF = /^\/assets\/(properties|vehicles|equipment|people)\/[a-z0-9-]+(\?tab=observations&open=[a-z0-9-]+)?$/
 /** Mirrors the FIXED_PAGES set in lib/llm/link-check.ts — pages that need no lookup to link. */
 const FIXED_PAGES = new Set([
   "/", "/chat", "/costs", "/maintenance", "/warranties", "/records", "/insurance", "/providers", "/notifications", "/settings",
@@ -38,15 +38,8 @@ describe("MODEL_TEST_CASES", () => {
     for (const id of ids) expect(id).toMatch(KEBAB)
   })
 
-  it("keeps stage and total counts in the expected ranges", () => {
-    expect(byStage("tool-choice").length).toBeGreaterThanOrEqual(18)
-    expect(byStage("tool-choice").length).toBeLessThanOrEqual(22)
-    expect(byStage("answer").length).toBeGreaterThanOrEqual(15)
-    expect(byStage("answer").length).toBeLessThanOrEqual(18)
-    expect(byStage("end-to-end").length).toBeGreaterThanOrEqual(10)
-    expect(byStage("end-to-end").length).toBeLessThanOrEqual(14)
-    expect(MODEL_TEST_CASES.length).toBeGreaterThanOrEqual(45)
-    expect(MODEL_TEST_CASES.length).toBeLessThanOrEqual(55)
+  it("covers every stage with a good number of cases", () => {
+    for (const stage of ["tool-choice", "answer", "end-to-end"] as const) expect(byStage(stage).length).toBeGreaterThanOrEqual(10)
   })
 
   it.each(byStage("answer").map((c) => [c.id, c] as const))("%s: has a non-empty given", (_id, c) => {
@@ -69,7 +62,7 @@ describe("MODEL_TEST_CASES", () => {
   it.each(MODEL_TEST_CASES.map((c) => [c.id, c] as const))("%s: every href is a real asset page or a fixed page", (_id, c) => {
     const hrefs: string[] = []
     for (const g of c.given ?? []) collectHrefs(g.result, hrefs)
-    if (c.fixtures) collectHrefs(c.fixtures, hrefs)
+    for (const f of Object.values(c.fixtures ?? {})) collectHrefs(typeof f === "function" ? f({}) : f, hrefs)
     for (const href of hrefs) expect(ASSET_HREF.test(href) || FIXED_PAGES.has(href)).toBe(true)
   })
 

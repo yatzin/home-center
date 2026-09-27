@@ -3,6 +3,7 @@ import {
   NotificationType, PropertyType, Relationship, ServiceCategory,
 } from "@/app/generated/prisma/enums"
 import { assetHref } from "@/lib/assets"
+import { observationHref } from "@/lib/observations"
 
 // The assistant's map of the data. Everything the LLM can reach is declared
 // here once — fields, enum values, relations, links — and the query compiler,
@@ -17,7 +18,7 @@ export type Row = Record<string, unknown>
 export const ENTITY_KEYS = [
   "property", "vehicle", "equipment", "person", "provider", "serviceRecord", "warranty",
   "maintenanceSchedule", "healthCondition", "medication", "allergy", "immunization",
-  "insurancePolicy", "notification",
+  "insurancePolicy", "notification", "observation",
 ] as const
 export type EntityKey = (typeof ENTITY_KEYS)[number]
 
@@ -128,6 +129,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       allergies: { kind: "many", entity: "allergy" },
       immunizations: { kind: "many", entity: "immunization" },
       insurancePolicies: { kind: "many", entity: "insurancePolicy" },
+      observations: { kind: "many", entity: "observation" },
       ...assetChildren,
     },
     defaultSort: { field: "name", dir: "asc" },
@@ -199,9 +201,24 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
       provider: { kind: "one", entity: "provider" },
       medications: { kind: "many", entity: "medication" },
       serviceRecords: { kind: "many", entity: "serviceRecord" },
+      observations: { kind: "many", entity: "observation" },
     },
     defaultSort: { field: "name", dir: "asc" },
     href: personLink,
+  },
+  observation: {
+    model: "observation", label: "Observation", plural: "observations",
+    description:
+      "Things noticed about a person on a day — meltdowns, bad nights, symptoms, moods — logged by the family. " +
+      "type is free text (e.g. Meltdown); severity 1 (mild) to 5 (severe); time is HH:MM when known. For counts and patterns prefer observation_log.",
+    nameField: "type", searchFields: ["type", "notes", "tags"], keys: ["personId", "conditionId"],
+    fields: { date: date, time: s, type: s, severity: int, durationMinutes: int, tags: s, notes: s },
+    relations: {
+      person: { kind: "one", entity: "person" },
+      condition: { kind: "one", entity: "healthCondition" },
+    },
+    defaultSort: { field: "date", dir: "desc" },
+    href: (row) => (row.personId ? observationHref(String(row.personId), String(row.id)) : null),
   },
   medication: {
     model: "medication", label: "Medication", plural: "medications",
