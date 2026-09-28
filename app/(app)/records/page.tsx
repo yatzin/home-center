@@ -77,7 +77,7 @@ export default async function RecordsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-2xl font-semibold">Service Records</h1>
+          <h1 className="font-heading text-2xl font-semibold">Records</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {total} record{total !== 1 ? "s" : ""}
             {totalCost > 0 && ` · $${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total`}
@@ -94,9 +94,9 @@ export default async function RecordsPage({
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          <p className="font-medium">No service records {q || assetId ? "match those filters" : "yet"}</p>
+          <p className="font-medium">No records {q || assetId ? "match those filters" : "yet"}</p>
           <p className="text-sm mt-1">
-            {q || assetId ? "Try clearing the search or filter." : "Add records from a property, vehicle, or equipment detail page."}
+            {q || assetId ? "Try clearing the search or filter." : "Add records from a property, vehicle, equipment, or person detail page."}
           </p>
         </div>
       ) : (

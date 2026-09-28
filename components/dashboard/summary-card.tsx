@@ -7,36 +7,18 @@ import { Card, CardContent } from "@/components/ui/card"
 import { assetImageSrc } from "@/components/asset-image"
 import { cn } from "@/lib/utils"
 import { assetHref } from "@/lib/assets"
+import { initialsOf, firstNameOf, softColorOf } from "@/lib/asset-visuals"
 import type { AssetType } from "@/app/generated/prisma/client"
 
 type Thumbnail = { assetType: AssetType; assetId: string; imageFilename: string | null; name: string }
 
-// Deterministic per-asset, so the same property or person always lands on the
-// same hue instead of flickering between colors on every render.
-function hashString(s: string) {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-  return Math.abs(h)
-}
-
-function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return "?"
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
-
-function softColorOf(seed: string) {
-  const hue = hashString(seed) % 360
-  return { background: `hsl(${hue} 60% 88%)`, color: `hsl(${hue} 45% 32%)` }
-}
-
 // A soft-colored initials tile in place of a photo, for anything without one —
-// used everywhere a thumbnail would otherwise be, not just the hero rows.
+// used everywhere a thumbnail would otherwise be, not just the hero rows. For
+// people specifically, the first name reads better than two letters.
 function InitialsTile({ thumbnail, className }: { thumbnail: Thumbnail; className?: string }) {
   return (
-    <div className={cn("flex items-center justify-center", className)} style={softColorOf(thumbnail.assetId)}>
-      {initialsOf(thumbnail.name)}
+    <div className={cn("flex items-center justify-center px-1 text-center", className)} style={softColorOf(thumbnail.assetId)}>
+      {thumbnail.assetType === "PERSON" ? firstNameOf(thumbnail.name) : initialsOf(thumbnail.name)}
     </div>
   )
 }

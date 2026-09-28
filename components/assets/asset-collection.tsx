@@ -99,8 +99,8 @@ export function AssetCollection<T extends { id: string }>({
                       assetType={assetType}
                       assetId={row.id}
                       imageFilename={imageFilenameOf(row)}
-                      alt=""
-                      className="h-8 w-8 rounded-md"
+                      alt={toCard(row).name}
+                      className="h-8 w-8 rounded-md text-[10px] font-medium"
                     />
                   </TableCell>
                   {columns.map((column) => (
