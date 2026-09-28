@@ -28,12 +28,14 @@ function isArraySchema(schema: unknown): boolean {
  * Smooths over two common small-model habits before validation: null for an
  * optional argument ("not set"), and a bare string where a list is expected.
  */
-export function normalizeArgs(schema: z.ZodType, raw: unknown): unknown {
+export function normalizeArgs(schema: z.ZodType, raw: unknown, aliases: Record<string, string> = {}): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw
   const shape = schema instanceof z.ZodObject ? (schema.shape as Record<string, unknown>) : {}
   const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(raw)) {
+  for (const [key, v] of Object.entries(raw)) {
     if (v === null) continue
+    // An argument's older name still works, unless the current name is also given.
+    const k = aliases[key] && !(aliases[key] in raw) ? aliases[key] : key
     out[k] = typeof v === "string" && isArraySchema(shape[k]) ? [v] : v
   }
   return out
@@ -43,6 +45,8 @@ export function defineTool<S extends z.ZodType>(t: {
   name: string
   description: string
   schema: S
+  /** Older argument names models may still send, mapped to the current ones. */
+  aliases?: Record<string, string>
   label: (args: z.infer<S>) => string
   run: (args: z.infer<S>, ctx: ToolContext) => Promise<unknown>
 }): RegisteredTool {
@@ -53,11 +57,11 @@ export function defineTool<S extends z.ZodType>(t: {
     description: t.description,
     parameters,
     label(raw) {
-      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw))
+      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw, t.aliases))
       return parsed.success ? t.label(parsed.data) : FALLBACK_LABEL
     },
     async execute(raw, ctx) {
-      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw))
+      const parsed = t.schema.safeParse(normalizeArgs(t.schema, raw, t.aliases))
       if (!parsed.success) {
         return JSON.stringify({
           error: "Invalid arguments.",

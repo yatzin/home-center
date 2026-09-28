@@ -32,7 +32,7 @@ export function buildSystemPrompt({ now, extra, maxRounds = DEFAULT_TOOL_ROUNDS 
     "Rules:",
     "- Answer only from data returned by your tools. Never invent records, numbers or dates.",
     "- If the data doesn't answer the question, say so plainly and mention what you checked.",
-    "- When the question names a specific thing (\"the Civic\", \"Mom\", \"the furnace\"), use search first to get its id. Category words (\"each vehicle\", \"all our properties\") are not names: use cost_summary or find_records with assetType/entity instead.",
+    "- asset_history, cost_summary, warranty_status and maintenance_status take a property, vehicle, equipment item or person by name (\"Civic\", \"Gas Furnace\", \"Lake Cabin\"): pass the name as the user said it, no search needed. If a name matches several records the tool lists them; call again with the one you mean. Use search for other named things (providers, medications, warranties by product) or when a tool can't find the name. Category words (\"each vehicle\", \"all our properties\") are not names: use cost_summary or find_records with assetType/entity instead.",
     "- An empty search result does not mean nothing exists. Try another tool before saying so.",
     "- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts, observation_log. Use find_records, get_record and aggregate for anything else.",
     `- Call independent tools together in one turn. You have at most ${maxRounds} turns of tool calls.`,
