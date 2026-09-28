@@ -36,6 +36,7 @@ const listy = defineTool({
   schema: z.object({ tags: z.array(z.string()).optional(), note: z.string().optional() }),
   label: (a) => `Tags ${a.tags?.join("+") ?? "none"}…`,
   run: async (a) => ({ tags: a.tags ?? [], note: a.note ?? "none" }),
+  aliases: { labels: "tags" },
 })
 const invalidFilter = defineTool({
   name: "invalid_filter",
@@ -93,6 +94,11 @@ describe("runToolCall", () => {
     expect(JSON.parse(await runToolCall(tools, call("listy", '{"tags":null,"note":null}'), ctx))).toEqual({ tags: [], note: "none" })
     expect(JSON.parse(await runToolCall(tools, call("listy", '{"tags":"a","note":"n"}'), ctx))).toEqual({ tags: ["a"], note: "n" })
     expect(toolLabel(tools, call("listy", '{"tags":"a"}'))).toBe("Tags a…")
+  })
+
+  it("accepts an argument's older name, but not over the current one", async () => {
+    expect(JSON.parse(await runToolCall(tools, call("listy", '{"labels":"a"}'), ctx))).toEqual({ tags: ["a"], note: "none" })
+    expect(JSON.parse(await runToolCall(tools, call("listy", '{"labels":["x"],"tags":["y"]}'), ctx)).tags).toEqual(["y"])
   })
   it("explains Prisma validation errors as a filter problem, logging the name only", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {})

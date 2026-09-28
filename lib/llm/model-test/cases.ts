@@ -30,6 +30,10 @@ function dateForms(iso: string): string[] {
 const hasGroup = (a: Record<string, unknown>, name: string) => Array.isArray(a.groupBy) && a.groupBy.includes(name)
 const typeIs = (a: Record<string, unknown>, type: string) => typeof a.assetType === "string" && a.assetType.toUpperCase() === type
 const statusIs = (a: Record<string, unknown>, status: string) => typeof a.status === "string" && a.status.toLowerCase() === status
+/** A has/hasNone filter on the given relation, e.g. {"field":"warranties","op":"hasNone"}. */
+const hasExistsFilter = (a: Record<string, unknown>, relation: string, op: string) =>
+  Array.isArray(a.filters) &&
+  a.filters.some((f) => f && typeof f === "object" && (f as { field?: unknown }).field === relation && (f as { op?: unknown }).op === op)
 const fromIsYear = (a: Record<string, unknown>, year: string) => typeof a.from === "string" && a.from.startsWith(year)
 
 // Realistic shortcut-tool result shapes (see lib/llm/tools/shortcuts.ts run() functions).
@@ -90,7 +94,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     category: "Spending",
     title: "Scopes a property's spending question to that property",
     question: "How much have we spent on 123 Maple St this year, including its equipment?",
-    check: orSearchFirst(calledTool("cost_summary", (a) => (typeIs(a, "PROPERTY") || Array.isArray(a.assetIds) ? null : "it wasn't limited to the property"))),
+    check: orSearchFirst(calledTool("cost_summary", (a) => (typeIs(a, "PROPERTY") || Array.isArray(a.assets) || Array.isArray(a.assetIds) ? null : "it wasn't limited to the property"))),
   },
   {
     id: "choice-compare-vehicles-spending",
@@ -225,6 +229,40 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     check: all(notCalled("find_records", "that's account credentials, not household data"), refuses()),
   },
 
+  {
+    id: "choice-property-warranties-by-name",
+    stage: "tool-choice",
+    category: "Warranties",
+    title: "Checks a property's warranties by its name",
+    question: "Which equipment at 123 Maple St is still under warranty?",
+    check: orSearchFirst(calledTool("warranty_status", (a) => (a.asset || a.assetId ? null : "it wasn't limited to the property"))),
+  },
+  {
+    id: "choice-property-maintenance-by-name",
+    stage: "tool-choice",
+    category: "Maintenance",
+    title: "Checks a property's maintenance by its name",
+    question: "What maintenance is coming up at 123 Maple St?",
+    check: orSearchFirst(calledTool("maintenance_status", (a) => (a.asset || a.assetId ? null : "it wasn't limited to the property"))),
+  },
+
+  {
+    id: "choice-no-warranty-hasnone",
+    stage: "tool-choice",
+    category: "Warranties",
+    title: "Finds items that have no warranty at all",
+    question: "Which equipment has no warranty on file?",
+    check: calledTool("find_records", (a) => (hasExistsFilter(a, "warranties", "hasNone") ? null : "it didn't filter for equipment without warranties")),
+  },
+  {
+    id: "choice-no-recent-service-hasnone",
+    stage: "tool-choice",
+    category: "Maintenance",
+    title: "Finds vehicles with no service since a date",
+    question: "Which vehicles haven't had any service since March 1?",
+    check: calledTool("find_records", (a) => (hasExistsFilter(a, "serviceRecords", "hasNone") ? null : "it didn't filter for vehicles without recent service")),
+  },
+
   // -------------------------------------------------------------------- answer
   {
     id: "answer-spending-sum-civic",
@@ -234,7 +272,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "How much have we spent on the Civic in total?",
     given: [{
       name: "cost_summary",
-      args: { groupBy: ["asset"], assetIds: [CIVIC.id] },
+      args: { groupBy: ["asset"], assets: ["Civic"] },
       result: costSummaryByAsset([{ ...CIVIC, value: 1344.35, count: 5 }]),
     }],
     check: all(answerIncludesAny(moneyForms(1344.35), "$1,344.35")),
@@ -277,7 +315,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "What was the total cost of service on the furnace?",
     given: [{
       name: "asset_history",
-      args: { assetType: "EQUIPMENT", assetId: FURNACE.id },
+      args: { asset: "furnace" },
       result: {
         asset: { type: "EQUIPMENT", id: FURNACE.id, name: FURNACE.name, href: FURNACE.href },
         totalCost: 612.4,
@@ -294,7 +332,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "Is the Civic's oil change overdue?",
     given: [{
       name: "maintenance_status",
-      args: { assetId: CIVIC.id },
+      args: { asset: "Civic" },
       result: {
         asOf: "2026-06-15",
         total: 1,
@@ -315,7 +353,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "When's the furnace filter change due?",
     given: [{
       name: "maintenance_status",
-      args: { assetId: FURNACE.id },
+      args: { asset: "furnace filter" },
       result: {
         asOf: "2026-06-15",
         total: 1,
@@ -476,7 +514,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "What's the service history on the furnace?",
     given: [{
       name: "asset_history",
-      args: { assetType: "EQUIPMENT", assetId: FURNACE.id },
+      args: { asset: "furnace" },
       result: {
         asset: { type: "EQUIPMENT", id: FURNACE.id, name: FURNACE.name, href: FURNACE.href },
         totalCost: 612.4,
@@ -496,7 +534,7 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     question: "Any notes on the Civic's last service?",
     given: [{
       name: "asset_history",
-      args: { assetType: "VEHICLE", assetId: CIVIC.id },
+      args: { asset: "Civic" },
       result: {
         asset: { type: "VEHICLE", id: CIVIC.id, name: CIVIC.name, href: CIVIC.href },
         totalCost: 210,
@@ -520,6 +558,54 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
       result: { query: "work truck", total: 1, rows: [{ entity: "vehicle", id: TRUCK.id, name: TRUCK.name, href: TRUCK.href }] },
     }],
     check: all(answerMatches(/yes/i, "confirms yes"), shortAnswer(300)),
+  },
+
+  {
+    id: "answer-property-warranties-include-equipment",
+    stage: "answer",
+    category: "Warranties",
+    title: "Lists the equipment warranties a property lookup returns",
+    question: "Which equipment at 123 Maple St is still under warranty?",
+    given: [{
+      name: "warranty_status",
+      args: { asset: "123 Maple St", status: "active" },
+      result: {
+        property: { type: "PROPERTY", name: MAPLE.name, href: MAPLE.href },
+        note: "Includes equipment installed at this property.",
+        asOf: "2026-06-15", status: "active", withinDays: 180, total: 2,
+        rows: [
+          {
+            id: "w-furnace-hx", product: "Heat exchanger — 20 yr", state: "active", expirationDate: "2040-01-01", daysLeft: 4948,
+            asset: { type: "EQUIPMENT", id: FURNACE.id, name: FURNACE.name, href: FURNACE.href }, href: FURNACE.href,
+          },
+          {
+            id: "w-water-heater", product: "Tank — 6 yr", state: "active", expirationDate: "2028-03-01", daysLeft: 625,
+            asset: { type: "EQUIPMENT", id: WATER_HEATER.id, name: WATER_HEATER.name, href: WATER_HEATER.href }, href: WATER_HEATER.href,
+          },
+        ],
+      },
+    }],
+    check: all(answerIncludes([FURNACE.name, WATER_HEATER.name]), linksOnly([MAPLE.href, FURNACE.href, WATER_HEATER.href])),
+  },
+  {
+    id: "answer-ambiguous-name-asks-which",
+    stage: "answer",
+    category: "History",
+    title: "Asks which one when a name fits several items",
+    question: "What's the history on the refrigerator?",
+    given: [{
+      name: "asset_history",
+      args: { asset: "refrigerator" },
+      result: {
+        lookedFor: "refrigerator",
+        note: '"refrigerator" matches 2 records. Call again with the one you mean (its id or exact name), or ask the user which one.',
+        matches: [
+          { id: "e-fridge-kitchen", type: "EQUIPMENT", name: "Kitchen Refrigerator", href: "/assets/equipment/e-fridge-kitchen" },
+          { id: "e-fridge-garage", type: "EQUIPMENT", name: "Garage Refrigerator", href: "/assets/equipment/e-fridge-garage" },
+        ],
+      },
+    }],
+    check: all(answerIncludes(["Kitchen Refrigerator", "Garage Refrigerator"]), answerMatches(/which|\?/i, "a question about which one")),
   },
 
   // --------------------------------------------------------------- end-to-end

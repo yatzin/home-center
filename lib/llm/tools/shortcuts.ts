@@ -12,7 +12,7 @@ import {
 } from "@/lib/health"
 import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
 import { ENTITIES, type EntityKey, type Row } from "../ontology"
-import { coerceValue, entityDef, inDayRange, requireDay, selectFor, ToolInputError } from "../query"
+import { coerceValue, entityDef, inDayRange, requireDay, selectFor, ToolInputError, type ToolContext } from "../query"
 import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
@@ -20,7 +20,7 @@ import { buildTimeline, type TimelineEvent } from "../timeline"
 import { rollUpToProperty } from "../cost-rollup"
 import { warrantyState } from "../warranty-status"
 import { splitSearchQuery } from "../search-terms"
-import { resolveAssetId } from "../asset-ids"
+import { matchAsset, resolveAssetId, type AssetEntry } from "../asset-ids"
 import { analyzeObservations } from "../observation-log"
 import { observationHref } from "@/lib/observations"
 import { defineTool } from "./registry"
@@ -51,38 +51,114 @@ export const searchTool = defineTool({
     entities: z.array(z.string()).optional().describe("Only search these entities."),
   }),
   label: (a) => `Searching for “${a.query}”…`,
-  async run({ query, entities }, ctx) {
-    const { words, types } = splitSearchQuery(query)
-    if (!words.length && !types.length) throw new ToolInputError("Search needs at least one word of two or more characters.")
-    const keys = types.length ? types : entities?.length ? entities.map((e) => entityDef(e).key) : SEARCHABLE
-    const index = await loadAssetIndex()
-    const found = await Promise.all(
-      keys.map(async (key) => {
-        const def = ENTITIES[key]
-        const where = {
-          AND: [
-            ...words.map((w) => ({ OR: def.searchFields.map((f) => ({ [f]: { contains: w } })) })),
-            ...(def.scope ? [def.scope(ctx)] : []),
-          ],
-        }
-        // No name words means "list this type", so allow a fuller page.
-        const rows = await delegate(key).findMany({ where, select: selectFor(key), take: words.length ? 10 : 25 })
-        if (def.polymorphic) attachAssets(index, rows)
-        return rows.map((r) => ({ entity: key, ...serializeRow(key, r) }))
-      })
-    )
-    const rows = found.flat()
-    return {
-      query,
-      total: rows.length,
-      rows,
-      // An empty search reads to weak models as "nothing exists"; say where else to look.
-      ...(rows.length
-        ? {}
-        : { note: "No names matched. This does not mean there are none: for spending use cost_summary, to list a type use find_records." }),
-    }
-  },
+  run: ({ query, entities }, ctx) => searchRecords(query, entities, ctx),
 })
+
+async function searchRecords(query: string, entities: string[] | undefined, ctx: ToolContext) {
+  const { words, types } = splitSearchQuery(query)
+  if (!words.length && !types.length) throw new ToolInputError("Search needs at least one word of two or more characters.")
+  const keys = types.length ? types : entities?.length ? entities.map((e) => entityDef(e).key) : SEARCHABLE
+  const index = await loadAssetIndex()
+  const found = await Promise.all(
+    keys.map(async (key) => {
+      const def = ENTITIES[key]
+      const where = {
+        AND: [
+          ...words.map((w) => ({ OR: def.searchFields.map((f) => ({ [f]: { contains: w } })) })),
+          ...(def.scope ? [def.scope(ctx)] : []),
+        ],
+      }
+      // No name words means "list this type", so allow a fuller page.
+      const rows = await delegate(key).findMany({ where, select: selectFor(key), take: words.length ? 10 : 25 })
+      if (def.polymorphic) attachAssets(index, rows)
+      return rows.map((r) => ({ entity: key, ...serializeRow(key, r) }))
+    })
+  )
+  const rows = found.flat()
+  return {
+    query,
+    total: rows.length,
+    rows,
+    // An empty search reads to weak models as "nothing exists"; say where else to look.
+    ...(rows.length
+      ? {}
+      : { note: "No names matched. This does not mean there are none: for spending use cost_summary, to list a type use find_records." }),
+  }
+}
+
+// --- assets by name -----------------------------------------------------------
+
+const ASSET_ARG = "A property, vehicle, equipment item or person: its name as the user said it (e.g. 'Civic', 'Gas Furnace', 'Lake Cabin') or an id."
+type FoundAsset = AssetEntry & { href: string }
+const assetLinkRef = (a: FoundAsset) => ({ type: a.type, name: a.name, href: a.href })
+
+async function loadAssetCatalog(): Promise<AssetEntry[]> {
+  const [index, vehicles] = await Promise.all([
+    loadAssetIndex(),
+    prisma.vehicle.findMany({ select: { id: true, year: true, make: true, model: true } }),
+  ])
+  const aka = new Map(vehicles.map((v) => [v.id, [v.year, v.make, v.model].filter(Boolean).join(" ")]))
+  return (Object.keys(index.names) as AssetType[]).flatMap((type) =>
+    Object.entries(index.names[type]).map(([id, name]) => ({ type, id, name, aka: aka.get(id) }))
+  )
+}
+
+/**
+ * Resolves a name or id to one asset. When it can't, returns what the tool
+ * should reply instead: the candidates for an ambiguous name, or — for a name
+ * that matches nothing — the results of searching for it, so the model doesn't
+ * spend a round calling search itself.
+ */
+async function findAsset(raw: string, ctx: ToolContext, types?: AssetType[]): Promise<{ asset: FoundAsset } | { reply: unknown }> {
+  const withHref = (a: AssetEntry): FoundAsset => ({ ...a, href: assetHref(a.type, a.id) })
+  const m = matchAsset(await loadAssetCatalog(), raw, types)
+  if (m.kind === "found") return { asset: withHref(m.asset) }
+  if (m.kind === "ambiguous") {
+    return {
+      reply: {
+        lookedFor: raw,
+        note: `"${raw}" matches ${m.matches.length} records. Call again with the one you mean (its id or exact name), or ask the user which one.`,
+        matches: m.matches.slice(0, 10).map((a) => ({ id: a.id, ...assetLinkRef(withHref(a)) })),
+      },
+    }
+  }
+  const found = await searchRecords(raw, undefined, ctx).catch((e) => {
+    if (e instanceof ToolInputError) return { total: 0, rows: [] }
+    throw e
+  })
+  return {
+    reply: found.total
+      ? {
+          lookedFor: raw,
+          note: `Nothing is named "${raw}", so it was searched for instead (results below). If one of these is what was meant, call again with its id.`,
+          search: { total: found.total, rows: found.rows },
+        }
+      : { lookedFor: raw, note: `Nothing is named "${raw}", and searching for it found nothing. It may not be tracked in HomeCenter.` },
+  }
+}
+
+/** A property's own rows plus those of the equipment installed there. */
+async function propertyScope(propertyId: string) {
+  const equipment = await prisma.equipment.findMany({ where: { propertyId }, select: { id: true } })
+  return {
+    OR: [
+      { assetType: "PROPERTY" as const, assetId: propertyId },
+      { assetType: "EQUIPMENT" as const, assetId: { in: equipment.map((e) => e.id) } },
+    ],
+  }
+}
+
+/** Where-clause and reply header for the optional asset of warranty_status / maintenance_status. */
+async function assetScope(a: { asset?: string; assetType?: string }, ctx: ToolContext) {
+  const assetType = a.assetType ? toAssetType(a.assetType) : undefined
+  if (!a.asset) return { where: assetType ? { assetType } : {} }
+  const found = await findAsset(a.asset, ctx, assetType ? [assetType] : undefined)
+  if ("reply" in found) return found
+  const { asset } = found
+  return asset.type === "PROPERTY"
+    ? { where: await propertyScope(asset.id), header: { property: assetLinkRef(asset), note: "Includes equipment installed at this property." } }
+    : { where: { assetType: asset.type, assetId: asset.id }, header: { for: assetLinkRef(asset) } }
+}
 
 const COST_GROUPS = {
   asset: "asset", year: "date:year", quarter: "date:quarter", month: "date:month", category: "category", vendor: "vendor",
@@ -97,14 +173,22 @@ export const costSummaryTool = defineTool({
   schema: z.object({
     groupBy: z.array(z.enum(["asset", "year", "quarter", "month", "category", "vendor"])).min(1).max(2),
     assetType: z.string().optional().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
-    assetIds: z.array(z.string()).max(20).optional().describe("Only these assets or people (ids from search)."),
+    assets: z.array(z.string()).max(20).optional().describe("Only these assets or people: names as the user said them (e.g. ['Commuter', 'Work Truck']) or ids."),
     from: z.string().optional().describe("YYYY-MM-DD, inclusive."),
     to: z.string().optional().describe("YYYY-MM-DD, inclusive."),
     category: z.string().optional().describe("A service category, e.g. REPAIR, ROUTINE, OFFICE_VISIT."),
   }),
+  aliases: { assetIds: "assets" },
   label: () => "Adding up costs…",
-  async run(a) {
-    const assetType = a.assetType ? toAssetType(a.assetType) : undefined
+  async run(a, ctx) {
+    const found: FoundAsset[] = []
+    for (const raw of a.assets ?? []) {
+      const f = await findAsset(raw, ctx, a.assetType ? [toAssetType(a.assetType)] : undefined)
+      if ("reply" in f) return f.reply
+      found.push(f.asset)
+    }
+    // Named assets set the scope themselves; a mismatched type guess would only empty the result.
+    const assetType = a.assetType && !found.length ? toAssetType(a.assetType) : undefined
     const from = optionalDay(a.from, "from")
     const to = optionalDay(a.to, "to")
     const category = a.category
@@ -116,7 +200,7 @@ export const costSummaryTool = defineTool({
       loadAssetIndex(),
       prisma.equipment.findMany({ where: { propertyId: { not: null } }, select: { id: true, propertyId: true } }),
     ])
-    const assetIds = a.assetIds?.map((id) => resolveAssetId(index.names, id, assetType ? [assetType] : undefined))
+    const assetIds = found.map((f) => f.id)
     // Equipment spending counts toward its property whenever properties are what's being asked about.
     const wanted = assetIds?.length ? new Set(assetIds) : null
     const rolled = rollUpToProperty(
@@ -136,6 +220,7 @@ export const costSummaryTool = defineTool({
     attachAssets(index, rows)
 
     return {
+      ...(found.length ? { assets: found.map(assetLinkRef) } : {}),
       currency: "USD",
       ...(rows.some((r) => r.viaEquipmentId) ? { note: "Property totals include spending on equipment at the property." } : {}),
       ...aggregateRows(
@@ -151,23 +236,27 @@ export const assetHistoryTool = defineTool({
   name: "asset_history",
   description:
     "Full chronological history of one property, vehicle, equipment item or person: service records with costs, warranty start/expiry, maintenance completed, " +
-    "and for people conditions, medications and immunizations (logged observations like meltdowns are in observation_log). Get the id from search first.",
+    "and for people conditions, medications and immunizations (logged observations like meltdowns are in observation_log). " +
+    "Pass the name as the user said it; no search needed.",
   schema: z.object({
-    assetType: z.string().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
-    assetId: z.string().min(1),
+    asset: z.string().min(1).describe(ASSET_ARG),
+    assetType: z.string().optional().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON, if known."),
     from: z.string().optional().describe("YYYY-MM-DD, inclusive."),
     to: z.string().optional().describe("YYYY-MM-DD, inclusive."),
   }),
+  aliases: { assetId: "asset" },
   label: () => "Reading the history…",
-  async run(a) {
-    const type = toAssetType(a.assetType)
-    const report = await loadReport(type, a.assetId)
-    if (!report) throw new ToolInputError(`No ${type.toLowerCase()} with id "${a.assetId}". Use search to find the id.`)
+  async run(a, ctx) {
+    const found = await findAsset(a.asset, ctx, a.assetType ? [toAssetType(a.assetType)] : undefined)
+    if ("reply" in found) return found.reply
+    const { type, id: assetId } = found.asset
+    const report = await loadReport(type, assetId)
+    if (!report) throw new ToolInputError(`No ${type.toLowerCase()} with id "${assetId}". Use search to find the id.`)
     const range = { from: optionalDay(a.from, "from"), to: optionalDay(a.to, "to") }
 
     // A property's history and spending include the equipment installed there.
     const equipment = type === "PROPERTY"
-      ? await prisma.equipment.findMany({ where: { propertyId: a.assetId }, select: { id: true, name: true } })
+      ? await prisma.equipment.findMany({ where: { propertyId: assetId }, select: { id: true, name: true } })
       : []
     const equipmentName = new Map(equipment.map((e) => [e.id, e.name]))
     const equipmentServices = equipment.length
@@ -183,7 +272,7 @@ export const assetHistoryTool = defineTool({
       }))
 
     return {
-      asset: compact({ type, id: a.assetId, name: report.asset.name, subtitle: report.asset.subtitle, href: assetHref(type, a.assetId) }),
+      asset: compact({ type, id: assetId, name: report.asset.name, subtitle: report.asset.subtitle, href: assetHref(type, assetId) }),
       totalCost: cents(sum(report.costRows) + equipmentServices.reduce((total, s) => total + (s.cost ?? 0), 0)),
       ...(equipment.length ? { note: "Includes service on equipment at this property." } : {}),
       rows: [...buildTimeline(report, range), ...equipmentEvents].sort((x, y) => x.date.localeCompare(y.date)),
@@ -195,22 +284,21 @@ export const warrantyStatusTool = defineTool({
   name: "warranty_status",
   description:
     "Warranties with their state worked out for you: expired, expiring (within withinDays, default 180 ≈ 6 months) or active. " +
-    "Use for 'which warranties expire soon', 'is the generator still under warranty', 'what has expired'.",
+    "Use for 'which warranties expire soon', 'is the generator still under warranty', 'what has expired'. " +
+    "For a property, the equipment installed there is included.",
   schema: z.object({
     status: z.enum(["expiring", "expired", "active", "all"]).optional().describe("Default expiring."),
     withinDays: z.coerce.number().int().min(0).max(3650).optional().describe("Window for 'expiring'. Default 180."),
-    assetType: z.string().optional(),
-    assetId: z.string().optional(),
+    assetType: z.string().optional().describe("Only this kind: PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
+    asset: z.string().optional().describe(ASSET_ARG),
   }),
+  aliases: { assetId: "asset" },
   label: () => "Checking warranties…",
   async run(a, ctx) {
-    const assetType = a.assetType ? toAssetType(a.assetType) : undefined
+    const scope = await assetScope(a, ctx)
+    if ("reply" in scope) return scope.reply
     const index = await loadAssetIndex()
-    const assetId = a.assetId ? resolveAssetId(index.names, a.assetId, assetType ? [assetType] : undefined) : undefined
-    const warranties = await prisma.warranty.findMany({
-      where: { ...(assetType ? { assetType } : {}), ...(assetId ? { assetId } : {}) },
-      orderBy: { expirationDate: "asc" },
-    })
+    const warranties = await prisma.warranty.findMany({ where: scope.where, orderBy: { expirationDate: "asc" } })
     const status = a.status ?? "expiring"
     const withinDays = a.withinDays ?? 180
     const rows = warranties
@@ -229,7 +317,7 @@ export const warrantyStatusTool = defineTool({
           href: assetHref(w.assetType, w.assetId),
         })
       )
-    return { asOf: toDay(ctx.now), status, withinDays, total: rows.length, rows }
+    return { ...scope.header, asOf: toDay(ctx.now), status, withinDays, total: rows.length, rows }
   },
 })
 
@@ -237,21 +325,22 @@ export const maintenanceStatusTool = defineTool({
   name: "maintenance_status",
   description:
     "Maintenance and checkup schedules with their due state (overdue, due_soon, ok), including mileage/hour-based due for vehicles. " +
-    "Use for 'what's due', 'what's overdue', 'when is the next oil change'.",
+    "Use for 'what's due', 'what's overdue', 'when is the next oil change'. For a property, the equipment installed there is included.",
   schema: z.object({
     status: z.enum(["overdue", "due_soon", "all"]).optional().describe("Default all."),
-    assetType: z.string().optional(),
-    assetId: z.string().optional(),
+    assetType: z.string().optional().describe("Only this kind: PROPERTY, VEHICLE, EQUIPMENT or PERSON."),
+    asset: z.string().optional().describe(ASSET_ARG),
     withinDays: z.coerce.number().int().min(0).max(3650).optional().describe("Only items overdue or due within this many days."),
   }),
+  aliases: { assetId: "asset" },
   label: () => "Checking maintenance…",
   async run(a, ctx) {
-    const assetType = a.assetType ? toAssetType(a.assetType) : undefined
+    const scope = await assetScope(a, ctx)
+    if ("reply" in scope) return scope.reply
     const index = await loadAssetIndex()
-    const assetId = a.assetId ? resolveAssetId(index.names, a.assetId, assetType ? [assetType] : undefined) : undefined
     const [schedules, mileage] = await Promise.all([
       prisma.maintenanceSchedule.findMany({
-        where: { isActive: true, ...(assetType ? { assetType } : {}), ...(assetId ? { assetId } : {}) },
+        where: { isActive: true, ...scope.where },
         orderBy: { nextDueDate: "asc" },
       }),
       loadVehicleMileage(),
@@ -287,7 +376,7 @@ export const maintenanceStatusTool = defineTool({
           href: assetHref(s.assetType, s.assetId),
         })
       )
-    return { asOf: toDay(ctx.now), total: rows.length, rows }
+    return { ...scope.header, asOf: toDay(ctx.now), total: rows.length, rows }
   },
 })
 

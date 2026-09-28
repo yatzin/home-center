@@ -38,6 +38,7 @@ describe("compileWhere", () => {
     expect(compileWhere("vehicle", [{ field: "year", op: "gte", value: 2015 }], ctx)).toEqual({
       where: { AND: [{ year: { gte: 2015 } }] },
       assetName: null,
+      related: [],
     })
   })
 
@@ -134,7 +135,7 @@ describe("compileWhere", () => {
 
   it("rejects deeper paths, list-of-children filters and excluded relations", () => {
     expect(() => compileWhere("medication", [{ field: "person.primaryProvider.name", op: "eq", value: "x" }], ctx)).toThrow(/one relation/)
-    expect(() => compileWhere("vehicle", [{ field: "serviceRecords.cost", op: "gt", value: 1 }], ctx)).toThrow(/query serviceRecord/)
+    expect(() => compileWhere("vehicle", [{ field: "serviceRecords.cost", op: "gt", value: 1 }], ctx)).toThrow(/"op":"has"/)
     expect(() => compileWhere("serviceRecord", [{ field: "createdBy.email", op: "eq", value: "x" }], ctx)).toThrow(ToolInputError)
   })
 
@@ -142,8 +143,36 @@ describe("compileWhere", () => {
     expect(compileWhere("serviceRecord", [{ field: "asset.name", op: "contains", value: "Civic" }], ctx)).toEqual({
       where: {},
       assetName: { op: "contains", value: "Civic" },
+      related: [],
     })
     expect(() => compileWhere("serviceRecord", [{ field: "asset.year", op: "eq", value: 1 }], ctx)).toThrow(/asset.name/)
+  })
+
+  it("keeps rows that have, or lack, related rows on a list relation", () => {
+    expect(compileWhere("person", [{ field: "allergies", op: "has" }], ctx).where).toEqual({ AND: [{ allergies: { some: {} } }] })
+    expect(
+      compileWhere("person", [{ field: "medications", op: "hasNone", value: [{ field: "name", op: "contains", value: "statin" }] }], ctx).where
+    ).toEqual({ AND: [{ medications: { none: { AND: [{ name: { contains: "statin" } }] } } }] })
+  })
+
+  it("hands has/hasNone on an asset's warranties or service records to the executor", () => {
+    const r = compileWhere("vehicle", [
+      { field: "make", op: "eq", value: "Honda" },
+      { field: "serviceRecords", op: "hasNone", value: [{ field: "date", op: "gte", value: "2026-07-01" }] },
+    ], ctx)
+    expect(r.where).toEqual({ AND: [{ make: { startsWith: "Honda", endsWith: "Honda" } }] })
+    expect(r.related).toEqual([
+      { entity: "serviceRecord", assetType: "VEHICLE", op: "hasNone", where: { AND: [{ date: { gte: new Date("2026-07-01T00:00:00Z") } }] } },
+    ])
+  })
+
+  it("explains has/hasNone misuse", () => {
+    expect(() => compileWhere("medication", [{ field: "person", op: "has" }], ctx)).toThrow(/single record/)
+    expect(() => compileWhere("vehicle", [{ field: "make", op: "has" }], ctx)).toThrow(/list relation/)
+    expect(() => compileWhere("equipment", [{ field: "warranties", op: "has", value: "active" }], ctx)).toThrow(/list of conditions/)
+    expect(() =>
+      compileWhere("property", [{ field: "equipment", op: "has", value: [{ field: "warranties", op: "hasNone" }] }], ctx)
+    ).toThrow(/can't be nested/)
   })
 
   it("never lets the model widen notification scope", () => {

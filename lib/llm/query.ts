@@ -12,10 +12,18 @@ export class ToolInputError extends Error {
   }
 }
 
-export const OPS = ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "isNull"] as const
+export const OPS = ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "isNull", "has", "hasNone"] as const
 export type Op = (typeof OPS)[number]
 export type Filter = { field: string; op: Op; value?: unknown }
 export type ToolContext = { userId: string; now: Date }
+/**
+ * has/hasNone on an asset's warranties, service records or schedules. Those
+ * point back at the asset by assetType + assetId, which Prisma can't follow
+ * as a relation, so the executor looks up the matching asset ids.
+ */
+export type RelatedFilter = { entity: EntityKey; assetType: string; op: "has" | "hasNone"; where: Row }
+
+const EXISTS_OPS: Op[] = ["has", "hasNone"]
 
 export const DEFAULT_LIMIT = 25
 export const MAX_LIMIT = 100
@@ -169,18 +177,51 @@ function fieldWhere(field: FieldDef, isKey: boolean, key: string, name: string, 
   }
 }
 
+/** The optional conditions on the related rows of a has/hasNone filter. */
+function relatedConditions(f: Filter, related: EntityKey): Filter[] {
+  if (f.value === undefined || f.value === null) return []
+  const list = Array.isArray(f.value) ? f.value : null
+  if (!list || !list.every((c) => c && typeof c === "object" && "field" in c && "op" in c)) {
+    const fields = Object.entries(ENTITIES[related].fields)
+    const [name] = fields.find(([, d]) => d.type === "date") ?? fields[0]
+    throw new ToolInputError(
+      `${f.op} on ${f.field} takes an optional list of conditions on the related ${related} rows, e.g. [{"field":"${name}","op":"gte","value":"2026-01-01"}].`
+    )
+  }
+  if (list.some((c) => EXISTS_OPS.includes((c as Filter).op))) throw new ToolInputError("has/hasNone can't be nested inside another has/hasNone.")
+  return list as Filter[]
+}
+
 export function compileWhere(
   entity: EntityKey,
   filters: Filter[] | undefined,
   ctx: ToolContext
-): { where: Row; assetName: { op: Op; value: unknown } | null } {
+): { where: Row; assetName: { op: Op; value: unknown } | null; related: RelatedFilter[] } {
   const def = ENTITIES[entity]
   const and: Row[] = []
+  const related: RelatedFilter[] = []
   let assetName: { op: Op; value: unknown } | null = null
 
   for (const f of filters ?? []) {
     const [head, tail, ...rest] = String(f.field).split(".")
     if (rest.length) throw new ToolInputError(`Filters can follow one relation at most ("${f.field}").`)
+
+    if (EXISTS_OPS.includes(f.op)) {
+      const rel = tail ? undefined : def.relations[head]
+      if (!rel) {
+        const lists = Object.entries(def.relations).filter(([, r]) => r.kind === "many" || r.kind === "assetChildren").map(([n]) => n)
+        throw new ToolInputError(`${f.op} goes on a list relation of ${entity}: ${lists.join(", ") || "none"}. Put conditions on its rows in value.`)
+      }
+      if (rel.kind === "one" || rel.kind === "asset") {
+        throw new ToolInputError(`"${head}" is a single record, not a list; filter ${head}.<field> instead.`)
+      }
+      const sub = compileWhere(rel.entity, relatedConditions(f, rel.entity), ctx)
+      if (sub.assetName) throw new ToolInputError(`asset.name can't be used inside ${f.op}.`)
+      const op = f.op as RelatedFilter["op"]
+      if (rel.kind === "assetChildren") related.push({ entity: rel.entity, assetType: def.assetType!, op, where: sub.where })
+      else and.push({ [head]: { [op === "has" ? "some" : "none"]: sub.where } })
+      continue
+    }
 
     if (!tail) {
       const { field, isKey } = filterField(entity, head)
@@ -198,7 +239,9 @@ export function compileWhere(
       continue
     }
     if (rel.kind === "assetChildren") {
-      throw new ToolInputError(`Can't filter ${entity} by ${head}; query ${rel.entity} with an asset.name filter instead.`)
+      throw new ToolInputError(
+        `Can't filter ${entity} by ${head}.${tail} directly. For ${entity} rows with matching ${head}, use {"field":"${head}","op":"has","value":[{"field":"${tail}","op":"…","value":…}]}.`
+      )
     }
 
     const { field, isKey } = filterField(rel.entity, tail)
@@ -208,7 +251,7 @@ export function compileWhere(
 
   // Scope goes last and is ANDed, so nothing the model sends can widen it.
   if (def.scope) and.push(def.scope(ctx))
-  return { where: and.length ? { AND: and } : {}, assetName }
+  return { where: and.length ? { AND: and } : {}, assetName, related }
 }
 
 export function compileSort(entity: EntityKey, sort?: { field: string; dir?: "asc" | "desc" }): Row {
