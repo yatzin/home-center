@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { z } from "zod/v4"
-import { runAgent, type AgentOptions } from "./agent"
+import { MAX_TOOL_ROUNDS, runAgent, type AgentOptions } from "./agent"
 import { EMPTY_ANSWER, FINAL_NUDGE, recheckNudge } from "./prompt"
 import { defineTool } from "./tools/registry"
 import type { AgentEvent, ChatFn, ChatRequest, ChatResult, HistoryMessage } from "./types"
@@ -107,25 +107,35 @@ describe("runAgent", () => {
     ])
   })
 
-  it("forces a final answer after five tool rounds", async () => {
-    const rounds = Array.from({ length: 5 }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, `q${i}`)] }))
+  it("forces a final answer after the default number of tool rounds", async () => {
+    const n = MAX_TOOL_ROUNDS
+    const rounds = Array.from({ length: n }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, `q${i}`)] }))
     const { chat, requests } = scripted([...rounds, { content: "Best effort.", toolCalls: [] }])
     const events = await run(chat)
-    expect(requests).toHaveLength(6)
-    expect(requests[5].toolChoice).toBe("none")
-    expect(requests[5].messages.at(-1)).toEqual({ role: "user", content: FINAL_NUDGE })
-    expect(events.at(-1)).toEqual({ type: "done", rounds: 6, model: "m" })
-    expect(events.filter((e) => e.type === "status")).toHaveLength(5)
+    expect(requests).toHaveLength(n + 1)
+    expect(requests[n].toolChoice).toBe("none")
+    expect(requests[n].messages.at(-1)).toEqual({ role: "user", content: FINAL_NUDGE })
+    expect(events.at(-1)).toEqual({ type: "done", rounds: n + 1, model: "m" })
+    expect(events.filter((e) => e.type === "status")).toHaveLength(n)
+  })
+
+  it("honours a configured number of rounds", async () => {
+    const rounds = Array.from({ length: 3 }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, `q${i}`)] }))
+    const { chat, requests } = scripted([...rounds, { content: "Best effort.", toolCalls: [] }])
+    const events = await run(chat, { maxRounds: 3 })
+    expect(requests).toHaveLength(4)
+    expect(requests[3].toolChoice).toBe("none")
+    expect(events.at(-1)).toEqual({ type: "done", rounds: 4, model: "m" })
   })
 
   it("falls back when the final answer is empty", async () => {
-    const rounds = Array.from({ length: 5 }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, "q")] }))
+    const rounds = Array.from({ length: MAX_TOOL_ROUNDS }, (_, i) => ({ content: "", toolCalls: [toolCall(`c${i}`, "q")] }))
     // A server that ignores tool_choice "none" and calls a tool anyway.
     const { chat } = scripted([...rounds, { content: "", toolCalls: [toolCall("c9", "q")] }])
     const events = await run(chat)
     expect(events.slice(-2)).toEqual([
       { type: "delta", text: EMPTY_ANSWER },
-      { type: "done", rounds: 6, model: "m" },
+      { type: "done", rounds: MAX_TOOL_ROUNDS + 1, model: "m" },
     ])
   })
 

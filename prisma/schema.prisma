@@ -511,6 +511,8 @@ model LlmSettings {
   systemPrompt String?
   /// Per-question time limit in seconds; null = the built-in default.
   timeoutSeconds Int?
+  /// Most rounds of lookups per question; null = the built-in default.
+  maxToolRounds Int?
   /// JSON object merged into every request, e.g. {"chat_template_kwargs":{"enable_thinking":true}}.
   extraBody    String?
   updatedAt    DateTime @updatedAt

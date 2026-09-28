@@ -90,6 +90,7 @@ export default async function SettingsPage() {
             maxTokens: llm.maxTokens?.toString() ?? "",
             systemPrompt: llm.systemPrompt ?? "",
             timeoutSeconds: llm.timeoutSeconds?.toString() ?? "",
+            maxToolRounds: llm.maxToolRounds?.toString() ?? "",
             extraBody: llm.extraBody ? JSON.stringify(parseExtraBody(llm.extraBody), null, 2) : "",
           }}
           hasStoredKey={llm.hasStoredKey}

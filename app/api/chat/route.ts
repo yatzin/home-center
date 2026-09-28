@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { NextResponse } from "next/server"
 import { loadLlmConfig } from "@/lib/llm/config"
-import { DEFAULT_TIMEOUT_SECONDS, isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
+import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS, isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
 import { createChatClient } from "@/lib/llm/client"
 import { agentErrorMessage, LlmError } from "@/lib/llm/errors"
 import { runAgent } from "@/lib/llm/agent"
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     extraBody: parseExtraBody(config.extraBody),
   })
   const model = config.model
+  const maxRounds = config.maxToolRounds ?? DEFAULT_TOOL_ROUNDS
   const userId = session.user.id
   const encoder = new TextEncoder()
   const started = Date.now()
@@ -68,12 +69,13 @@ export async function POST(request: Request) {
         const now = new Date()
         await runAgent({
           history: parsed.data.messages,
-          systemPrompt: buildSystemPrompt({ now, extra: config.systemPrompt }),
+          systemPrompt: buildSystemPrompt({ now, extra: config.systemPrompt, maxRounds }),
           chat,
           tools: TOOLS,
           ctx: { userId, now },
           signal,
           model,
+          maxRounds,
           emit: (event) => {
             if (event.type === "status") used.push(event.tool)
             if (event.type === "done") rounds = event.rounds

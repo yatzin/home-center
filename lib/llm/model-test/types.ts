@@ -58,7 +58,15 @@ export type ModelTestCase = {
 
 /** Streamed from /api/assistant-test to the page, one JSON object per line. */
 export type ModelTestEvent =
-  | { type: "start"; total: number; model: string; temperature: number | null; extraBody: string | null; today: string }
+  | {
+      type: "start"
+      total: number
+      model: string
+      temperature: number | null
+      extraBody: string | null
+      maxToolRounds: number
+      today: string
+    }
   | { type: "warmup"; ms: number; ok: boolean; error?: string }
   | { type: "running"; key: string; id: string; rep: number }
   | {

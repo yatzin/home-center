@@ -22,6 +22,7 @@ export async function loadLlmConfig(): Promise<LlmConfig> {
     maxTokens: row?.maxTokens ?? null,
     systemPrompt: row?.systemPrompt ?? null,
     timeoutSeconds: row?.timeoutSeconds ?? null,
+    maxToolRounds: row?.maxToolRounds ?? null,
     extraBody: row?.extraBody ?? null,
     apiKey,
     hasStoredKey: Boolean(row?.apiKeyEnc),

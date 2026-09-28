@@ -18,6 +18,8 @@ export type RunDeps = {
   tools: RegisteredTool[]
   systemPrompt: string
   signal: AbortSignal
+  /** Lookup rounds for "end-to-end" cases; the agent's default when absent. */
+  maxRounds?: number
 }
 
 const argsOf = (raw: string): Record<string, unknown> => (parseToolArgs(raw) as Record<string, unknown> | undefined) ?? { _unparsed: raw }
@@ -76,6 +78,7 @@ export async function runCase(c: ModelTestCase, deps: RunDeps): Promise<Outcome>
     ctx: { userId: "model-test", now: new Date() },
     signal: deps.signal,
     model: "model-test",
+    maxRounds: deps.maxRounds,
     emit: (e) => {
       if (e.type === "delta") answer += e.text
       if (e.type === "reset") answer = ""

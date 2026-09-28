@@ -19,6 +19,8 @@ export function ModelTest({
   savedModel,
   savedTemperature,
   savedExtraBody,
+  savedRounds,
+  defaultRounds,
   serverHost,
   timeoutSeconds,
   catalog,
@@ -28,13 +30,15 @@ export function ModelTest({
   savedModel: string
   savedTemperature: string
   savedExtraBody: string
+  savedRounds: string
+  defaultRounds: number
   serverHost: string
   timeoutSeconds: number
   catalog: ModelTestCatalogEntry[]
   stages: StageInfo[]
   today: string
 }) {
-  const t = useModelTest({ savedModel, savedTemperature, savedExtraBody, catalog, stages })
+  const t = useModelTest({ savedModel, savedTemperature, savedExtraBody, savedRounds, catalog, stages })
 
   const started = t.liveSummary.total > 0 || t.startLine !== null
   const progressPct = t.liveSummary.total ? Math.round((t.liveSummary.completed / t.liveSummary.total) * 100) : 0
@@ -75,6 +79,20 @@ export function ModelTest({
                 placeholder="Provider default"
                 disabled={t.running}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="mt-rounds">Lookup rounds</Label>
+              <Input
+                id="mt-rounds"
+                type="number"
+                min={3}
+                max={12}
+                value={t.rounds}
+                onChange={(e) => t.setRounds(e.target.value)}
+                placeholder={`Default (${defaultRounds})`}
+                disabled={t.running}
+              />
+              <p className="text-xs text-muted-foreground">Used by the “Whole conversation” tests.</p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="mt-extra">Extra request JSON</Label>

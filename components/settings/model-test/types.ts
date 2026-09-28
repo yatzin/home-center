@@ -41,6 +41,8 @@ export type HistoryEntry = {
   avgMs: number
   perStage: { stage: Stage; passed: number; total: number }[]
   stoppedEarly: boolean
+  /** Lookup rounds the run allowed; absent in runs saved before the setting existed. */
+  rounds?: number
   /** Topics the run was limited to; absent = every topic. */
   topics?: string[]
 }
