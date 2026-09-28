@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react"
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { loadLlmConfig } from "@/lib/llm/config"
-import { DEFAULT_TIMEOUT_SECONDS } from "@/lib/llm/settings-schema"
+import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS } from "@/lib/llm/settings-schema"
 import { MODEL_TEST_CATALOG } from "@/lib/llm/model-test/cases"
 import { MODEL_TEST_TODAY, STAGES } from "@/lib/llm/model-test/types"
 import { ModelTest } from "@/components/settings/model-test/model-test"
@@ -41,6 +41,8 @@ export default async function AssistantTestPage() {
           savedModel={config.model ?? ""}
           savedTemperature={config.temperature?.toString() ?? ""}
           savedExtraBody={config.extraBody ?? ""}
+          savedRounds={config.maxToolRounds?.toString() ?? ""}
+          defaultRounds={DEFAULT_TOOL_ROUNDS}
           serverHost={new URL(config.baseUrl).host}
           timeoutSeconds={config.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS}
           catalog={MODEL_TEST_CATALOG}

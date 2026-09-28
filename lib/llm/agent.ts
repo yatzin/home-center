@@ -1,11 +1,12 @@
 import type { ToolContext } from "./query"
+import { DEFAULT_TOOL_ROUNDS } from "./settings-schema"
 import { EMPTY_ANSWER, FINAL_NUDGE, recheckNudge } from "./prompt"
 import { impossibleLinks, unlink, unverifiedLinks } from "./link-check"
 import { runToolCall, toOpenAiTools, toolLabel, type RegisteredTool } from "./tools/registry"
 import type { AgentEvent, ChatFn, ChatMessage, HistoryMessage } from "./types"
 import type { ChatRequest, ChatResult } from "./types"
 
-export const MAX_TOOL_ROUNDS = 5
+export const MAX_TOOL_ROUNDS = DEFAULT_TOOL_ROUNDS
 export const HISTORY_LIMIT = 20
 export const MAX_CALLS_PER_ROUND = 8
 const TOO_MANY_CALLS = JSON.stringify({ error: `Too many tool calls in one turn — at most ${MAX_CALLS_PER_ROUND}.` })

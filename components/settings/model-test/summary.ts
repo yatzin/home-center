@@ -59,6 +59,7 @@ export function buildHistoryEntry(args: {
   model: string
   temperature: number | string | null
   extraBody: string | null
+  rounds?: number
   results: Record<string, CaseRunState>
   catalog: ModelTestCatalogEntry[]
   repeat: number
@@ -82,6 +83,7 @@ export function buildHistoryEntry(args: {
     model: args.model,
     temperature: fieldTemperature(args.temperature),
     extraBody: args.extraBody ?? "",
+    ...(args.rounds !== undefined ? { rounds: args.rounds } : {}),
     passed,
     total,
     scorePct: total ? Math.round((passed / total) * 100) : 0,
@@ -106,6 +108,7 @@ function isHistoryEntry(v: unknown): v is HistoryEntry {
     typeof e.avgMs === "number" &&
     Array.isArray(e.perStage) &&
     typeof e.stoppedEarly === "boolean" &&
+    (e.rounds === undefined || typeof e.rounds === "number") &&
     (e.topics === undefined || (Array.isArray(e.topics) && e.topics.every((t) => typeof t === "string")))
   )
 }

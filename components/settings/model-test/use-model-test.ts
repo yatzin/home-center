@@ -17,27 +17,30 @@ type LiveSummary = {
   avgMs: number
 }
 
-type StartMeta = { model: string; temperature: number | null; extraBody: string | null }
+type StartMeta = { model: string; temperature: number | null; extraBody: string | null; maxToolRounds: number }
 
 export function useModelTest(args: {
   savedModel: string
   savedTemperature: string
   savedExtraBody: string
+  savedRounds: string
   catalog: ModelTestCatalogEntry[]
   stages: StageInfo[]
 }) {
-  const { savedModel, savedTemperature, savedExtraBody, catalog, stages } = args
+  const { savedModel, savedTemperature, savedExtraBody, savedRounds, catalog, stages } = args
 
   // --- settings form (this test only; never persisted) -------------------
   const [model, setModel] = useState(savedModel)
   const [temperature, setTemperature] = useState(savedTemperature)
   const [extraBody, setExtraBody] = useState(savedExtraBody)
+  const [rounds, setRounds] = useState(savedRounds)
 
   const resetToSaved = useCallback(() => {
     setModel(savedModel)
     setTemperature(savedTemperature)
     setExtraBody(savedExtraBody)
-  }, [savedModel, savedTemperature, savedExtraBody])
+    setRounds(savedRounds)
+  }, [savedModel, savedTemperature, savedExtraBody, savedRounds])
 
   const applyPreset = useCallback((value: string) => setExtraBody(value), [])
 
@@ -134,6 +137,7 @@ export function useModelTest(args: {
         model: meta?.model ?? (model || savedModel),
         temperature: meta?.temperature ?? temperature,
         extraBody: meta?.extraBody ?? (extraBody || null),
+        rounds: meta?.maxToolRounds,
         results: resultsRef.current,
         catalog,
         repeat,
@@ -150,11 +154,11 @@ export function useModelTest(args: {
 
   const handleEvent = useCallback((event: ModelTestEvent) => {
     if (event.type === "start") {
-      startMetaRef.current = { model: event.model, temperature: event.temperature, extraBody: event.extraBody }
+      startMetaRef.current = { model: event.model, temperature: event.temperature, extraBody: event.extraBody, maxToolRounds: event.maxToolRounds }
       setWarmup({ status: "pending" })
       const tempLabel = formatTemperature(event.temperature)
       const extraLabel = event.extraBody ? shortJson(event.extraBody, 80) : "no extra JSON"
-      setStartLine(`Testing: ${event.model} · temp ${tempLabel} · ${extraLabel}`)
+      setStartLine(`Testing: ${event.model} · temp ${tempLabel} · ${event.maxToolRounds} lookup rounds · ${extraLabel}`)
     } else if (event.type === "warmup") {
       setWarmup({ status: event.ok ? "ok" : "warn", ms: event.ms, error: event.error })
     } else if (event.type === "running") {
@@ -211,6 +215,7 @@ export function useModelTest(args: {
         model,
         temperature,
         extraBody,
+        maxToolRounds: rounds,
         caseIds: allSelected ? undefined : ids,
         repeat,
       }
@@ -248,7 +253,7 @@ export function useModelTest(args: {
         }
       })()
     },
-    [buildPending, catalog.length, extraBody, finalizeRun, handleEvent, model, repeat, selectedCatalog, temperature]
+    [buildPending, catalog.length, extraBody, finalizeRun, handleEvent, model, repeat, rounds, selectedCatalog, temperature]
   )
 
   const stop = useCallback(() => abortRef.current?.abort(), [])
@@ -261,6 +266,7 @@ export function useModelTest(args: {
     setModel(entry.model)
     setTemperature(entry.temperature)
     setExtraBody(entry.extraBody)
+    if (entry.rounds !== undefined) setRounds(String(entry.rounds))
   }, [])
 
   const clearHistoryEntries = useCallback(() => {
@@ -288,6 +294,8 @@ export function useModelTest(args: {
     setTemperature,
     extraBody,
     setExtraBody,
+    rounds,
+    setRounds,
     applyPreset,
     resetToSaved,
 

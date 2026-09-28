@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 import { testLlmConnection, updateLlmSettings } from "@/lib/actions/llm-settings"
-import { DEFAULT_TIMEOUT_SECONDS, LLM_PRESETS } from "@/lib/llm/settings-schema"
+import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS, TOOL_ROUNDS_RANGE, LLM_PRESETS } from "@/lib/llm/settings-schema"
 
 type Values = {
   enabled: boolean
@@ -22,6 +22,7 @@ type Values = {
   maxTokens: string
   systemPrompt: string
   timeoutSeconds: string
+  maxToolRounds: string
   extraBody: string
 }
 
@@ -183,6 +184,20 @@ export function LlmSettings({
                   <FormControl><Input type="number" min={30} max={900} placeholder={String(DEFAULT_TIMEOUT_SECONDS)} {...field} /></FormControl>
                   <FormDescription className="text-xs">
                     Raise it for slow local models. Once a reply starts, it also stops if the server then sends nothing for 60 seconds.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="maxToolRounds" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Lookup rounds per question</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={TOOL_ROUNDS_RANGE.min} max={TOOL_ROUNDS_RANGE.max} placeholder={String(DEFAULT_TOOL_ROUNDS)} {...field} />
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    How many times the assistant may go back for more data before it must answer. More helps follow-up and
+                    multi-step questions; simple questions stop early either way.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

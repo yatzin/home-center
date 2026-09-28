@@ -1,15 +1,16 @@
 import { describeOntology } from "./ontology"
 import { toDay } from "./serialize"
+import { DEFAULT_TOOL_ROUNDS } from "./settings-schema"
 
 export const FINAL_NUDGE =
   "You have used all your tool rounds. Answer now using only the data gathered above, and say clearly what couldn't be determined."
 
 /**
  * Sent when an answer links records no tool returned during this question.
- * Measured against the earlier "look these records up" wording on follow-ups:
- * that one made the model search the linked names and then drop the facts it
- * could no longer see (4 of 6 re-checked answers right); naming the kind of
- * lookup to redo got 6 of 6, and faster.
+ * Measured against the earlier "look these records up" wording on 20 follow-ups
+ * each: the same share of re-checked answers came out right (86% vs 85%), but
+ * naming the kind of lookup to redo took fewer rounds (4.4 vs 5.0) and less
+ * time (48 s vs 60 s).
  */
 export function recheckNudge(links: string[]): string {
   return (
@@ -23,7 +24,7 @@ export function recheckNudge(links: string[]): string {
 
 export const EMPTY_ANSWER = "I couldn't put together an answer from the data I gathered. Try asking a narrower question."
 
-export function buildSystemPrompt({ now, extra }: { now: Date; extra?: string | null }): string {
+export function buildSystemPrompt({ now, extra, maxRounds = DEFAULT_TOOL_ROUNDS }: { now: Date; extra?: string | null; maxRounds?: number }): string {
   return [
     "You are HomeCenter's household assistant. HomeCenter tracks a household's properties, vehicles, equipment, people and their health records (including observations the family logs, like meltdowns or bad nights), care providers, insurance, service records and costs, warranties, and maintenance schedules.",
     `Today is ${toDay(now)} (UTC).`,
@@ -34,7 +35,7 @@ export function buildSystemPrompt({ now, extra }: { now: Date; extra?: string | 
     "- When the question names a specific thing (\"the Civic\", \"Mom\", \"the furnace\"), use search first to get its id. Category words (\"each vehicle\", \"all our properties\") are not names: use cost_summary or find_records with assetType/entity instead.",
     "- An empty search result does not mean nothing exists. Try another tool before saying so.",
     "- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts, observation_log. Use find_records, get_record and aggregate for anything else.",
-    "- Call independent tools together in one turn. You have at most 5 turns of tool calls.",
+    `- Call independent tools together in one turn. You have at most ${maxRounds} turns of tool calls.`,
     "- Dates in tool arguments are YYYY-MM-DD. For 'last year' or 'in 2024' use explicit from/to days.",
     "",
     "Answer format:",

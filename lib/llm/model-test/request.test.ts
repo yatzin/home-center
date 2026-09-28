@@ -1,20 +1,21 @@
 import { describe, expect, it } from "vitest"
 import { parseModelTestRequest } from "./request"
 
-const saved = { model: "saved-model", temperature: 0.2, extraBody: '{"a":1}' }
+const saved = { model: "saved-model", temperature: 0.2, extraBody: '{"a":1}', maxToolRounds: null }
 const ids = ["one", "two"]
 
 describe("parseModelTestRequest", () => {
   it("falls back to saved settings for anything not sent", () => {
     expect(parseModelTestRequest({}, saved, ids)).toEqual({
       ok: true,
-      value: { model: "saved-model", temperature: 0.2, extraBody: '{"a":1}', caseIds: null, repeat: 1 },
+      value: { model: "saved-model", temperature: 0.2, extraBody: '{"a":1}', maxToolRounds: null, caseIds: null, repeat: 1 },
     })
   })
 
   it("applies overrides; blank temperature and extra JSON mean none", () => {
-    const r = parseModelTestRequest({ model: "other", temperature: "", extraBody: "", caseIds: ["two"], repeat: 3 }, saved, ids)
-    expect(r).toEqual({ ok: true, value: { model: "other", temperature: null, extraBody: null, caseIds: ["two"], repeat: 3 } })
+    const r = parseModelTestRequest({ model: "other", temperature: "", extraBody: "", maxToolRounds: "10", caseIds: ["two"], repeat: 3 }, saved, ids)
+    expect(r).toEqual({ ok: true, value: { model: "other", temperature: null, extraBody: null, maxToolRounds: 10, caseIds: ["two"], repeat: 3 } })
+    expect(parseModelTestRequest({ maxToolRounds: "1" }, saved, ids)).toEqual({ ok: false, error: "Lookup rounds must be a whole number from 3 to 12." })
     expect(parseModelTestRequest({ model: "", temperature: "0.7" }, saved, ids)).toMatchObject({ value: { model: "saved-model", temperature: 0.7 } })
   })
 
@@ -28,6 +29,6 @@ describe("parseModelTestRequest", () => {
 
   it("ignores any attempt to change the server or key", () => {
     const r = parseModelTestRequest({ baseUrl: "http://evil", apiKey: "x" }, saved, ids)
-    expect(r.ok && Object.keys(r.value)).toEqual(["model", "temperature", "extraBody", "caseIds", "repeat"])
+    expect(r.ok && Object.keys(r.value)).toEqual(["model", "temperature", "extraBody", "maxToolRounds", "caseIds", "repeat"])
   })
 })

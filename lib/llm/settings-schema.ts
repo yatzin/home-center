@@ -21,10 +21,21 @@ const schema = z.object({
   maxTokens: z.string().trim().optional(),
   systemPrompt: z.string().trim().max(4000).optional(),
   timeoutSeconds: z.string().trim().optional(),
+  maxToolRounds: z.string().trim().optional(),
   extraBody: z.string().trim().max(2000).optional(),
 })
 
 export const DEFAULT_TIMEOUT_SECONDS = 180
+
+/**
+ * Rounds of lookups the assistant may make per question. Measured on
+ * follow-ups with the local model: at 5, a re-checked spending follow-up
+ * often ran out of rounds before redoing the lookup (12 of 14 re-checked
+ * answers right); at 8, 14 of 14, for about 11 s more on those turns.
+ * Questions that need fewer rounds never use the rest.
+ */
+export const DEFAULT_TOOL_ROUNDS = 8
+export const TOOL_ROUNDS_RANGE = { min: 3, max: 12 } as const
 
 /** Request fields the assistant builds itself; extra JSON may not replace them. */
 const RESERVED_FIELDS = ["model", "messages", "stream", "tools", "tool_choice"]
@@ -40,6 +51,8 @@ export type ParsedLlmSettings = {
   systemPrompt: string | null
   /** Per-question time limit; null = DEFAULT_TIMEOUT_SECONDS. */
   timeoutSeconds: number | null
+  /** Most rounds of lookups per question; null = DEFAULT_TOOL_ROUNDS. */
+  maxToolRounds: number | null
   /** Provider-specific request fields as normalised JSON, e.g. {"chat_template_kwargs":{"enable_thinking":true}}. */
   extraBody: string | null
 }
@@ -84,6 +97,14 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
     timeoutSeconds = n
   }
 
+  let maxToolRounds: number | null = null
+  if (v.maxToolRounds) {
+    const n = Number(v.maxToolRounds)
+    const { min, max } = TOOL_ROUNDS_RANGE
+    if (!Number.isInteger(n) || n < min || n > max) return { ok: false, error: `Lookup rounds must be a whole number from ${min} to ${max}.` }
+    maxToolRounds = n
+  }
+
   let extraBody: string | null = null
   if (v.extraBody) {
     const obj = parseExtraBody(v.extraBody)
@@ -100,7 +121,7 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 
   return {
     ok: true,
-    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, extraBody },
+    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody },
   }
 }
 

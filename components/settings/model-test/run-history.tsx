@@ -37,6 +37,7 @@ export function RunHistory({
                     <TableHead>When</TableHead>
                     <TableHead>Model</TableHead>
                     <TableHead>Temp</TableHead>
+                    <TableHead>Rounds</TableHead>
                     <TableHead>Extra JSON</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead>Avg</TableHead>
@@ -55,6 +56,7 @@ export function RunHistory({
                         )}
                       </TableCell>
                       <TableCell>{entry.temperature || "default"}</TableCell>
+                      <TableCell>{entry.rounds ?? "—"}</TableCell>
                       <TableCell className="max-w-48 truncate font-mono text-xs" title={entry.extraBody || undefined}>
                         {shortJson(entry.extraBody, 40)}
                       </TableCell>

@@ -23,6 +23,7 @@ describe("parseLlmSettings", () => {
         maxTokens: 1500,
         systemPrompt: "Be brief.",
         timeoutSeconds: null,
+        maxToolRounds: null,
         extraBody: null,
       },
     })
@@ -34,7 +35,7 @@ describe("parseLlmSettings", () => {
       ok: true,
       value: {
         enabled: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
-        timeoutSeconds: null, extraBody: null,
+        timeoutSeconds: null, maxToolRounds: null, extraBody: null,
       },
     })
   })
@@ -89,6 +90,9 @@ describe("originChanged", () => {
 describe("time limit and extra request JSON", () => {
   it("accepts a time limit in range", () => {
     expect(parseLlmSettings({ ...base, timeoutSeconds: "300" })).toMatchObject({ ok: true, value: { timeoutSeconds: 300 } })
+    expect(parseLlmSettings({ ...base, maxToolRounds: "10" })).toMatchObject({ ok: true, value: { maxToolRounds: 10 } })
+    expect(parseLlmSettings({ ...base, maxToolRounds: "2" })).toEqual({ ok: false, error: "Lookup rounds must be a whole number from 3 to 12." })
+    expect(parseLlmSettings({ ...base, maxToolRounds: "6.5" })).toMatchObject({ ok: false })
     expect(parseLlmSettings({ ...base, timeoutSeconds: "10" })).toEqual({
       ok: false,
       error: "Time limit must be a whole number of seconds from 30 to 900.",

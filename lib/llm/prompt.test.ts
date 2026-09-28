@@ -18,4 +18,9 @@ describe("buildSystemPrompt", () => {
     expect(p.trimEnd().endsWith("Answer in Spanish.")).toBe(true)
     expect(buildSystemPrompt({ now, extra: null })).not.toContain("administrator")
   })
+
+  it("tells the model how many lookup rounds it has", () => {
+    expect(buildSystemPrompt({ now })).toContain("at most 8 turns of tool calls")
+    expect(buildSystemPrompt({ now, maxRounds: 4 })).toContain("at most 4 turns of tool calls")
+  })
 })

@@ -12,6 +12,8 @@ const schema = z.object({
   temperature: z.string().trim().max(10).optional(),
   /** Absent = saved value. Blank = none. */
   extraBody: z.string().trim().max(2000).optional(),
+  /** Absent = saved value. Blank = the built-in default. */
+  maxToolRounds: z.string().trim().max(3).optional(),
   /** Absent = every case. */
   caseIds: z.array(z.string().max(100)).max(500).optional(),
   repeat: z.number().int().min(1).max(5).optional(),
@@ -19,8 +21,15 @@ const schema = z.object({
 
 export type ModelTestRequest = z.infer<typeof schema>
 
-type Saved = { model: string | null; temperature: number | null; extraBody: string | null }
-export type ModelTestSettings = { model: string; temperature: number | null; extraBody: string | null; caseIds: string[] | null; repeat: number }
+type Saved = { model: string | null; temperature: number | null; extraBody: string | null; maxToolRounds: number | null }
+export type ModelTestSettings = {
+  model: string
+  temperature: number | null
+  extraBody: string | null
+  maxToolRounds: number | null
+  caseIds: string[] | null
+  repeat: number
+}
 
 export function parseModelTestRequest(
   body: unknown,
@@ -32,7 +41,7 @@ export function parseModelTestRequest(
   const r = parsed.data
 
   const checked = parseLlmSettings(
-    { enabled: false, baseUrl: "", model: "", temperature: r.temperature ?? "", extraBody: r.extraBody ?? "" },
+    { enabled: false, baseUrl: "", model: "", temperature: r.temperature ?? "", extraBody: r.extraBody ?? "", maxToolRounds: r.maxToolRounds ?? "" },
     { requireComplete: false }
   )
   if (!checked.ok) return checked
@@ -52,6 +61,7 @@ export function parseModelTestRequest(
       model,
       temperature: r.temperature === undefined ? saved.temperature : checked.value.temperature,
       extraBody: r.extraBody === undefined ? saved.extraBody : checked.value.extraBody,
+      maxToolRounds: r.maxToolRounds === undefined ? saved.maxToolRounds : checked.value.maxToolRounds,
       caseIds: r.caseIds ?? null,
       repeat: r.repeat ?? 1,
     },
