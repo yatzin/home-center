@@ -115,22 +115,22 @@ export default async function DashboardPage() {
           <SummaryCard icon={<HeartPulse />} label="People" value={personCount} href="/assets/people" thumbnails={peopleThumbnails} compact hero />
           <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact hero />
         </div>
-        {/* Service Records, Active Warranties, and Due stack vertically in a
+        {/* Records, Active Warranties, and Due stack vertically in a
             narrow far-right column on wide screens; on narrower ones they run
             side by side so they don't stretch the page tall. */}
         <div className="col-span-2 grid grid-cols-3 gap-4 sm:col-span-3 lg:col-span-1 lg:flex lg:flex-col">
-          <SummaryCard icon={<Wrench />} label="Service Records" value={recordCount} href="/records" compact />
+          <SummaryCard icon={<Wrench />} label="Records" value={recordCount} href="/records" compact />
           <SummaryCard icon={<ShieldCheck />} label="Active Warranties" value={warrantyCount} href="/warranties" compact />
           <SummaryCard icon={<Calendar />} label="Due (30d)" value={maintenanceCount} href="/maintenance" urgent={maintenanceCount > 0} compact />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Upcoming maintenance */}
+        {/* Upcoming reminders */}
         <Card className="py-5">
           <CardHeader className="px-5 pb-1">
             <CardTitle className="flex items-center justify-between text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
-              Upcoming Maintenance
+              Reminders
               <Link
                 href="/maintenance"
                 className="rounded-md px-2 py-1 text-xs font-medium normal-case tracking-normal text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"

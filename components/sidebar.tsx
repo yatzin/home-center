@@ -21,7 +21,7 @@ const navItems: NavItem[] = [
   { href: "/assets/people", label: "People", icon: HeartPulse, section: "Health" },
   { href: "/providers", label: "Providers", icon: Stethoscope },
   { href: "/insurance", label: "Insurance", icon: ShieldPlus },
-  { href: "/records", label: "Service Records", icon: Wrench, section: "Activity" },
+  { href: "/records", label: "Records", icon: Wrench, section: "Activity" },
   { href: "/costs", label: "Costs", icon: PiggyBank },
   { href: "/warranties", label: "Warranties", icon: ShieldCheck },
   { href: "/maintenance", label: "Maintenance", icon: Calendar },
