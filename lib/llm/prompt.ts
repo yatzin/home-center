@@ -6,10 +6,10 @@ export const FINAL_NUDGE =
 
 /**
  * Sent when an answer links records no tool returned during this question.
- * Measured against the earlier "look these records up" wording on follow-ups:
- * that one made the model search the linked names and then drop the facts it
- * could no longer see (4 of 6 re-checked answers right); naming the kind of
- * lookup to redo got 6 of 6, and faster.
+ * Measured against the earlier "look these records up" wording on 20 follow-ups
+ * each: the same share of re-checked answers came out right (86% vs 85%), but
+ * naming the kind of lookup to redo took fewer rounds (4.4 vs 5.0) and less
+ * time (48 s vs 60 s).
  */
 export function recheckNudge(links: string[]): string {
   return (
