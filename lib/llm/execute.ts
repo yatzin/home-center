@@ -5,7 +5,7 @@ import type { AssetType } from "@/app/generated/prisma/client"
 import { ENTITIES, type EntityKey, type Row } from "./ontology"
 import {
   CHILD_LIMIT, compileInclude, compileLimit, compileSort, compileWhere, entityDef, selectFor, ToolInputError,
-  type Filter, type Op, type ToolContext,
+  type Filter, type Op, type RelatedFilter, type ToolContext,
 } from "./query"
 import { serializeRow } from "./serialize"
 import { aggregateRows, groupSpec, measureSpec, type MeasureInput } from "./aggregate"
@@ -52,13 +52,27 @@ function assetNameClause(index: AssetIndex, filter: { op: Op; value: unknown }):
   return or.length ? { OR: or } : null
 }
 
+/** Ids of assets of the given type that have at least one related row matching `where`. */
+async function assetIdsWith(r: RelatedFilter): Promise<string[]> {
+  const rows = await delegate(r.entity).findMany({ where: { AND: [{ assetType: r.assetType }, r.where] }, select: { assetId: true } })
+  return [...new Set(rows.map((row) => String(row.assetId)))]
+}
+
 /** null means "an asset.name filter matched nothing" — the answer is empty. */
-function resolveWhere(entity: EntityKey, filters: Filter[] | undefined, ctx: ToolContext, index: AssetIndex | null): Row | null {
-  const { where, assetName } = compileWhere(entity, filters, ctx)
-  if (!assetName) return where
-  if (!index) throw new ToolInputError(`${entity} has no asset to filter on.`)
-  const clause = assetNameClause(index, assetName)
-  return clause ? { AND: [where, clause] } : null
+async function resolveWhere(entity: EntityKey, filters: Filter[] | undefined, ctx: ToolContext, index: AssetIndex | null): Promise<Row | null> {
+  const { where, assetName, related } = compileWhere(entity, filters, ctx)
+  const and: Row[] = [where]
+  for (const r of related) {
+    const ids = await assetIdsWith(r)
+    and.push({ id: r.op === "has" ? { in: ids } : { notIn: ids } })
+  }
+  if (assetName) {
+    if (!index) throw new ToolInputError(`${entity} has no asset to filter on.`)
+    const clause = assetNameClause(index, assetName)
+    if (!clause) return null
+    and.push(clause)
+  }
+  return and.length === 1 ? where : { AND: and }
 }
 
 async function attachChildren(entity: EntityKey, rows: Row[], children: { relation: string; entity: EntityKey }[]) {
@@ -89,7 +103,7 @@ export type FindArgs = {
 export async function findRecords(args: FindArgs, ctx: ToolContext) {
   const { key, def } = entityDef(args.entity)
   const index = def.polymorphic ? await loadAssetIndex() : null
-  const where = resolveWhere(key, args.filters, ctx, index)
+  const where = await resolveWhere(key, args.filters, ctx, index)
   if (!where) return { entity: key, total: 0, rows: [], note: NO_ASSET_MATCH }
 
   const plan = compileInclude(key, args.include, args.fields)
@@ -123,7 +137,7 @@ export async function aggregateRecords(args: AggregateArgs, ctx: ToolContext) {
   const measure = measureSpec(key, args.measure)
   const groups = (args.groupBy ?? []).map((g) => groupSpec(key, g))
   const index = def.polymorphic ? await loadAssetIndex() : null
-  const where = resolveWhere(key, args.filters, ctx, index)
+  const where = await resolveWhere(key, args.filters, ctx, index)
   if (!where) return { entity: key, groups: [], total: { value: 0, count: 0 }, note: NO_ASSET_MATCH }
 
   const select = Object.assign(

@@ -10,9 +10,13 @@ import { defineTool, FALLBACK_LABEL } from "./registry"
 const entity = z.string().describe(`Entity name. One of: ${ENTITY_KEYS.join(", ")}.`)
 
 const filter = z.object({
-  field: z.string().describe("A field, or relation.field one hop away, e.g. person.name, asset.name, property.name."),
+  field: z.string().describe(
+    "A field, or relation.field one hop away (e.g. person.name, asset.name). With has/hasNone: a list relation such as warranties, serviceRecords, medications, equipment."
+  ),
   op: z.enum(OPS),
-  value: z.unknown().optional().describe("Dates as YYYY-MM-DD. An array for 'in'. true/false for isNull."),
+  value: z.unknown().optional().describe(
+    "Dates as YYYY-MM-DD. An array for 'in'. true/false for isNull. For has/hasNone: optional conditions on the related rows, e.g. [{\"field\":\"date\",\"op\":\"gte\",\"value\":\"2026-07-01\"}]."
+  ),
 })
 
 const plural = (raw: string) => {
@@ -28,7 +32,9 @@ export const findRecordsTool = defineTool({
   description:
     "List rows of any entity with filters, sorting and related rows. Use for questions the shortcut tools don't cover. " +
     'Example: {"entity":"allergy","filters":[{"field":"substance","op":"contains","value":"penicillin"}],"include":["person"]}. ' +
-    'Service records for one asset: {"entity":"serviceRecord","filters":[{"field":"asset.name","op":"contains","value":"Civic"}]}.',
+    'Service records for one asset: {"entity":"serviceRecord","filters":[{"field":"asset.name","op":"contains","value":"Civic"}]}. ' +
+    'Rows that have, or lack, related rows: equipment with no warranty {"entity":"equipment","filters":[{"field":"warranties","op":"hasNone"}]}; ' +
+    'vehicles with no service since July 1 {"entity":"vehicle","filters":[{"field":"serviceRecords","op":"hasNone","value":[{"field":"date","op":"gte","value":"2026-07-01"}]}]}.',
   schema: z.object({
     entity,
     filters: z.array(filter).max(10).optional(),

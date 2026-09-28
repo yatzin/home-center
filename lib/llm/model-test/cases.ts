@@ -30,6 +30,10 @@ function dateForms(iso: string): string[] {
 const hasGroup = (a: Record<string, unknown>, name: string) => Array.isArray(a.groupBy) && a.groupBy.includes(name)
 const typeIs = (a: Record<string, unknown>, type: string) => typeof a.assetType === "string" && a.assetType.toUpperCase() === type
 const statusIs = (a: Record<string, unknown>, status: string) => typeof a.status === "string" && a.status.toLowerCase() === status
+/** A has/hasNone filter on the given relation, e.g. {"field":"warranties","op":"hasNone"}. */
+const hasExistsFilter = (a: Record<string, unknown>, relation: string, op: string) =>
+  Array.isArray(a.filters) &&
+  a.filters.some((f) => f && typeof f === "object" && (f as { field?: unknown }).field === relation && (f as { op?: unknown }).op === op)
 const fromIsYear = (a: Record<string, unknown>, year: string) => typeof a.from === "string" && a.from.startsWith(year)
 
 // Realistic shortcut-tool result shapes (see lib/llm/tools/shortcuts.ts run() functions).
@@ -240,6 +244,23 @@ export const MODEL_TEST_CASES: ModelTestCase[] = [
     title: "Checks a property's maintenance by its name",
     question: "What maintenance is coming up at 123 Maple St?",
     check: orSearchFirst(calledTool("maintenance_status", (a) => (a.asset || a.assetId ? null : "it wasn't limited to the property"))),
+  },
+
+  {
+    id: "choice-no-warranty-hasnone",
+    stage: "tool-choice",
+    category: "Warranties",
+    title: "Finds items that have no warranty at all",
+    question: "Which equipment has no warranty on file?",
+    check: calledTool("find_records", (a) => (hasExistsFilter(a, "warranties", "hasNone") ? null : "it didn't filter for equipment without warranties")),
+  },
+  {
+    id: "choice-no-recent-service-hasnone",
+    stage: "tool-choice",
+    category: "Maintenance",
+    title: "Finds vehicles with no service since a date",
+    question: "Which vehicles haven't had any service since March 1?",
+    check: calledTool("find_records", (a) => (hasExistsFilter(a, "serviceRecords", "hasNone") ? null : "it didn't filter for vehicles without recent service")),
   },
 
   // -------------------------------------------------------------------- answer
