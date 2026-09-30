@@ -17,7 +17,8 @@ export function Markdown({ children }: { children: string }) {
         unwrapDisallowed
         components={{
           a: ({ href, children }) =>
-            href && href.startsWith("/") && !href.startsWith("//") ? (
+            // /api/files/… are downloads, not pages: plain link in a new tab.
+            href && href.startsWith("/") && !href.startsWith("//") && !href.startsWith("/api/") ? (
               <Link href={href}>{children}</Link>
             ) : (
               <a href={href} target="_blank" rel="noopener noreferrer">

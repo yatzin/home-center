@@ -30,7 +30,7 @@ import { defineTool } from "./registry"
 // so answers agree with what the app shows.
 
 const assetTypeField = ENTITIES.serviceRecord.fields.assetType
-const toAssetType = (v: string) => coerceValue(assetTypeField, "assetType", v) as AssetType
+export const toAssetType = (v: string) => coerceValue(assetTypeField, "assetType", v) as AssetType
 const optionalDay = (v: string | undefined, name: string) => (v ? requireDay(v, name) : null)
 /** Stored dates go to the model as YYYY-MM-DD even when the value has a non-midnight time. */
 const dayOrNull = (d: Date | null | undefined) => (d ? toDay(d) : null)
@@ -88,9 +88,9 @@ async function searchRecords(query: string, entities: string[] | undefined, ctx:
 
 // --- assets by name -----------------------------------------------------------
 
-const ASSET_ARG = "A property, vehicle, equipment item or person: its name as the user said it (e.g. 'Civic', 'Gas Furnace', 'Lake Cabin') or an id."
-type FoundAsset = AssetEntry & { href: string }
-const assetLinkRef = (a: FoundAsset) => ({ type: a.type, name: a.name, href: a.href })
+export const ASSET_ARG = "A property, vehicle, equipment item or person: its name as the user said it (e.g. 'Civic', 'Gas Furnace', 'Lake Cabin') or an id."
+export type FoundAsset = AssetEntry & { href: string }
+export const assetLinkRef = (a: FoundAsset) => ({ type: a.type, name: a.name, href: a.href })
 
 async function loadAssetCatalog(): Promise<AssetEntry[]> {
   const [index, vehicles] = await Promise.all([
@@ -109,7 +109,7 @@ async function loadAssetCatalog(): Promise<AssetEntry[]> {
  * that matches nothing — the results of searching for it, so the model doesn't
  * spend a round calling search itself.
  */
-async function findAsset(raw: string, ctx: ToolContext, types?: AssetType[]): Promise<{ asset: FoundAsset } | { reply: unknown }> {
+export async function findAsset(raw: string, ctx: ToolContext, types?: AssetType[]): Promise<{ asset: FoundAsset } | { reply: unknown }> {
   const withHref = (a: AssetEntry): FoundAsset => ({ ...a, href: assetHref(a.type, a.id) })
   const m = matchAsset(await loadAssetCatalog(), raw, types)
   if (m.kind === "found") return { asset: withHref(m.asset) }
