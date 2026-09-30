@@ -14,6 +14,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Local login** — no third-party account required, your data stays on your hardware
 - **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
 - **AI assistant** — optional chat that answers questions about your data ("what did we spend on the truck last year?", "which meds need refills?") using any OpenAI-compatible model, including local ones via Ollama or LM Studio
+- **Search inside uploaded documents** — the assistant reads manuals, receipts and policies, with OCR for photos and scans
 
 ## Screenshots
 
@@ -178,6 +179,26 @@ thinking in llama.cpp or vLLM, or `{"reasoning_effort": "low"}` for OpenAI
 reasoning models.
 
 Chats stay in your browser tab and are never stored on the server.
+
+### Document search (optional)
+
+HomeCenter reads the text of uploaded files in the background — PDF, Word
+(.doc/.docx), OpenDocument, PowerPoint, Excel, RTF, text/CSV, and photos or
+scanned PDFs via OCR — and indexes it so the assistant can search it. It runs
+entirely inside the container; nothing is sent anywhere until the assistant
+uses a passage to answer a question.
+
+**Settings → Documents** turns indexing and OCR on or off and shows progress.
+**Settings → Assistant** decides whether the assistant may read documents at
+all, and separately whether it may read files attached to health records (off
+by default).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SEARCH_INDEX_PATH` | next to the database (`/data/search-index.db`) | The keyword index. Derived data: it doesn't need backing up and is rebuilt automatically if missing. |
+| `DOCUMENT_REINDEX_HOURS` | `6` | How often to pick up missed or failed files. `0` disables the timer (uploads are still indexed immediately). |
+
+Not indexed: iWork files, .zip, legacy .xls/.ppt and HEIC photos.
 
 ## Updating
 
