@@ -24,6 +24,8 @@ const schema = z.object({
   timeoutSeconds: z.string().trim().optional(),
   maxToolRounds: z.string().trim().optional(),
   extraBody: z.string().trim().max(2000).optional(),
+  documentsEnabled: z.boolean().optional(),
+  healthDocumentsEnabled: z.boolean().optional(),
 })
 
 export const DEFAULT_TIMEOUT_SECONDS = 180
@@ -58,6 +60,10 @@ export type ParsedLlmSettings = {
   maxToolRounds: number | null
   /** Provider-specific request fields as normalised JSON, e.g. {"chat_template_kwargs":{"enable_thinking":true}}. */
   extraBody: string | null
+  /** Offer the document tools to the assistant. */
+  documentsEnabled: boolean
+  /** Include files on health records in those tools. */
+  healthDocumentsEnabled: boolean
 }
 
 type Result = { ok: true; value: ParsedLlmSettings } | { ok: false; error: string }
@@ -126,7 +132,7 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
     ok: true,
     // Hidden only makes sense while off — turning the assistant on clears it,
     // rather than trusting the client to have disabled the checkbox.
-    value: { enabled: v.enabled, hidden: v.enabled ? false : (v.hidden ?? false), baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody },
+    value: { enabled: v.enabled, hidden: v.enabled ? false : (v.hidden ?? false), baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody, documentsEnabled: v.documentsEnabled ?? true, healthDocumentsEnabled: v.healthDocumentsEnabled ?? false },
   }
 }
 

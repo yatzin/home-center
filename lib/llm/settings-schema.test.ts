@@ -11,6 +11,18 @@ const base: LlmSettingsInput = {
 }
 
 describe("parseLlmSettings", () => {
+  it("defaults document access on and health documents off", () => {
+    const r = parseLlmSettings(base)
+    expect(r.ok && r.value.documentsEnabled).toBe(true)
+    expect(r.ok && r.value.healthDocumentsEnabled).toBe(false)
+  })
+
+  it("keeps the document switches as sent", () => {
+    const r = parseLlmSettings({ ...base, documentsEnabled: false, healthDocumentsEnabled: true })
+    expect(r.ok && r.value.documentsEnabled).toBe(false)
+    expect(r.ok && r.value.healthDocumentsEnabled).toBe(true)
+  })
+
   it("normalises a complete config", () => {
     const r = parseLlmSettings({ ...base, temperature: "0.2", maxTokens: "1500", systemPrompt: " Be brief. " })
     expect(r).toEqual({
@@ -26,6 +38,8 @@ describe("parseLlmSettings", () => {
         timeoutSeconds: null,
         maxToolRounds: null,
         extraBody: null,
+        documentsEnabled: true,
+        healthDocumentsEnabled: false,
       },
     })
   })
@@ -36,7 +50,7 @@ describe("parseLlmSettings", () => {
       ok: true,
       value: {
         enabled: false, hidden: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
-        timeoutSeconds: null, maxToolRounds: null, extraBody: null,
+        timeoutSeconds: null, maxToolRounds: null, extraBody: null, documentsEnabled: true, healthDocumentsEnabled: false,
       },
     })
   })

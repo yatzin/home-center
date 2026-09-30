@@ -25,6 +25,8 @@ export async function loadLlmConfig(): Promise<LlmConfig> {
     timeoutSeconds: row?.timeoutSeconds ?? null,
     maxToolRounds: row?.maxToolRounds ?? null,
     extraBody: row?.extraBody ?? null,
+    documentsEnabled: row?.documentsEnabled ?? true,
+    healthDocumentsEnabled: row?.healthDocumentsEnabled ?? false,
     apiKey,
     hasStoredKey: Boolean(row?.apiKeyEnc),
     keyUnreadable: Boolean(row?.apiKeyEnc) && apiKey === null,
