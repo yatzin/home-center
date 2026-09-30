@@ -9,6 +9,23 @@ export const UPLOAD_TYPES: Record<string, string> = {
   ".webp": "image/webp",
   ".heic": "image/heic",
   ".heif": "image/heif",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".dotx": "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+  ".odt": "application/vnd.oasis.opendocument.text",
+  ".rtf": "application/rtf",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ods": "application/vnd.oasis.opendocument.spreadsheet",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".odp": "application/vnd.oasis.opendocument.presentation",
+  ".pages": "application/x-iwork-pages-sffpages",
+  ".numbers": "application/x-iwork-numbers-sffnumbers",
+  ".key": "application/x-iwork-keynote-sffkey",
+  ".zip": "application/zip",
 }
 
 export function extensionForFilename(name: string): string | null {

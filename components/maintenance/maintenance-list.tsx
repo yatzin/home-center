@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -10,17 +10,21 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { Pencil, Trash2, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
+import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
 import { deleteMaintenanceSchedule, completeMaintenanceSchedule } from "@/lib/actions/maintenance"
 import { MaintenanceFormDialog } from "./maintenance-form-dialog"
+import { AttachmentList } from "@/components/attachments/attachment-list"
+import { AttachmentCount } from "@/components/attachments/attachment-count"
 import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
 import { scheduleDue, dueBadge, meterUnitShort, meterUnitNoun, type MileageIndex } from "@/lib/maintenance-due"
-import type { MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
+import type { Attachment, MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
 
-const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
+type MaintenanceScheduleWithAttachments = MaintenanceSchedule & { attachments: Attachment[] }
+
+const ACCESSORS: Record<string, Accessor<MaintenanceScheduleWithAttachments>> = {
   title: (s) => s.title,
   status: (s) => (s.nextDueDate ? new Date(s.nextDueDate).getTime() : null),
   nextDue: (s) => (s.nextDueDate ? new Date(s.nextDueDate).getTime() : null),
@@ -30,7 +34,7 @@ const ACCESSORS: Record<string, Accessor<MaintenanceSchedule>> = {
 const INITIAL_DIRS: Record<string, SortDir> = { lastCompleted: "desc" }
 
 interface Props {
-  schedules: MaintenanceSchedule[]
+  schedules: MaintenanceScheduleWithAttachments[]
   assetId: string
   assetType: AssetType
   currentMileage?: number | null
@@ -42,7 +46,7 @@ interface Props {
   openId?: string
 }
 
-function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undefined, meterUnit: MeterUnit) {
+function getStatus(s: MaintenanceScheduleWithAttachments, currentMileage: number | null | undefined, meterUnit: MeterUnit) {
   // One-entry index: this list only ever shows a single asset's schedules, and
   // the odometer is already on the page.
   const mileage: MileageIndex = new Map(
@@ -55,16 +59,24 @@ function getStatus(s: MaintenanceSchedule, currentMileage: number | null | undef
   return { ...badge, label: due.dueSoon ? "Due soon" : badge.label, icon }
 }
 
-export function MaintenanceList({ schedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, openId }: Props) {
-  const [editing, setEditing] = useState<MaintenanceSchedule | null>(null)
+export function MaintenanceList({ schedules: initialSchedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, openId }: Props) {
+  const [schedules, setSchedules] = useState(initialSchedules)
+  const [prevInitialSchedules, setPrevInitialSchedules] = useState(initialSchedules)
+  const [editing, setEditing] = useState<MaintenanceScheduleWithAttachments | null>(null)
   const [formOpen, setFormOpen] = useState(false)
   const [completing, setCompleting] = useState<MaintenanceSchedule | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!openId) return
-    const match = schedules.find((s) => s.id === openId)
+    const match = initialSchedules.find((s) => s.id === openId)
     if (match) { setEditing(match); setFormOpen(true) }
   }, [openId])
+
+  if (initialSchedules !== prevInitialSchedules) {
+    setPrevInitialSchedules(initialSchedules)
+    setSchedules(initialSchedules)
+  }
 
   const table = useClientTable({
     rows: schedules,
@@ -77,7 +89,17 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
   const showSource = !!equipment
   const equipmentNames = equipment ? Object.fromEntries(equipment.map((e) => [e.id, e.name])) : undefined
 
-  async function handleDelete(s: MaintenanceSchedule) {
+  const handleAttachmentDeleted = useCallback((scheduleId: string, attachmentId: string) => {
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId
+          ? { ...s, attachments: s.attachments.filter((a) => a.id !== attachmentId) }
+          : s
+      )
+    )
+  }, [])
+
+  async function handleDelete(s: MaintenanceScheduleWithAttachments) {
     if (!confirm(`Delete "${s.title}"?`)) return
     await deleteMaintenanceSchedule(s.id, s.assetType, s.assetId)
     toast.success("Schedule deleted.")
@@ -106,6 +128,7 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
                 <SortableTableHead column="nextDue" label="Next Due" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Interval</TableHead>
                 <SortableTableHead column="lastCompleted" label="Last Completed" sortState={table.sortState} onToggle={table.toggleSort} />
+                <TableHead>Files</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -113,9 +136,10 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
               {table.rows.map((s) => {
                 const status = getStatus(s, currentMileage, meterUnit)
                 const StatusIcon = status?.icon
+                const expanded = expandedId === s.id
                 return (
+                  <Fragment key={s.id}>
                   <TableRow
-                    key={s.id}
                     className="cursor-pointer"
                     onClick={() => { setEditing(s); setFormOpen(true) }}
                   >
@@ -164,6 +188,9 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
                     <TableCell className="whitespace-nowrap text-muted-foreground">
                       {s.lastCompletedDate ? new Date(s.lastCompletedDate).toLocaleDateString() : "—"}
                     </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <AttachmentCount attachments={s.attachments} onClick={() => setExpandedId(expanded ? null : s.id)} />
+                    </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="outline" size="sm" className="h-7 text-xs px-2"
@@ -178,9 +205,21 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
                           onClick={() => handleDelete(s)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={expanded ? "Hide details" : "Show details"} aria-expanded={expanded}
+                          onClick={() => setExpandedId(expanded ? null : s.id)}>
+                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
+                  {expanded && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={8 + (showSource ? 1 : 0)} className="bg-muted/30 whitespace-normal">
+                        <AttachmentList recordId={s.id} recordType="MAINTENANCE" attachments={s.attachments} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </Fragment>
                 )
               })}
             </TableBody>
@@ -204,6 +243,8 @@ export function MaintenanceList({ schedules, assetId, assetType, currentMileage,
         assetId={assetId}
         assetType={assetType}
         schedule={editing}
+        attachments={editing?.attachments ?? []}
+        onAttachmentDeleted={handleAttachmentDeleted}
         equipmentOptions={equipment}
         propertyName={propertyName}
         meterUnit={meterUnit}

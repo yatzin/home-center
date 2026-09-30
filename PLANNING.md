@@ -221,7 +221,7 @@ A containerized web application for households to track houses and vehicles: ser
 ```
 
 - Max file size: 25 MB per file (configurable via env var)
-- Accepted types: PDF, JPG, PNG, HEIC, WEBP
+- Accepted types: PDF, JPG, PNG, HEIC, WEBP, DOC/DOCX/DOTX/ODT/RTF/TXT, XLS/XLSX/ODS/CSV, PPT/PPTX/ODP, Pages/Numbers/Keynote, ZIP (see `lib/upload-types.ts`)
 - Files served via a Next.js API route that validates the requesting user's session before streaming the file — no direct static access
 - On record delete: files are deleted from disk (or archived to a `_deleted/` directory as a safety option)
 

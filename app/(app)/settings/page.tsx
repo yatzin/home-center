@@ -84,6 +84,7 @@ export default async function SettingsPage() {
           // The key itself is never sent — only whether one is stored.
           initial={{
             enabled: llm.enabled,
+            hidden: llm.hidden,
             baseUrl: llm.baseUrl ?? "",
             model: llm.model ?? "",
             temperature: llm.temperature?.toString() ?? "",

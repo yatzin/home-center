@@ -29,7 +29,7 @@ export default async function PropertyDetailPage({
   const [propertyServiceRecords, propertyWarranties, propertyMaintenanceSchedules, equipment] = await Promise.all([
     prisma.serviceRecord.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.warranty.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { expirationDate: "asc" } }),
-    prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "PROPERTY", isActive: true }, orderBy: { nextDueDate: "asc" } }),
+    prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "PROPERTY", isActive: true }, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
     prisma.equipment.findMany({ where: { propertyId: id }, select: { id: true, name: true } }),
   ])
 
@@ -49,6 +49,7 @@ export default async function PropertyDetailPage({
         }),
         prisma.maintenanceSchedule.findMany({
           where: { assetId: { in: equipmentIds }, assetType: "EQUIPMENT", isActive: true },
+          include: { attachments: true },
           orderBy: { nextDueDate: "asc" },
         }),
       ])

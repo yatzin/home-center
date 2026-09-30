@@ -7,7 +7,7 @@ import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { extensionForFilename, UPLOAD_TYPES } from "@/lib/upload-types"
 
-const RECORD_TYPES = ["SERVICE", "WARRANTY", "MAINTENANCE", "CONDITION", "INSURANCE", "OBSERVATION"] as const
+const RECORD_TYPES = ["SERVICE", "WARRANTY", "MAINTENANCE", "CONDITION", "INSURANCE", "OBSERVATION", "MEDICATION", "ALLERGY", "IMMUNIZATION"] as const
 type RecordType = (typeof RECORD_TYPES)[number]
 
 function isRecordType(v: string | null): v is RecordType {
@@ -23,6 +23,9 @@ async function recordExists(type: RecordType, id: string): Promise<boolean> {
   if (type === "MAINTENANCE") return !!(await prisma.maintenanceSchedule.findUnique(where))
   if (type === "CONDITION") return !!(await prisma.healthCondition.findUnique(where))
   if (type === "OBSERVATION") return !!(await prisma.observation.findUnique(where))
+  if (type === "MEDICATION") return !!(await prisma.medication.findUnique(where))
+  if (type === "ALLERGY") return !!(await prisma.allergy.findUnique(where))
+  if (type === "IMMUNIZATION") return !!(await prisma.immunization.findUnique(where))
   return !!(await prisma.insurancePolicy.findUnique(where))
 }
 
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
   }
   const ext = extensionForFilename(file.name)
   if (!ext) {
-    return NextResponse.json({ error: "File type not allowed. Use PDF, JPG, PNG, WEBP or HEIC." }, { status: 400 })
+    return NextResponse.json({ error: "File type not allowed." }, { status: 400 })
   }
   if (!(await recordExists(recordType, recordId))) {
     return NextResponse.json({ error: "Record not found" }, { status: 404 })
@@ -69,6 +72,9 @@ export async function POST(request: NextRequest) {
       healthConditionId: recordType === "CONDITION" ? recordId : null,
       insurancePolicyId: recordType === "INSURANCE" ? recordId : null,
       observationId: recordType === "OBSERVATION" ? recordId : null,
+      medicationId: recordType === "MEDICATION" ? recordId : null,
+      allergyId: recordType === "ALLERGY" ? recordId : null,
+      immunizationId: recordType === "IMMUNIZATION" ? recordId : null,
     },
   })
 

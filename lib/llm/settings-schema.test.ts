@@ -17,6 +17,7 @@ describe("parseLlmSettings", () => {
       ok: true,
       value: {
         enabled: true,
+        hidden: false,
         baseUrl: "https://api.openai.com/v1",
         model: "gpt-4o-mini",
         temperature: 0.2,
@@ -34,10 +35,20 @@ describe("parseLlmSettings", () => {
     expect(r).toEqual({
       ok: true,
       value: {
-        enabled: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
+        enabled: false, hidden: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
         timeoutSeconds: null, maxToolRounds: null, extraBody: null,
       },
     })
+  })
+
+  it("clears hidden when turning the assistant on", () => {
+    const r = parseLlmSettings({ ...base, hidden: true })
+    expect(r).toMatchObject({ ok: true, value: { enabled: true, hidden: false } })
+  })
+
+  it("keeps hidden while off", () => {
+    const r = parseLlmSettings({ ...base, enabled: false, baseUrl: "", model: "", hidden: true })
+    expect(r).toMatchObject({ ok: true, value: { enabled: false, hidden: true } })
   })
 
   it("rejects non-http URLs", () => {

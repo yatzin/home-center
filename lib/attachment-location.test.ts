@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { attachmentDir } from "./attachment-location"
 
-const base = { serviceRecordId: null, warrantyId: null, maintenanceScheduleId: null, healthConditionId: null, insurancePolicyId: null, observationId: null }
+const base = {
+  serviceRecordId: null, warrantyId: null, maintenanceScheduleId: null, healthConditionId: null,
+  insurancePolicyId: null, observationId: null, medicationId: null, allergyId: null, immunizationId: null,
+}
 
 describe("attachmentDir", () => {
   it("uses the foreign key that matches the record type", () => {
@@ -21,5 +24,11 @@ describe("attachmentDir", () => {
   it("locates condition and insurance files", () => {
     expect(attachmentDir({ ...base, recordType: "CONDITION", healthConditionId: "c1" })).toEqual(["condition", "c1"])
     expect(attachmentDir({ ...base, recordType: "INSURANCE", insurancePolicyId: "i1" })).toEqual(["insurance", "i1"])
+  })
+
+  it("locates medication, allergy and immunization files", () => {
+    expect(attachmentDir({ ...base, recordType: "MEDICATION", medicationId: "m1" })).toEqual(["medication", "m1"])
+    expect(attachmentDir({ ...base, recordType: "ALLERGY", allergyId: "a1" })).toEqual(["allergy", "a1"])
+    expect(attachmentDir({ ...base, recordType: "IMMUNIZATION", immunizationId: "i1" })).toEqual(["immunization", "i1"])
   })
 })

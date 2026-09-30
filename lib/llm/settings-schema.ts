@@ -12,6 +12,7 @@ export const LLM_PRESETS = [
 
 const schema = z.object({
   enabled: z.boolean(),
+  hidden: z.boolean().optional(),
   baseUrl: z.string().trim(),
   // Empty means "leave the stored key alone" — the browser never sees it.
   apiKey: z.string().optional(),
@@ -44,6 +45,8 @@ export type LlmSettingsInput = z.infer<typeof schema>
 
 export type ParsedLlmSettings = {
   enabled: boolean
+  /** Hides the assistant from the nav and header. Only meaningful while enabled is false. */
+  hidden: boolean
   baseUrl: string | null
   model: string | null
   temperature: number | null
@@ -121,7 +124,9 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 
   return {
     ok: true,
-    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody },
+    // Hidden only makes sense while off — turning the assistant on clears it,
+    // rather than trusting the client to have disabled the checkbox.
+    value: { enabled: v.enabled, hidden: v.enabled ? false : (v.hidden ?? false), baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody },
   }
 }
 

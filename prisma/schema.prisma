@@ -111,6 +111,9 @@ enum AttachmentRecordType {
   CONDITION
   INSURANCE
   OBSERVATION
+  MEDICATION
+  ALLERGY
+  IMMUNIZATION
 }
 
 enum NotificationType {
@@ -316,6 +319,8 @@ model Medication {
   prescriber   Provider?        @relation(fields: [prescriberId], references: [id], onDelete: SetNull)
   conditionId  String?
   condition    HealthCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+
+  attachments  Attachment[]
 }
 
 model Allergy {
@@ -329,6 +334,8 @@ model Allergy {
 
   personId String
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  attachments Attachment[]
 }
 
 model Immunization {
@@ -344,6 +351,8 @@ model Immunization {
 
   personId String
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  attachments Attachment[]
 }
 
 model InsurancePolicy {
@@ -468,6 +477,15 @@ model Attachment {
 
   observationId         String?
   observation           Observation?         @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  medicationId          String?
+  medication            Medication?          @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  allergyId             String?
+  allergy               Allergy?             @relation(fields: [allergyId], references: [id], onDelete: Cascade)
+
+  immunizationId        String?
+  immunization          Immunization?        @relation(fields: [immunizationId], references: [id], onDelete: Cascade)
 }
 
 // ─── Mail settings ────────────────────────────────────────────────────────────
@@ -497,6 +515,9 @@ model MailSettings {
 model LlmSettings {
   id           String   @id @default("singleton")
   enabled      Boolean  @default(false)
+  /// Hides the assistant from the nav and header while it's off. Only
+  /// meaningful while enabled is false — turning the assistant on clears it.
+  hidden       Boolean  @default(false)
   /// e.g. https://api.openai.com/v1 or http://localhost:11434/v1 — no trailing slash.
   baseUrl      String?
   /// AES-256-GCM via lib/secret-box.ts. Optional: local servers need none.

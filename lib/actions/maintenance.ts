@@ -42,10 +42,10 @@ export async function createMaintenanceSchedule(data: z.infer<typeof schema>) {
   if (!session) redirect("/login")
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
-  await prisma.maintenanceSchedule.create({ data: clean(parsed.data) })
+  const row = await prisma.maintenanceSchedule.create({ data: clean(parsed.data) })
   revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/maintenance")
-  return { success: true }
+  return { success: true, id: row.id }
 }
 
 export async function updateMaintenanceSchedule(id: string, data: z.infer<typeof schema>) {

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -9,7 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { deleteAttachment } from "@/lib/actions/attachments"
+import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { ActionResult, FieldConfig, FormValues } from "@/lib/form-types"
+import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
 
 // Base UI Select has no empty-string option, so "none" needs a sentinel.
 const NONE = "__none__"
@@ -27,15 +31,39 @@ interface Props {
   fields: FieldConfig[]
   initial: FormValues
   onSubmit: (values: FormValues) => Promise<ActionResult>
-  /** Rendered under the fields, e.g. attachments for a record that already exists. */
+  /** Rendered under the fields, e.g. extra content for a record that already exists. */
   children?: React.ReactNode
+  /** When set, shows an "Attach file" control: staged before save, uploaded once the record has an id. */
+  attachmentRecordType?: AttachmentRecordType
+  /** The record's id when editing; absent while creating (the id comes back from onSubmit instead). */
+  recordId?: string
+  attachments?: Attachment[]
 }
 
-export function EntityFormDialog({ open, onClose, title, submitLabel, successMessage, fields, initial, onSubmit, children }: Props) {
+function fileIcon(mimeType: string) {
+  if (mimeType.startsWith("image/")) return Image
+  return FileText
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+export function EntityFormDialog({ open, onClose, title, submitLabel, successMessage, fields, initial, onSubmit, children, attachmentRecordType, recordId, attachments: initialAttachments = [] }: Props) {
   const [values, setValues] = useState<FormValues>(initial)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [prevOpen, setPrevOpen] = useState(open)
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
+  const [createdRecordId, setCreatedRecordId] = useState<string | null>(null)
+  const [filePickerOpen, setFilePickerOpen] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
+
+  const existingAttachments = initialAttachments.filter((a) => !removedIds.has(a.id))
 
   // Reset whenever the dialog opens, so it shows the record being edited (or a
   // blank form) rather than whatever was typed last time.
@@ -44,7 +72,38 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
     if (open) {
       setValues(initial)
       setErrors({})
+      setStagedFiles([])
+      setRemovedIds(new Set())
+      setCreatedRecordId(null)
     }
+  }
+
+  function openFilePicker() {
+    // The native OS file picker moves focus outside the dialog's DOM, which would
+    // otherwise trigger Base UI's modal focus-out dismissal and close the dialog
+    // before the file selection is even processed.
+    setFilePickerOpen(true)
+    window.addEventListener("focus", () => setFilePickerOpen(false), { once: true })
+    fileInputRef.current?.click()
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files) return
+    setStagedFiles((prev) => [...prev, ...Array.from(files)])
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  function removeStagedFile(index: number) {
+    setStagedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleDeleteExisting(attachment: Attachment) {
+    if (!confirm(`Remove "${attachment.originalName}"?`)) return
+    const result = await deleteAttachment(attachment.id)
+    if (result?.error) { toast.error(result.error); return }
+    setRemovedIds((prev) => new Set(prev).add(attachment.id))
+    toast.success("Attachment removed.")
   }
 
   function set(name: string, value: string) {
@@ -77,6 +136,35 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
         }
         return
       }
+
+      const savedId = recordId ?? createdRecordId ?? result.id
+      if (savedId && !recordId && !createdRecordId) setCreatedRecordId(savedId)
+
+      if (stagedFiles.length > 0 && attachmentRecordType && savedId) {
+        const uploads = await Promise.allSettled(
+          stagedFiles.map(async (file) => {
+            const formData = new FormData()
+            formData.append("file", file)
+            formData.append("recordId", savedId)
+            formData.append("recordType", attachmentRecordType)
+            const res = await fetch("/api/uploads", { method: "POST", body: formData })
+            if (!res.ok) {
+              const json = await res.json().catch(() => ({}))
+              throw new Error(json.error ?? `Failed to upload "${file.name}"`)
+            }
+            return file
+          })
+        )
+        const succeeded = new Set(uploads.flatMap((u) => (u.status === "fulfilled" ? [u.value] : [])))
+        setStagedFiles((prev) => prev.filter((f) => !succeeded.has(f)))
+        const firstFailure = uploads.find((u): u is PromiseRejectedResult => u.status === "rejected")
+        if (firstFailure) {
+          toast.error(firstFailure.reason instanceof Error ? firstFailure.reason.message : "Some files failed to upload.")
+          return
+        }
+        router.refresh()
+      }
+
       toast.success(successMessage)
       onClose()
     } catch {
@@ -87,7 +175,7 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()} disablePointerDismissal={filePickerOpen}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -105,6 +193,73 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
               </div>
             ))}
           </div>
+
+          {attachmentRecordType && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Attachments {(existingAttachments.length + stagedFiles.length) > 0 && <span className="inline-flex items-center justify-center rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium">{existingAttachments.length + stagedFiles.length}</span>}
+                </div>
+                <label>
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                  <Button type="button" variant="outline" size="sm" onClick={openFilePicker}>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Attach file
+                  </Button>
+                </label>
+              </div>
+
+              {existingAttachments.length > 0 && (
+                <ul className="space-y-1">
+                  {existingAttachments.map((a) => {
+                    const Icon = fileIcon(a.mimeType)
+                    const href = `/api/files/${attachmentRecordType.toLowerCase()}/${recordId}/${a.filename}`
+                    return (
+                      <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
+                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:underline">
+                          {a.originalName}
+                        </a>
+                        <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExisting(a)}
+                          aria-label={`Remove "${a.originalName}"`}
+                          className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+
+              {stagedFiles.length > 0 && (
+                <ul className="space-y-1">
+                  {stagedFiles.map((file, index) => {
+                    const Icon = fileIcon(file.type)
+                    return (
+                      <li key={index} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
+                        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{formatBytes(file.size)}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeStagedFile(index)}
+                          aria-label={`Remove "${file.name}"`}
+                          className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
 
           {children}
 

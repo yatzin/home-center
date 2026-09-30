@@ -6,6 +6,9 @@ describe("upload types", () => {
     expect(mimeForFilename("receipt.PDF")).toBe("application/pdf")
     expect(mimeForFilename("card.jpeg")).toBe("image/jpeg")
     expect(extensionForFilename("Scan.HEIC")).toBe(".heic")
+    expect(mimeForFilename("manual.docx")).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
   })
 
   it("rejects anything not on the list", () => {

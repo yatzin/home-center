@@ -15,6 +15,7 @@ import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS, TOOL_ROUNDS_RANGE, LLM_PR
 
 type Values = {
   enabled: boolean
+  hidden: boolean
   baseUrl: string
   apiKey: string
   model: string
@@ -97,10 +98,32 @@ export function LlmSettings({
                     type="checkbox"
                     className="h-4 w-4 accent-primary"
                     checked={field.value}
-                    onChange={(e) => field.onChange(e.target.checked)}
+                    onChange={(e) => {
+                      field.onChange(e.target.checked)
+                      // Hidden only applies while off — mirror the server, which
+                      // clears it the moment the assistant is turned on.
+                      if (e.target.checked) form.setValue("hidden", false)
+                    }}
                   />
                 </FormControl>
                 <FormLabel className="!mt-0">Turn on the assistant</FormLabel>
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="hidden" render={({ field }) => (
+              <FormItem className="flex items-center gap-2 space-y-0">
+                <FormControl>
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={field.value}
+                    disabled={form.watch("enabled")}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                </FormControl>
+                <FormLabel className="!mt-0 font-normal text-muted-foreground">
+                  Hide the assistant from the nav menu and the top-right button
+                </FormLabel>
               </FormItem>
             )} />
 

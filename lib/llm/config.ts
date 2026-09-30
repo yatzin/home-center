@@ -16,6 +16,7 @@ export async function loadLlmConfig(): Promise<LlmConfig> {
   const apiKey = row?.apiKeyEnc ? decrypt(row.apiKeyEnc) : null
   return {
     enabled: row?.enabled ?? false,
+    hidden: row?.hidden ?? false,
     baseUrl: row?.baseUrl ?? null,
     model: row?.model ?? null,
     temperature: row?.temperature ?? null,
@@ -34,10 +35,10 @@ export async function loadLlmConfig(): Promise<LlmConfig> {
  * What the layout needs on every page. Skips decryption (scrypt is not free);
  * an unreadable key surfaces as an error from /api/chat instead.
  */
-export async function loadLlmStatus(): Promise<{ available: boolean; model: string | null }> {
+export async function loadLlmStatus(): Promise<{ available: boolean; model: string | null; hidden: boolean }> {
   const row = await prisma.llmSettings.findUnique({
     where: { id: LLM_SETTINGS_ID },
-    select: { enabled: true, baseUrl: true, model: true },
+    select: { enabled: true, hidden: true, baseUrl: true, model: true },
   })
   const available = isLlmReady({
     enabled: row?.enabled ?? false,
@@ -45,5 +46,5 @@ export async function loadLlmStatus(): Promise<{ available: boolean; model: stri
     model: row?.model ?? null,
     keyUnreadable: false,
   })
-  return { available, model: available ? (row?.model ?? null) : null }
+  return { available, model: available ? (row?.model ?? null) : null, hidden: row?.hidden ?? false }
 }

@@ -94,10 +94,13 @@ export function ConditionsSection({ personId, conditions, providers, observation
         onClose={() => setOpen(false)}
         title={editing ? "Edit Condition" : "Add Condition"}
         submitLabel={editing ? "Save Changes" : "Add Condition"}
-        successMessage={editing ? "Condition updated." : "Condition added. Expand its row to attach files."}
+        successMessage={editing ? "Condition updated." : "Condition added."}
         fields={fields}
         initial={initialFor(editing)}
         onSubmit={(values) => (editing ? updateCondition(editing.id, values) : createCondition(personId, values))}
+        attachmentRecordType="CONDITION"
+        recordId={editing?.id}
+        attachments={editing?.attachments}
       />
     </>
   )
