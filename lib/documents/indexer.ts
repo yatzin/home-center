@@ -1,0 +1,188 @@
+import { chunkPages } from "./chunk"
+import type { SearchIndex } from "./index-db"
+import { hasText, joinPages, splitPages } from "./normalize"
+import { ExtractError, type Extracted, type ExtractMethod } from "./types"
+
+// Reads uploads one at a time in the server process. Everything it touches is
+// passed in, so the rules live here and are tested with fakes; the Prisma
+// store and the real extractors are wired up in indexer-server.ts.
+//
+// The in-memory queue is only a fast path. The database is the source of
+// truth: reconcile() finds every PENDING, stale or retryable row, so a restart
+// loses nothing.
+
+export type Job = {
+  attachmentId: string
+  /** null when the attachment's location can't be resolved. */
+  filePath: string | null
+  ext: string | null
+  originalName: string
+  recordType: string
+  attempts: number
+}
+
+export type SaveResult =
+  | { status: "DONE"; method: ExtractMethod; text: string; pageCount: number; truncated: boolean }
+  | { status: "EMPTY" | "UNSUPPORTED" }
+  | { status: "FAILED"; error: string }
+
+export type IndexerStore = {
+  settings(): Promise<{ indexingEnabled: boolean; ocrEnabled: boolean }>
+  loadJob(id: string): Promise<Job | null>
+  /** Must be a no-op when the row is gone (attachment deleted meanwhile). FAILED increments attempts. */
+  save(id: string, result: SaveResult): Promise<void>
+  /** Creates PENDING rows for attachments that have none. */
+  ensureRows(): Promise<void>
+  attachmentIds(): Promise<Set<string>>
+  doneIds(): Promise<string[]>
+  /** PENDING, extracted by an older EXTRACTOR_VERSION, or FAILED with attempts left. */
+  dueIds(): Promise<string[]>
+  loadText(id: string): Promise<{ text: string; originalName: string; recordType: string } | null>
+}
+
+export type IndexerDeps = {
+  store: IndexerStore
+  index: () => Promise<SearchIndex>
+  extract: (filePath: string, ext: string | null, opts: { ocr: boolean }) => Promise<Extracted>
+  /** Called whenever the queue empties — frees the OCR worker. */
+  idle?: () => Promise<void>
+  log?: Pick<Console, "info" | "error">
+}
+
+export type Indexer = {
+  enqueue(id: string): void
+  reconcile(): Promise<{ queued: number }>
+  /** Resolves once the queue is empty and nothing is running. */
+  idle(): Promise<void>
+  pending(): number
+}
+
+const nameOf = (error: unknown) => (error instanceof Error ? error.name : typeof error)
+
+export function createIndexer(deps: IndexerDeps): Indexer {
+  const log = deps.log ?? console
+  const queue = new Set<string>()
+  let draining: Promise<void> | null = null
+  let reconciling: Promise<{ queued: number }> | null = null
+
+  async function indexText(id: string, text: string, meta: { originalName: string; recordType: string }) {
+    try {
+      const index = await deps.index()
+      await index.replace(id, meta, chunkPages(splitPages(text)))
+    } catch (error) {
+      // The text is saved; reconcile() re-indexes DONE rows missing from the index.
+      log.error(`[documents] index ${id} failed:`, nameOf(error))
+    }
+  }
+
+  async function removeFromIndex(id: string) {
+    try {
+      await (await deps.index()).remove([id])
+    } catch (error) {
+      log.error(`[documents] unindex ${id} failed:`, nameOf(error))
+    }
+  }
+
+  async function processOne(id: string, ocr: boolean) {
+    const job = await deps.store.loadJob(id)
+    if (!job) return
+    if (!job.filePath) {
+      await deps.store.save(id, { status: "FAILED", error: "File missing on disk" })
+      return
+    }
+    let out: Extracted
+    try {
+      out = await deps.extract(job.filePath, job.ext, { ocr })
+    } catch (error) {
+      const message = error instanceof ExtractError ? error.message : "Couldn't read this file"
+      await deps.store.save(id, { status: "FAILED", error: message })
+      log.error(`[documents] extract ${id} failed:`, nameOf(error))
+      return
+    }
+    if (out.kind === "unsupported") {
+      await deps.store.save(id, { status: "UNSUPPORTED" })
+      await removeFromIndex(id)
+      return
+    }
+    const joined = joinPages(out.pages)
+    if (!hasText(joined.text)) {
+      await deps.store.save(id, { status: "EMPTY" })
+      await removeFromIndex(id)
+      return
+    }
+    await deps.store.save(id, { status: "DONE", method: out.method, ...joined })
+    await indexText(id, joined.text, job)
+  }
+
+  function drain(): Promise<void> {
+    if (draining) return draining
+    const current = (async () => {
+      // Yield first: with an empty queue the body would otherwise finish
+      // before `draining` is assigned, leaving it pointing at a settled run.
+      await Promise.resolve()
+      try {
+        while (queue.size) {
+          const id = queue.values().next().value as string
+          queue.delete(id)
+          const { indexingEnabled, ocrEnabled } = await deps.store.settings()
+          if (!indexingEnabled) {
+            queue.clear()
+            break
+          }
+          try {
+            await processOne(id, ocrEnabled)
+          } catch (error) {
+            log.error(`[documents] job ${id} failed:`, nameOf(error))
+          }
+          // Let requests in between files.
+          await new Promise((resolve) => setImmediate(resolve))
+        }
+      } finally {
+        await deps.idle?.().catch(() => {})
+      }
+    })()
+    draining = current
+    void current.finally(() => {
+      if (draining === current) draining = null
+      // Something was enqueued after the loop's last check.
+      if (queue.size) void drain()
+    })
+    return current
+  }
+
+  async function runReconcile(): Promise<{ queued: number }> {
+    const { indexingEnabled } = await deps.store.settings()
+    if (!indexingEnabled) return { queued: 0 }
+    await deps.store.ensureRows()
+    const index = await deps.index()
+    const [known, indexed] = await Promise.all([deps.store.attachmentIds(), index.indexedIds()])
+    const orphans = [...indexed].filter((id) => !known.has(id))
+    if (orphans.length) await index.remove(orphans)
+    for (const id of await deps.store.doneIds()) {
+      if (indexed.has(id)) continue
+      const stored = await deps.store.loadText(id)
+      if (stored) await indexText(id, stored.text, stored)
+    }
+    const due = await deps.store.dueIds()
+    for (const id of due) queue.add(id)
+    void drain()
+    return { queued: due.length }
+  }
+
+  return {
+    enqueue(id) {
+      queue.add(id)
+      void drain()
+    },
+    reconcile() {
+      reconciling ??= runReconcile().finally(() => {
+        reconciling = null
+      })
+      return reconciling
+    },
+    async idle() {
+      while (draining || reconciling) await (reconciling ?? draining)
+    },
+    pending: () => queue.size,
+  }
+}
