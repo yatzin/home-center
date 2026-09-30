@@ -115,9 +115,9 @@ describe("search index", () => {
 
 describe("searchIndexPath", () => {
   it("sits next to the database file by default", () => {
-    expect(searchIndexPath({ DATABASE_URL: "file:/data/homecenter.db" } as NodeJS.ProcessEnv)).toBe(path.resolve("/data/search-index.db"))
+    expect(searchIndexPath({ DATABASE_URL: "file:/data/homecenter.db" })).toBe(path.resolve("/data/search-index.db"))
   })
   it("honours SEARCH_INDEX_PATH", () => {
-    expect(searchIndexPath({ SEARCH_INDEX_PATH: "/tmp/x.db", DATABASE_URL: "file:/data/h.db" } as NodeJS.ProcessEnv)).toBe(path.resolve("/tmp/x.db"))
+    expect(searchIndexPath({ SEARCH_INDEX_PATH: "/tmp/x.db", DATABASE_URL: "file:/data/h.db" })).toBe(path.resolve("/tmp/x.db"))
   })
 })

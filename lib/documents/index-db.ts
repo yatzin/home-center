@@ -30,7 +30,7 @@ export type SearchIndex = {
   close(): void
 }
 
-export function searchIndexPath(env: NodeJS.ProcessEnv = process.env): string {
+export function searchIndexPath(env: Record<string, string | undefined> = process.env): string {
   if (env.SEARCH_INDEX_PATH) return path.resolve(env.SEARCH_INDEX_PATH)
   const db = (env.DATABASE_URL ?? "").replace(/^file:/, "")
   return path.join(db ? path.dirname(path.resolve(db)) : process.cwd(), "search-index.db")
