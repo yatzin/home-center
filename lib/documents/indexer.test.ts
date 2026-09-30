@@ -44,7 +44,7 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
     clear: async () => chunks.clear(),
     close: () => {},
   }
-  const extract = vi.fn(async (filePath: string, _ext: string | null, _o: { ocr: boolean }): Promise<Extracted> => {
+  const extract = vi.fn<(filePath: string, ext: string | null, opts: { ocr: boolean }) => Promise<Extracted>>(async (filePath) => {
     const id = filePath.replace(/^\/u\/|\.pdf$/g, "")
     const outcome = opts.outcomes?.[id] ?? { kind: "text", method: "TEXT", pages: [`text of ${id}`] }
     if (outcome instanceof Error) throw outcome
