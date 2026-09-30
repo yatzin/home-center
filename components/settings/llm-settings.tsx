@@ -149,7 +149,7 @@ export function LlmSettings({
                 <FormDescription className="text-xs">
                   {indexingEnabled
                     ? "Document text is sent to the configured LLM server when it's relevant to a question."
-                    : "Turn on document indexing first (Documents, above)."}
+                    : "Turn on document indexing first (Documents, below)."}
                 </FormDescription>
               </FormItem>
             )} />

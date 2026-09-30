@@ -83,8 +83,6 @@ export default async function SettingsPage() {
         />
       )}
 
-      {isAdmin && docs && <DocumentSettings initial={docs[0]} stats={docs[1]} />}
-
       {isAdmin && llm && (
         <LlmSettings
           // The key itself is never sent — only whether one is stored.
@@ -108,6 +106,8 @@ export default async function SettingsPage() {
           ready={isLlmReady(llm)}
         />
       )}
+
+      {isAdmin && docs && <DocumentSettings initial={docs[0]} stats={docs[1]} />}
 
       {isAdmin && <UserManagement users={users} currentUserId={session.user.id} />}
     </div>
