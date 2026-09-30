@@ -2,14 +2,16 @@ import { z } from "zod/v4"
 import { prisma } from "@/lib/prisma"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { searchIndex } from "@/lib/documents/indexer-server"
-import { attachmentIdsForAsset, countNotIndexed, listDocumentRefs, loadDocumentRefs, OWNER_SELECT } from "@/lib/documents/scope"
+import {
+  attachmentIdsForAsset, countNotIndexed, healthAttachmentIds, listDocumentRefs, loadDocumentRefs, OWNER_SELECT,
+} from "@/lib/documents/scope"
 import { describeAttachment } from "@/lib/documents/owner"
 import { parseSearch } from "@/lib/documents/fts-query"
 import { passage } from "@/lib/documents/passage"
 import { readWindow } from "@/lib/documents/read-window"
 import { splitPages } from "@/lib/documents/normalize"
 import {
-  groupHits, hiddenRecordTypes, isHiddenRecordType, listDocumentsDescription, listedDocument, READ_DOCUMENT_DESCRIPTION,
+  groupHits, hiddenRecordTypes, isHealthDocument, listDocumentsDescription, listedDocument, READ_DOCUMENT_DESCRIPTION,
   searchDocumentsDescription, STATUS_NOTE, toRecordType, visibleRecordTypes,
 } from "@/lib/documents/tool-helpers"
 import { ToolInputError, type ToolContext } from "../query"
@@ -58,7 +60,7 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
       if ("reply" in resolved) return resolved.reply
       const { attachmentIds, scope } = resolved
       const [{ total, refs }, index] = await Promise.all([
-        listDocumentRefs({ attachmentIds, recordTypes, hidden, limit: a.limit ?? LIST_LIMIT }),
+        listDocumentRefs({ attachmentIds, recordTypes, includeHealth, limit: a.limit ?? LIST_LIMIT }),
         loadAssetIndex(),
       ])
       const documents = refs.map((r) => listedDocument(r, r.asset ? index.names[r.asset.type]?.[r.asset.id] : undefined))
@@ -94,20 +96,26 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
       const { attachmentIds, scope } = resolved
 
       const hits = await (await searchIndex()).search(parsed.match, {
-        attachmentIds, recordTypes, excludeRecordTypes: hidden, limit: SEARCH_POOL,
+        attachmentIds,
+        recordTypes,
+        excludeRecordTypes: hidden,
+        // A person's visits, reminders and warranties aren't a health record type,
+        // so the index can only exclude them by id.
+        excludeAttachmentIds: includeHealth ? [] : await healthAttachmentIds(),
+        limit: SEARCH_POOL,
       })
       const groups = groupHits(hits, a.limit ?? DEFAULT_LIMIT)
       const [refs, index, notIndexed] = await Promise.all([
         loadDocumentRefs(groups.map((g) => g.attachmentId)),
         loadAssetIndex(),
-        countNotIndexed({ attachmentIds, recordTypes, hidden }),
+        countNotIndexed({ attachmentIds, recordTypes, includeHealth }),
       ])
 
       const documents = groups.flatMap((g) => {
         const ref = refs.get(g.attachmentId)
-        // Deleted since it was indexed (reconcile drops its chunks), or hidden —
-        // the index filter already excludes hidden types; this is the second lock.
-        if (!ref || !ref.text || isHiddenRecordType(ref.recordType, includeHealth)) return []
+        // Deleted since it was indexed (reconcile drops its chunks), or a health
+        // file — the index filter already excludes those; this is the second lock.
+        if (!ref || !ref.text || (!includeHealth && isHealthDocument(ref))) return []
         const pages = ref.text.pageCount ?? 1
         return [compact({
           attachmentId: ref.attachmentId,
@@ -143,10 +151,10 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
         where: { id: a.attachmentId },
         select: { ...OWNER_SELECT, text: { select: { status: true, text: true, truncated: true } } },
       })
-      if (!row || isHiddenRecordType(row.recordType, includeHealth)) {
+      const ref = row ? describeAttachment(row) : null
+      if (!row || !ref || (!includeHealth && isHealthDocument({ recordType: row.recordType, asset: ref.asset }))) {
         throw new ToolInputError(`No document with id "${a.attachmentId}". Use search_documents to find one.`)
       }
-      const ref = describeAttachment(row)
       const head = { fileName: ref.fileName, fileHref: ref.fileHref, record: ref.record }
       const t = row.text
       if (!t || t.status !== "DONE" || !t.text) return { ...head, status: STATUS_NOTE[t && t.status !== "DONE" ? t.status : "PENDING"] }

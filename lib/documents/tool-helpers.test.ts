@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest"
 import {
-  documentAccess, groupHits, hiddenRecordTypes, isHiddenRecordType, listDocumentsDescription, listedDocument, searchDocumentsDescription,
+  documentAccess, groupHits, hiddenRecordTypes, isHealthDocument, listDocumentsDescription, listedDocument,
+  searchDocumentsDescription,
   toRecordType, visibleRecordTypes,
 } from "./tool-helpers"
+
+describe("isHealthDocument", () => {
+  it("treats anything owned by a person as health, plus the health record types", () => {
+    expect(isHealthDocument({ recordType: "SERVICE", asset: { type: "PERSON", id: "p1" } })).toBe(true)
+    expect(isHealthDocument({ recordType: "MAINTENANCE", asset: { type: "PERSON", id: "p1" } })).toBe(true)
+    expect(isHealthDocument({ recordType: "WARRANTY", asset: { type: "PERSON", id: "p1" } })).toBe(true)
+    expect(isHealthDocument({ recordType: "MEDICATION", asset: null })).toBe(true)
+    expect(isHealthDocument({ recordType: "SERVICE", asset: { type: "VEHICLE", id: "v1" } })).toBe(false)
+    expect(isHealthDocument({ recordType: "INSURANCE", asset: null })).toBe(false)
+  })
+})
 
 describe("listedDocument", () => {
   const ref = {
@@ -43,9 +55,6 @@ describe("record type rules", () => {
     expect(hiddenRecordTypes(false)).toEqual(["CONDITION", "OBSERVATION", "MEDICATION", "ALLERGY", "IMMUNIZATION"])
     expect(hiddenRecordTypes(true)).toEqual([])
     expect(visibleRecordTypes(false)).toEqual(["SERVICE", "WARRANTY", "MAINTENANCE", "INSURANCE"])
-    expect(isHiddenRecordType("MEDICATION", false)).toBe(true)
-    expect(isHiddenRecordType("INSURANCE", false)).toBe(false)
-    expect(isHiddenRecordType("MEDICATION", true)).toBe(false)
   })
 
   it("accepts the loose names models use", () => {

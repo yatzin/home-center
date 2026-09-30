@@ -190,7 +190,8 @@ uses a passage to answer a question.
 
 **Settings → Documents** turns indexing and OCR on or off and shows progress.
 **Settings → Assistant** decides whether the assistant may read documents at
-all, and separately whether it may read files attached to health records (off
+all, and separately whether it may read health documents — files on anything
+that belongs to a person, such as their visits, reminders and medications (off
 by default).
 
 | Variable | Default | Meaning |

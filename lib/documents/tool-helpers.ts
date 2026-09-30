@@ -20,8 +20,14 @@ export function visibleRecordTypes(includeHealth: boolean): AttachmentRecordType
   return RECORD_TYPES.filter((t) => !hidden.includes(t))
 }
 
-export function isHiddenRecordType(type: string, includeHealth: boolean): boolean {
-  return (hiddenRecordTypes(includeHealth) as string[]).includes(type)
+/**
+ * What "Include health record documents" covers: the health record types, and
+ * anything else owned by a person — their visits (service records), reminders
+ * (maintenance schedules) and warranties. Insurance policies aren't one
+ * person's record and stay visible.
+ */
+export function isHealthDocument(ref: { recordType: string; asset: { type: string; id: string } | null }): boolean {
+  return ref.asset?.type === "PERSON" || (HEALTH_RECORD_TYPES as readonly string[]).includes(ref.recordType)
 }
 
 const ALIASES: Record<string, AttachmentRecordType> = {

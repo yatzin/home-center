@@ -85,6 +85,8 @@ describe("search index", () => {
     expect(await ids({ attachmentIds: [] })).toEqual([])
     expect(await ids({ recordTypes: ["SERVICE"] })).toEqual(["s1"])
     expect(await ids({ excludeRecordTypes: ["MEDICATION"] })).toEqual(["s1"])
+    expect(await ids({ excludeAttachmentIds: ["m1"] })).toEqual(["s1"])
+    expect(await ids({ attachmentIds: ["s1", "m1"], excludeAttachmentIds: ["s1"] })).toEqual(["m1"])
   })
 
   it("clear empties the index", async () => {

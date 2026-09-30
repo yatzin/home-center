@@ -17,6 +17,8 @@ export type SearchFilter = {
   attachmentIds?: string[] | null
   recordTypes?: string[] | null
   excludeRecordTypes?: string[]
+  /** e.g. health files owned by a person, which the record type alone can't identify. */
+  excludeAttachmentIds?: string[]
   limit: number
 }
 
@@ -123,6 +125,10 @@ export async function openSearchIndex(file: string): Promise<SearchIndex> {
       if (f.excludeRecordTypes?.length) {
         where.push(`c.record_type NOT IN (${marks(f.excludeRecordTypes.length)})`)
         args.push(...f.excludeRecordTypes)
+      }
+      if (f.excludeAttachmentIds?.length) {
+        where.push(`c.attachment_id NOT IN (${marks(f.excludeAttachmentIds.length)})`)
+        args.push(...f.excludeAttachmentIds)
       }
       args.push(f.limit)
       const r = await db.execute({

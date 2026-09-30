@@ -1,9 +1,41 @@
 import { prisma } from "@/lib/prisma"
 import type { AssetType, AttachmentRecordType, DocumentTextStatus, Prisma } from "@/app/generated/prisma/client"
 import { describeAttachment, type DocumentRef } from "./owner"
+import { HEALTH_RECORD_TYPES } from "./limits"
 
 // Database side of the document tools: which files belong to an asset, and
 // what each file belongs to.
+
+/**
+ * The query form of isHealthDocument (tool-helpers.ts): the health record
+ * types plus anything whose service record, reminder or warranty belongs to a
+ * person. Keep the two in step.
+ */
+export function healthWhere(): Prisma.AttachmentWhereInput {
+  return {
+    OR: [
+      { recordType: { in: [...HEALTH_RECORD_TYPES] } },
+      { serviceRecord: { is: { assetType: "PERSON" } } },
+      { maintenanceSchedule: { is: { assetType: "PERSON" } } },
+      { warranty: { is: { assetType: "PERSON" } } },
+    ],
+  }
+}
+
+/** Ids of every health file, for filtering the search index (which only knows record types). */
+export async function healthAttachmentIds(): Promise<string[]> {
+  const rows = await prisma.attachment.findMany({ where: healthWhere(), select: { id: true } })
+  return rows.map((r) => r.id)
+}
+
+/** Shared filter for list_documents and the not-indexed count. */
+function scopeWhere(f: { attachmentIds: string[] | null; recordTypes: AttachmentRecordType[] | null; includeHealth: boolean }): Prisma.AttachmentWhereInput {
+  return {
+    ...(f.recordTypes ? { recordType: { in: f.recordTypes } } : {}),
+    ...(f.attachmentIds ? { id: { in: f.attachmentIds } } : {}),
+    ...(f.includeHealth ? {} : { NOT: healthWhere() }),
+  }
+}
 
 export const OWNER_SELECT = {
   id: true, recordType: true, filename: true, originalName: true,
@@ -66,17 +98,14 @@ export async function attachmentIdsForAsset(type: AssetType, id: string): Promis
 
 export type ListedRef = LoadedRef & { uploadedAt: Date }
 
-/** Files in scope, newest first, for list_documents. Hidden record types never appear or count. */
+/** Files in scope, newest first, for list_documents. Health files never appear or count unless included. */
 export async function listDocumentRefs(f: {
   attachmentIds: string[] | null
   recordTypes: AttachmentRecordType[] | null
-  hidden: AttachmentRecordType[]
+  includeHealth: boolean
   limit: number
 }): Promise<{ total: number; refs: ListedRef[] }> {
-  const where: Prisma.AttachmentWhereInput = {
-    recordType: { ...(f.recordTypes ? { in: f.recordTypes } : {}), notIn: f.hidden },
-    ...(f.attachmentIds ? { id: { in: f.attachmentIds } } : {}),
-  }
+  const where = scopeWhere(f)
   const [total, rows] = await Promise.all([
     prisma.attachment.count({ where }),
     prisma.attachment.findMany({
@@ -92,19 +121,13 @@ export async function listDocumentRefs(f: {
   }
 }
 
-/** Files in scope the search couldn't see: not read yet, failed, or unsupported. Hidden types never count. */
+/** Files in scope the search couldn't see: not read yet, failed, or unsupported. Health files never count unless included. */
 export async function countNotIndexed(f: {
   attachmentIds: string[] | null
   recordTypes: AttachmentRecordType[] | null
-  hidden: AttachmentRecordType[]
+  includeHealth: boolean
 }): Promise<number> {
   return prisma.attachmentText.count({
-    where: {
-      status: { in: ["PENDING", "FAILED", "UNSUPPORTED"] },
-      attachment: {
-        recordType: { ...(f.recordTypes ? { in: f.recordTypes } : {}), notIn: f.hidden },
-        ...(f.attachmentIds ? { id: { in: f.attachmentIds } } : {}),
-      },
-    },
+    where: { status: { in: ["PENDING", "FAILED", "UNSUPPORTED"] }, attachment: scopeWhere(f) },
   })
 }

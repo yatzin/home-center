@@ -169,8 +169,9 @@ export function LlmSettings({
                   <FormLabel className="!mt-0 font-normal">Include health record documents</FormLabel>
                 </div>
                 <FormDescription className="text-xs">
-                  Files attached to conditions, observations, medications, allergies and immunizations. With a cloud
-                  provider, their text leaves this server.
+                  Files on anything that belongs to a person: their visits, reminders and warranties, plus conditions,
+                  observations, medications, allergies and immunizations. With a cloud provider, their text leaves this
+                  server.
                 </FormDescription>
               </FormItem>
             )} />

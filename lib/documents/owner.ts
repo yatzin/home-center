@@ -36,12 +36,34 @@ export type DocumentRef = {
 
 type Owner = Pick<DocumentRef, "record" | "asset">
 
-const onAsset = (type: string, title: string, o: OnAsset): Owner => ({
-  record: { type, title, href: assetHref(o.assetType, o.assetId) },
-  asset: { type: o.assetType, id: o.assetId },
-})
-const onPerson = (type: string, title: string, personId: string, href = assetHref("PERSON", personId)): Owner => ({
-  record: { type, title, href },
+/** A tab on the owner's page, opening one item where that tab supports ?open= (see the asset pages). */
+const tabHref = (base: string, tab: string, openId?: string | null) =>
+  `${base}?tab=${tab}${openId ? `&open=${openId}` : ""}`
+
+// Record kinds are named as the UI names them: a person's service records are
+// "Visits", maintenance schedules are "Reminders" / "Maintenance Reminders".
+const ASSET_TABS = {
+  SERVICE: { tab: "service", type: "service record" },
+  WARRANTY: { tab: "warranties", type: "warranty" },
+  MAINTENANCE: { tab: "maintenance", type: "maintenance reminder" },
+} as const
+const PERSON_TABS = {
+  SERVICE: { tab: "visits", type: "visit" },
+  // A person's page has no warranties tab.
+  WARRANTY: { tab: null, type: "warranty" },
+  MAINTENANCE: { tab: "reminders", type: "reminder" },
+} as const
+
+function onAsset(kind: keyof typeof ASSET_TABS, recordId: string | null, title: string, o: OnAsset): Owner {
+  const { tab, type } = o.assetType === "PERSON" ? PERSON_TABS[kind] : ASSET_TABS[kind]
+  const base = assetHref(o.assetType, o.assetId)
+  return {
+    record: { type, title, href: tab ? tabHref(base, tab, recordId) : base },
+    asset: { type: o.assetType, id: o.assetId },
+  }
+}
+const onPerson = (type: string, title: string, personId: string, tab: string, openId?: string | null): Owner => ({
+  record: { type, title, href: tabHref(assetHref("PERSON", personId), tab, openId) },
   asset: { type: "PERSON", id: personId },
 })
 const missing = (type: string): Owner => ({ record: { type, title: "(record not found)", href: null }, asset: null })
@@ -49,23 +71,28 @@ const missing = (type: string): Owner => ({ record: { type, title: "(record not 
 function owner(a: AttachmentOwnerRow): Owner {
   switch (a.recordType) {
     case "SERVICE":
-      return a.serviceRecord ? onAsset("service record", a.serviceRecord.title, a.serviceRecord) : missing("service record")
+      return a.serviceRecord ? onAsset("SERVICE", a.serviceRecordId, a.serviceRecord.title, a.serviceRecord) : missing("service record")
     case "WARRANTY":
-      return a.warranty ? onAsset("warranty", a.warranty.productName, a.warranty) : missing("warranty")
+      return a.warranty ? onAsset("WARRANTY", a.warrantyId, a.warranty.productName, a.warranty) : missing("warranty")
     case "MAINTENANCE":
-      return a.maintenanceSchedule ? onAsset("maintenance schedule", a.maintenanceSchedule.title, a.maintenanceSchedule) : missing("maintenance schedule")
+      return a.maintenanceSchedule
+        ? onAsset("MAINTENANCE", a.maintenanceScheduleId, a.maintenanceSchedule.title, a.maintenanceSchedule)
+        : missing("maintenance reminder")
     case "CONDITION":
-      return a.healthCondition ? onPerson("condition", a.healthCondition.name, a.healthCondition.personId) : missing("condition")
+      // The conditions and allergies tabs can't open a single item.
+      return a.healthCondition ? onPerson("condition", a.healthCondition.name, a.healthCondition.personId, "conditions") : missing("condition")
     case "OBSERVATION": {
       const o = a.observation
-      return o ? onPerson("observation", `${o.type} on ${toDay(o.date)}`, o.personId, observationHref(o.personId, o.id)) : missing("observation")
+      return o
+        ? { record: { type: "observation", title: `${o.type} on ${toDay(o.date)}`, href: observationHref(o.personId, o.id) }, asset: { type: "PERSON", id: o.personId } }
+        : missing("observation")
     }
     case "MEDICATION":
-      return a.medication ? onPerson("medication", a.medication.name, a.medication.personId) : missing("medication")
+      return a.medication ? onPerson("medication", a.medication.name, a.medication.personId, "medications", a.medicationId) : missing("medication")
     case "ALLERGY":
-      return a.allergy ? onPerson("allergy", a.allergy.substance, a.allergy.personId) : missing("allergy")
+      return a.allergy ? onPerson("allergy", a.allergy.substance, a.allergy.personId, "allergies") : missing("allergy")
     case "IMMUNIZATION":
-      return a.immunization ? onPerson("immunization", a.immunization.vaccine, a.immunization.personId) : missing("immunization")
+      return a.immunization ? onPerson("immunization", a.immunization.vaccine, a.immunization.personId, "immunizations", a.immunizationId) : missing("immunization")
     case "INSURANCE":
       return a.insurancePolicy
         ? { record: { type: "insurance policy", title: a.insurancePolicy.carrier, href: "/insurance" }, asset: null }
