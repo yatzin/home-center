@@ -8,4 +8,7 @@ export async function register() {
 
   const { startNotificationScheduler } = await import("@/lib/notifications/scheduler")
   startNotificationScheduler()
+
+  const { startDocumentIndexer } = await import("@/lib/documents/indexer-server")
+  startDocumentIndexer()
 }

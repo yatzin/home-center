@@ -6,6 +6,7 @@ import path from "path"
 import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { extensionForFilename, UPLOAD_TYPES } from "@/lib/upload-types"
+import { enqueueDocument } from "@/lib/documents/indexer-server"
 
 const RECORD_TYPES = ["SERVICE", "WARRANTY", "MAINTENANCE", "CONDITION", "INSURANCE", "OBSERVATION", "MEDICATION", "ALLERGY", "IMMUNIZATION"] as const
 type RecordType = (typeof RECORD_TYPES)[number]
@@ -75,8 +76,11 @@ export async function POST(request: NextRequest) {
       medicationId: recordType === "MEDICATION" ? recordId : null,
       allergyId: recordType === "ALLERGY" ? recordId : null,
       immunizationId: recordType === "IMMUNIZATION" ? recordId : null,
+      // Every upload is indexed in the background; the response doesn't wait.
+      text: { create: {} },
     },
   })
 
+  enqueueDocument(attachment.id)
   return NextResponse.json({ attachment })
 }
