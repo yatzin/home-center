@@ -4,7 +4,7 @@ import { openSearchIndex, searchIndexPath, type SearchIndex } from "./index-db"
 import { prismaIndexerStore } from "./store"
 import { loadDocumentSettings } from "./settings"
 import { formatIndexStats, type StatusCounts } from "./stats"
-import { OCR_EXTENSIONS } from "./limits"
+import { MAX_ATTEMPTS, OCR_EXTENSIONS } from "./limits"
 
 // instrumentation.ts, route handlers and server actions can each load their
 // own copy of this module, so the one indexer and index handle per process
@@ -74,13 +74,21 @@ export function startDocumentIndexer(): void {
   if (every > 0) setInterval(() => void reconcileNow("scheduled"), every).unref()
 }
 
+/** Failed files, and files that ran out of attempts (e.g. ones that crashed the process), get another go. */
 export async function retryFailed(): Promise<void> {
-  await prisma.attachmentText.updateMany({ where: { status: "FAILED" }, data: { status: "PENDING", attempts: 0 } })
+  await prisma.attachmentText.updateMany({
+    where: { OR: [{ status: "FAILED" }, { attempts: { gte: MAX_ATTEMPTS } }] },
+    data: { attempts: 0 },
+  })
   void reconcileNow("retry failed")
 }
 
+/**
+ * Marks everything as extracted by an older version rather than PENDING, so
+ * existing text stays readable and searchable until each file is re-read.
+ */
 export async function reextractAll(): Promise<void> {
-  await prisma.attachmentText.updateMany({ data: { status: "PENDING", attempts: 0 } })
+  await prisma.attachmentText.updateMany({ data: { extractorVersion: 0, attempts: 0 } })
   void reconcileNow("re-extract all")
 }
 

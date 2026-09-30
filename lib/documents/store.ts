@@ -37,18 +37,23 @@ export const prismaIndexerStore: IndexerStore = {
     }
   },
 
+  async claim(id) {
+    await prisma.attachmentText.updateMany({ where: { attachmentId: id }, data: { attempts: { increment: 1 } } })
+  },
+
   async save(id, r) {
     const base = { status: r.status, extractorVersion: EXTRACTOR_VERSION, extractedAt: new Date() }
     const where = { attachmentId: id }
     if (r.status === "DONE") {
       await prisma.attachmentText.updateMany({
         where,
-        data: { ...base, method: r.method, text: r.text, pageCount: r.pageCount, charCount: r.text.length, truncated: r.truncated, error: null },
+        data: { ...base, method: r.method, text: r.text, pageCount: r.pageCount, charCount: r.text.length, truncated: r.truncated, error: null, attempts: 0 },
       })
     } else if (r.status === "FAILED") {
-      await prisma.attachmentText.updateMany({ where, data: { ...base, ...CLEARED, error: r.error, attempts: { increment: 1 } } })
+      // claim() already counted this attempt.
+      await prisma.attachmentText.updateMany({ where, data: { ...base, ...CLEARED, error: r.error } })
     } else {
-      await prisma.attachmentText.updateMany({ where, data: { ...base, ...CLEARED, error: null } })
+      await prisma.attachmentText.updateMany({ where, data: { ...base, ...CLEARED, error: null, attempts: 0 } })
     }
   },
 
@@ -75,11 +80,10 @@ export const prismaIndexerStore: IndexerStore = {
   async dueIds() {
     const rows = await prisma.attachmentText.findMany({
       where: {
-        OR: [
-          { status: "PENDING" },
-          { extractorVersion: { lt: EXTRACTOR_VERSION } },
-          { status: "FAILED", attempts: { lt: MAX_ATTEMPTS } },
-        ],
+        // attempts counts tries that never succeeded — including ones where the
+        // process died mid-file — so a poison file stops being picked up.
+        attempts: { lt: MAX_ATTEMPTS },
+        OR: [{ status: "PENDING" }, { status: "FAILED" }, { extractorVersion: { lt: EXTRACTOR_VERSION } }],
       },
       select: { attachmentId: true },
     })

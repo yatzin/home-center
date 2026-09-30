@@ -17,12 +17,16 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
   const store: IndexerStore = {
     settings: async () => ({ ...settings }),
     loadJob: async (id) => rows.get(id)?.job ?? null,
+    claim: async (id) => {
+      const row = rows.get(id)
+      if (row) row.job.attempts++
+    },
     save: async (id, result) => {
       const row = rows.get(id)
       if (!row) return // deleted meanwhile: a no-op, like updateMany
       row.result = result
       row.text = result.status === "DONE" ? result.text : undefined
-      if (result.status === "FAILED") row.job.attempts++
+      if (result.status !== "FAILED") row.job.attempts = 0
     },
     ensureRows: async () => {},
     attachmentIds: async () => new Set(rows.keys()),
@@ -160,6 +164,35 @@ describe("indexer", () => {
     await t.indexer.idle()
     expect(t.rows.get("a")!.result?.status).toBe("DONE")
     expect(t.rows.get("b")!.result?.status).toBe("DONE")
+  })
+
+  it("drops a file's old chunks when re-extracting it fails", async () => {
+    const t = setup()
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.chunks.has("a")).toBe(true)
+
+    t.extract.mockRejectedValueOnce(new ExtractError("Not a readable PDF"))
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.rows.get("a")!.result).toEqual({ status: "FAILED", error: "Not a readable PDF" })
+    expect(t.chunks.has("a")).toBe(false)
+  })
+
+  it("counts an attempt before extracting, so a file that kills the process isn't retried forever", async () => {
+    const t = setup()
+    t.add("bomb")
+    let attemptsSeenByExtractor = -1
+    t.extract.mockImplementationOnce(async () => {
+      attemptsSeenByExtractor = t.rows.get("bomb")!.job.attempts
+      return { kind: "text", method: "TEXT", pages: ["ok"] }
+    })
+    t.indexer.enqueue("bomb")
+    await t.indexer.idle()
+    expect(attemptsSeenByExtractor).toBe(1)
+    // Success clears the count: attempts means unsuccessful tries in a row.
+    expect(t.rows.get("bomb")!.job.attempts).toBe(0)
   })
 
   it("picks up a job enqueued while the queue is finishing", async () => {

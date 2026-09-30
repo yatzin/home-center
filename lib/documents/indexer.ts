@@ -29,13 +29,22 @@ export type SaveResult =
 export type IndexerStore = {
   settings(): Promise<{ indexingEnabled: boolean; ocrEnabled: boolean }>
   loadJob(id: string): Promise<Job | null>
-  /** Must be a no-op when the row is gone (attachment deleted meanwhile). FAILED increments attempts. */
+  /**
+   * Counts an attempt before the file is read. A file that kills the process
+   * (zip bomb, native crash) never reaches save(), so counting afterwards would
+   * retry it on every boot.
+   */
+  claim(id: string): Promise<void>
+  /**
+   * Must be a no-op when the row is gone (attachment deleted meanwhile).
+   * DONE / EMPTY / UNSUPPORTED reset attempts to 0: attempts means unsuccessful tries in a row.
+   */
   save(id: string, result: SaveResult): Promise<void>
   /** Creates PENDING rows for attachments that have none. */
   ensureRows(): Promise<void>
   attachmentIds(): Promise<Set<string>>
   doneIds(): Promise<string[]>
-  /** PENDING, extracted by an older EXTRACTOR_VERSION, or FAILED with attempts left. */
+  /** PENDING, extracted by an older EXTRACTOR_VERSION, or FAILED — and in every case with attempts left. */
   dueIds(): Promise<string[]>
   loadText(id: string): Promise<{ text: string; originalName: string; recordType: string } | null>
 }
@@ -86,8 +95,11 @@ export function createIndexer(deps: IndexerDeps): Indexer {
   async function processOne(id: string, ocr: boolean) {
     const job = await deps.store.loadJob(id)
     if (!job) return
+    await deps.store.claim(id)
+    // A failed re-read leaves no text behind, so its old chunks must go too.
     if (!job.filePath) {
       await deps.store.save(id, { status: "FAILED", error: "File missing on disk" })
+      await removeFromIndex(id)
       return
     }
     let out: Extracted
@@ -96,6 +108,7 @@ export function createIndexer(deps: IndexerDeps): Indexer {
     } catch (error) {
       const message = error instanceof ExtractError ? error.message : "Couldn't read this file"
       await deps.store.save(id, { status: "FAILED", error: message })
+      await removeFromIndex(id)
       log.error(`[documents] extract ${id} failed:`, nameOf(error))
       return
     }

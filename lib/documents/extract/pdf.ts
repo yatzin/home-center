@@ -20,16 +20,25 @@ export async function extractPdf(data: Uint8Array, opts: { ocr: boolean }): Prom
     const pages = [...text]
     let textPages = 0
     let ocrPages = 0
+    let ocrFailures = 0
     for (let i = 0; i < pages.length; i++) {
       if (!isBlankPage(pages[i])) {
         textPages++
         continue
       }
       if (!opts.ocr || ocrPages >= MAX_OCR_PAGES) continue
-      const png = await renderPageAsImage(doc, i + 1, { canvasImport: () => import("@napi-rs/canvas"), scale: 2 })
-      pages[i] = await ocrImage(Buffer.from(png))
-      ocrPages++
+      try {
+        const png = await renderPageAsImage(doc, i + 1, { canvasImport: () => import("@napi-rs/canvas"), scale: 2 })
+        pages[i] = await ocrImage(Buffer.from(png))
+        ocrPages++
+      } catch {
+        // Rendering or OCR failed for this page (e.g. no canvas binary for the
+        // platform): keep it blank rather than lose the pages that have text.
+        ocrFailures++
+      }
     }
+    // Nothing had text and OCR couldn't run at all: that's a failure, not an empty file.
+    if (textPages === 0 && ocrPages === 0 && ocrFailures > 0) throw new ExtractError("Couldn't OCR this scanned PDF")
     const method = ocrPages === 0 ? "TEXT" : textPages === 0 ? "OCR" : "MIXED"
     return { kind: "text", method, pages }
   } finally {
