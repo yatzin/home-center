@@ -344,6 +344,17 @@ Returns:
 
 Label: `Searching documents for “filter size”…`
 
+### `list_documents` (added after first use)
+
+Search only finds passages, so "what documents do you have?" had no answer.
+`list_documents` lists the files themselves, newest first: everything, or one
+`asset` / `recordType` (the same arguments and health filter as search).
+`limit` defaults to 25, max 30, which keeps it inside the tool-result budget.
+Each row has the file name and link, owning record, asset name, upload day,
+page count (when > 1), and `searchable` when the text isn't indexed ("not yet —
+waiting to be read", "no — file type can't be read", …). `total` plus a note
+says when more exist.
+
 ### `read_document`
 
 > Read the extracted text of one uploaded file, in pages. Use after
