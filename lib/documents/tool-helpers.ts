@@ -1,7 +1,9 @@
 import type { AttachmentRecordType, DocumentTextStatus } from "@/app/generated/prisma/client"
 import { ToolInputError } from "@/lib/llm/query"
+import { compact, toDay } from "@/lib/llm/serialize"
 import type { Hit } from "./index-db"
 import { HEALTH_RECORD_TYPES } from "./limits"
+import type { DocumentRef } from "./owner"
 
 // Rules for the assistant's document tools that don't need the database.
 
@@ -68,6 +70,44 @@ export function searchDocumentsDescription(includeHealth: boolean): string {
     "deductibles, coverage terms, instructions. Key words or a model number work better than a whole question. " +
     "Returns the best passages per file; call read_document for more."
   )
+}
+
+export function listDocumentsDescription(includeHealth: boolean): string {
+  return (
+    "List the files uploaded to records — receipts, manuals, warranty cards, insurance policies" +
+    (includeHealth ? ", medical documents" : "") +
+    ", newest first. Use it for 'what documents do we have', to see the files for one asset or person, " +
+    "or of one record type. It lists names, not contents: use search_documents or read_document for what's inside."
+  )
+}
+
+const NOT_SEARCHABLE: Record<Exclude<DocumentTextStatus, "DONE">, string> = {
+  PENDING: "not yet — waiting to be read",
+  EMPTY: "no — no text found",
+  UNSUPPORTED: "no — file type can't be read",
+  FAILED: "no — couldn't be read",
+}
+
+/** One row of list_documents: the file, what it belongs to, and whether its text can be searched. */
+export function listedDocument(
+  ref: Omit<DocumentRef, "asset"> & {
+    asset: DocumentRef["asset"]
+    uploadedAt: Date
+    text: { status: DocumentTextStatus; pageCount: number | null } | null
+  },
+  assetName: string | undefined
+): Record<string, unknown> {
+  const status = ref.text?.status ?? "PENDING"
+  return compact({
+    attachmentId: ref.attachmentId,
+    fileName: ref.fileName,
+    fileHref: ref.fileHref,
+    record: ref.record,
+    asset: assetName,
+    uploaded: toDay(ref.uploadedAt),
+    pages: ref.text?.pageCount && ref.text.pageCount > 1 ? ref.text.pageCount : null,
+    searchable: status === "DONE" ? null : NOT_SEARCHABLE[status],
+  })
 }
 
 export const READ_DOCUMENT_DESCRIPTION =

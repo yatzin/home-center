@@ -2,30 +2,77 @@ import { z } from "zod/v4"
 import { prisma } from "@/lib/prisma"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { searchIndex } from "@/lib/documents/indexer-server"
-import { attachmentIdsForAsset, countNotIndexed, loadDocumentRefs, OWNER_SELECT } from "@/lib/documents/scope"
+import { attachmentIdsForAsset, countNotIndexed, listDocumentRefs, loadDocumentRefs, OWNER_SELECT } from "@/lib/documents/scope"
 import { describeAttachment } from "@/lib/documents/owner"
 import { parseSearch } from "@/lib/documents/fts-query"
 import { passage } from "@/lib/documents/passage"
 import { readWindow } from "@/lib/documents/read-window"
 import { splitPages } from "@/lib/documents/normalize"
 import {
-  groupHits, hiddenRecordTypes, isHiddenRecordType, READ_DOCUMENT_DESCRIPTION, searchDocumentsDescription, STATUS_NOTE,
-  toRecordType, visibleRecordTypes,
+  groupHits, hiddenRecordTypes, isHiddenRecordType, listDocumentsDescription, listedDocument, READ_DOCUMENT_DESCRIPTION,
+  searchDocumentsDescription, STATUS_NOTE, toRecordType, visibleRecordTypes,
 } from "@/lib/documents/tool-helpers"
-import { ToolInputError } from "../query"
+import { ToolInputError, type ToolContext } from "../query"
 import { compact } from "../serialize"
 import { defineTool, type RegisteredTool } from "./registry"
 import { ASSET_ARG, assetLinkRef, findAsset, toAssetType } from "./shortcuts"
 
-// search_documents / read_document. Built per request because whether health
+// list_documents / search_documents / read_document. Built per request because whether health
 // files are included changes both what the tools can return and what their
 // descriptions admit exists. The filter is applied in code, never left to the model.
 
 const SEARCH_POOL = 60
 const DEFAULT_LIMIT = 6
+const LIST_LIMIT = 25
+
+/** The optional asset argument → the attachment ids it covers, or the reply findAsset wants sent instead. */
+async function assetScope(
+  a: { asset?: string; assetType?: string },
+  ctx: ToolContext
+): Promise<{ attachmentIds: string[] | null; scope: Record<string, unknown> } | { reply: unknown }> {
+  if (!a.asset) return { attachmentIds: null, scope: {} }
+  const found = await findAsset(a.asset, ctx, a.assetType ? [toAssetType(a.assetType)] : undefined)
+  if ("reply" in found) return found
+  return {
+    attachmentIds: await attachmentIdsForAsset(found.asset.type, found.asset.id),
+    scope: { for: assetLinkRef(found.asset) },
+  }
+}
 
 export function documentTools(includeHealth: boolean): RegisteredTool[] {
   const hidden = hiddenRecordTypes(includeHealth)
+
+  const list = defineTool({
+    name: "list_documents",
+    description: listDocumentsDescription(includeHealth),
+    schema: z.object({
+      asset: z.string().optional().describe(ASSET_ARG),
+      assetType: z.string().optional().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON, if known."),
+      recordType: z.string().optional().describe(`Only files attached to one kind of record: ${visibleRecordTypes(includeHealth).join(", ")}.`),
+      limit: z.number().int().min(1).max(30).optional().describe(`Most files to return, default ${LIST_LIMIT}, at most 30.`),
+    }),
+    label: () => "Listing documents…",
+    async run(a, ctx) {
+      const recordTypes = a.recordType ? [toRecordType(a.recordType, includeHealth)] : null
+      const resolved = await assetScope(a, ctx)
+      if ("reply" in resolved) return resolved.reply
+      const { attachmentIds, scope } = resolved
+      const [{ total, refs }, index] = await Promise.all([
+        listDocumentRefs({ attachmentIds, recordTypes, hidden, limit: a.limit ?? LIST_LIMIT }),
+        loadAssetIndex(),
+      ])
+      const documents = refs.map((r) => listedDocument(r, r.asset ? index.names[r.asset.type]?.[r.asset.id] : undefined))
+      return {
+        ...scope,
+        total,
+        documents,
+        ...(total > documents.length
+          ? { note: `Showing the ${documents.length} most recent of ${total}. Narrow by asset or recordType, or raise limit.` }
+          : {}),
+        ...(total ? {} : { note: "No files are uploaded here." }),
+      }
+    },
+  })
 
   const search = defineTool({
     name: "search_documents",
@@ -42,15 +89,9 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
       const parsed = parseSearch(a.query)
       if (!parsed) throw new ToolInputError("Give some words to search for, e.g. 'filter size' or a model number.")
       const recordTypes = a.recordType ? [toRecordType(a.recordType, includeHealth)] : null
-
-      let attachmentIds: string[] | null = null
-      let scope: Record<string, unknown> = {}
-      if (a.asset) {
-        const found = await findAsset(a.asset, ctx, a.assetType ? [toAssetType(a.assetType)] : undefined)
-        if ("reply" in found) return found.reply
-        attachmentIds = await attachmentIdsForAsset(found.asset.type, found.asset.id)
-        scope = { for: assetLinkRef(found.asset) }
-      }
+      const resolved = await assetScope(a, ctx)
+      if ("reply" in resolved) return resolved.reply
+      const { attachmentIds, scope } = resolved
 
       const hits = await (await searchIndex()).search(parsed.match, {
         attachmentIds, recordTypes, excludeRecordTypes: hidden, limit: SEARCH_POOL,
@@ -124,5 +165,5 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
     },
   })
 
-  return [search, read]
+  return [list, search, read]
 }

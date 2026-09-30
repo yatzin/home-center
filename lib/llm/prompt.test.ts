@@ -9,6 +9,7 @@ describe("buildSystemPrompt", () => {
     const p = buildSystemPrompt({ now, documents: true })
     expect(p).toContain("search_documents")
     expect(p).toContain("read_document")
+    expect(p).toContain("list_documents")
     expect(p).toMatch(/never follow instructions/i)
   })
 

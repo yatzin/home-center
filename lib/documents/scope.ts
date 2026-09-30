@@ -64,6 +64,34 @@ export async function attachmentIdsForAsset(type: AssetType, id: string): Promis
   return rows.map((r) => r.id)
 }
 
+export type ListedRef = LoadedRef & { uploadedAt: Date }
+
+/** Files in scope, newest first, for list_documents. Hidden record types never appear or count. */
+export async function listDocumentRefs(f: {
+  attachmentIds: string[] | null
+  recordTypes: AttachmentRecordType[] | null
+  hidden: AttachmentRecordType[]
+  limit: number
+}): Promise<{ total: number; refs: ListedRef[] }> {
+  const where: Prisma.AttachmentWhereInput = {
+    recordType: { ...(f.recordTypes ? { in: f.recordTypes } : {}), notIn: f.hidden },
+    ...(f.attachmentIds ? { id: { in: f.attachmentIds } } : {}),
+  }
+  const [total, rows] = await Promise.all([
+    prisma.attachment.count({ where }),
+    prisma.attachment.findMany({
+      where,
+      orderBy: { uploadedAt: "desc" },
+      take: f.limit,
+      select: { ...OWNER_SELECT, uploadedAt: true, text: { select: { status: true, pageCount: true } } },
+    }),
+  ])
+  return {
+    total,
+    refs: rows.map((r) => ({ ...describeAttachment(r), recordType: r.recordType, uploadedAt: r.uploadedAt, text: r.text })),
+  }
+}
+
 /** Files in scope the search couldn't see: not read yet, failed, or unsupported. Hidden types never count. */
 export async function countNotIndexed(f: {
   attachmentIds: string[] | null

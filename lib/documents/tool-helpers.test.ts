@@ -1,7 +1,42 @@
 import { describe, expect, it } from "vitest"
 import {
-  documentAccess, groupHits, hiddenRecordTypes, isHiddenRecordType, searchDocumentsDescription, toRecordType, visibleRecordTypes,
+  documentAccess, groupHits, hiddenRecordTypes, isHiddenRecordType, listDocumentsDescription, listedDocument, searchDocumentsDescription,
+  toRecordType, visibleRecordTypes,
 } from "./tool-helpers"
+
+describe("listedDocument", () => {
+  const ref = {
+    attachmentId: "a1",
+    fileName: "Manual.pdf",
+    fileHref: "/api/files/warranty/w1/x.pdf",
+    record: { type: "warranty", title: "Furnace", href: "/assets/equipment/e1" },
+    asset: { type: "EQUIPMENT" as const, id: "e1" },
+    uploadedAt: new Date("2026-09-01T15:30:00Z"),
+  }
+
+  it("shows a searchable file with its asset name, day and page count", () => {
+    expect(listedDocument({ ...ref, text: { status: "DONE", pageCount: 12 } }, "Gas Furnace")).toEqual({
+      attachmentId: "a1",
+      fileName: "Manual.pdf",
+      fileHref: "/api/files/warranty/w1/x.pdf",
+      record: { type: "warranty", title: "Furnace", href: "/assets/equipment/e1" },
+      asset: "Gas Furnace",
+      uploaded: "2026-09-01",
+      pages: 12,
+    })
+  })
+
+  it("says why a file isn't searchable, and leaves out single-page counts", () => {
+    expect(listedDocument({ ...ref, text: { status: "PENDING", pageCount: null } }, undefined)).toMatchObject({ searchable: "not yet — waiting to be read" })
+    expect(listedDocument({ ...ref, text: { status: "UNSUPPORTED", pageCount: null } }, undefined).searchable).toBe("no — file type can't be read")
+    expect(listedDocument({ ...ref, text: { status: "DONE", pageCount: 1 } }, undefined)).not.toHaveProperty("pages")
+  })
+
+  it("only mentions medical files in the list description when they're included", () => {
+    expect(listDocumentsDescription(false)).not.toMatch(/medical/i)
+    expect(listDocumentsDescription(true)).toMatch(/medical/i)
+  })
+})
 
 describe("record type rules", () => {
   it("hides exactly the five health types unless health documents are on", () => {
