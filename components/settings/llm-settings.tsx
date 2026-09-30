@@ -25,6 +25,8 @@ type Values = {
   timeoutSeconds: string
   maxToolRounds: string
   extraBody: string
+  documentsEnabled: boolean
+  healthDocumentsEnabled: boolean
 }
 
 export function LlmSettings({
@@ -32,11 +34,14 @@ export function LlmSettings({
   hasStoredKey,
   keyUnreadable,
   ready,
+  indexingEnabled,
 }: {
   initial: Omit<Values, "apiKey">
   hasStoredKey: boolean
   keyUnreadable: boolean
   ready: boolean
+  /** Document switches only matter while indexing is on (Settings → Documents). */
+  indexingEnabled: boolean
 }) {
   const form = useForm<Values>({ defaultValues: { ...initial, apiKey: "" } })
   const [clearApiKey, setClearApiKey] = useState(false)
@@ -124,6 +129,49 @@ export function LlmSettings({
                 <FormLabel className="!mt-0 font-normal text-muted-foreground">
                   Hide the assistant from the nav menu and the top-right button
                 </FormLabel>
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="documentsEnabled" render={({ field }) => (
+              <FormItem className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={field.value}
+                      disabled={!indexingEnabled}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  </FormControl>
+                  <FormLabel className="!mt-0">Let the assistant read uploaded documents</FormLabel>
+                </div>
+                <FormDescription className="text-xs">
+                  {indexingEnabled
+                    ? "Document text is sent to the configured LLM server when it's relevant to a question."
+                    : "Turn on document indexing first (Documents, above)."}
+                </FormDescription>
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="healthDocumentsEnabled" render={({ field }) => (
+              <FormItem className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={field.value}
+                      disabled={!indexingEnabled || !form.watch("documentsEnabled")}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  </FormControl>
+                  <FormLabel className="!mt-0 font-normal">Include health record documents</FormLabel>
+                </div>
+                <FormDescription className="text-xs">
+                  Files attached to conditions, observations, medications, allergies and immunizations. With a cloud
+                  provider, their text leaves this server.
+                </FormDescription>
               </FormItem>
             )} />
 
