@@ -7,6 +7,7 @@ import { formatIndexStats, type StatusCounts } from "./stats"
 import { MAX_ATTEMPTS, OCR_EXTENSIONS } from "./limits"
 import { activeModel, embedderFor } from "./embed/server"
 import { modelKey, type EmbeddingModel } from "./embed/models"
+import { entitiesChanged } from "@/lib/search/entities/changes"
 
 // instrumentation.ts, route handlers and server actions can each load their
 // own copy of this module, so the one indexer and index handle per process
@@ -82,6 +83,9 @@ function intervalMs() {
 }
 
 function reconcileNow(trigger: string) {
+  // Database records share the index file; re-sync them on the same occasions
+  // (boot, the schedule, settings changes, a rebuild).
+  entitiesChanged()
   return documentIndexer()
     .reconcile()
     .then(

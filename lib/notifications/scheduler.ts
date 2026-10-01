@@ -1,5 +1,6 @@
 import { checkAndNotify } from "./checker"
 import { sendPendingDigests } from "./digest"
+import { pruneOldNotifications } from "./retention"
 
 // Notifications used to be created by a fire-and-forget call on the dashboard,
 // which meant they only appeared when somebody happened to look — no visit, no
@@ -43,9 +44,10 @@ async function runOnce(trigger: string) {
     // Runs every pass, not just when something was created: a digest the user
     // wasn't due for last time may be due now, and a failed send needs a retry.
     const emailed = await sendPendingDigests()
-    if (created > 0 || emailed > 0) {
+    const pruned = await pruneOldNotifications()
+    if (created > 0 || emailed > 0 || pruned > 0) {
       console.log(
-        `[notifications] ${trigger}: created ${created}, emailed ${emailed} in ${Date.now() - startedAt}ms`
+        `[notifications] ${trigger}: created ${created}, emailed ${emailed}, deleted ${pruned} older than a year in ${Date.now() - startedAt}ms`
       )
     }
   } catch (error) {

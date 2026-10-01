@@ -11,8 +11,8 @@ import {
   daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, isSupersededImmunization, refillDue,
 } from "@/lib/health"
 import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
-import { ENTITIES, type EntityKey, type Row } from "../ontology"
-import { coerceValue, entityDef, inDayRange, requireDay, selectFor, ToolInputError, type ToolContext } from "../query"
+import { ENTITIES, HEALTH_ENTITIES, type EntityKey, type Row } from "../ontology"
+import { coerceValue, entityDef, healthOn, inDayRange, requireDay, selectFor, ToolInputError, type ToolContext } from "../query"
 import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
@@ -57,7 +57,9 @@ export const searchTool = defineTool({
 async function searchRecords(query: string, entities: string[] | undefined, ctx: ToolContext) {
   const { words, types } = splitSearchQuery(query)
   if (!words.length && !types.length) throw new ToolInputError("Search needs at least one word of two or more characters.")
-  const keys = types.length ? types : entities?.length ? entities.map((e) => entityDef(e).key) : SEARCHABLE
+  const requested = types.length ? types : entities?.length ? entities.map((e) => entityDef(e, ctx).key) : SEARCHABLE
+  // With Health off its entities are skipped, and a person's records with them.
+  const keys = healthOn(ctx) ? requested : requested.filter((k) => !HEALTH_ENTITIES.has(k))
   const index = await loadAssetIndex()
   const found = await Promise.all(
     keys.map(async (key) => {
@@ -66,6 +68,7 @@ async function searchRecords(query: string, entities: string[] | undefined, ctx:
         AND: [
           ...words.map((w) => ({ OR: def.searchFields.map((f) => ({ [f]: { contains: w } })) })),
           ...(def.scope ? [def.scope(ctx)] : []),
+          ...(def.polymorphic && !healthOn(ctx) ? [{ assetType: { not: "PERSON" } }] : []),
         ],
       }
       // No name words means "list this type", so allow a fuller page.
@@ -151,7 +154,7 @@ async function propertyScope(propertyId: string) {
 /** Where-clause and reply header for the optional asset of warranty_status / maintenance_status. */
 async function assetScope(a: { asset?: string; assetType?: string }, ctx: ToolContext) {
   const assetType = a.assetType ? toAssetType(a.assetType) : undefined
-  if (!a.asset) return { where: assetType ? { assetType } : {} }
+  if (!a.asset) return { where: assetType ? { assetType } : healthOn(ctx) ? {} : { assetType: { not: "PERSON" as const } } }
   const found = await findAsset(a.asset, ctx, assetType ? [assetType] : undefined)
   if ("reply" in found) return found
   const { asset } = found

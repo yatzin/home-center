@@ -21,6 +21,10 @@ export type RankedRow = RankedEntry & {
   /// This is a client component, so every prop crossing into it has to be
   /// serializable, and a function is not.
   href?: string
+  /// 1 for a row nested under the one above it, whose total is already counted
+  /// in that row. Only the label is indented: the bar keeps the full width so
+  /// every row stays on the one shared scale.
+  depth?: number
 }
 
 export function RankedBars({
@@ -71,7 +75,11 @@ export function RankedBars({
             const row = (
               <>
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-sm">{entry.label}</span>
+                  <span
+                    className={entry.depth ? "truncate pl-4 text-[13px] text-muted-foreground" : "truncate text-sm"}
+                  >
+                    {entry.label}
+                  </span>
                   <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
                     {formatMoney(entry.total)}
                   </span>
@@ -89,7 +97,10 @@ export function RankedBars({
                         />
                       ))}
                     </div>
-                    <div className="relative rounded-full bg-muted" style={{ height: barHeight }}>
+                    <div
+                      className="relative rounded-full bg-muted"
+                      style={{ height: entry.depth ? Math.min(barHeight, 5) : barHeight }}
+                    >
                       <div
                         className="chart-grow-x h-full rounded-full"
                         // A sub-pixel width vanishes entirely, so a real but tiny
@@ -163,7 +174,7 @@ export function RankedBars({
           { key: "count", label: "Records", align: "right" },
         ]}
         rows={entries.map((entry) => ({
-          label: entry.label,
+          label: entry.depth ? "  " + entry.label : entry.label,
           total: formatMoney(entry.total),
           count: entry.count,
         }))}

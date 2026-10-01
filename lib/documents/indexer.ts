@@ -77,6 +77,8 @@ export type IndexerDeps = {
 export type Indexer = {
   enqueue(id: string): void
   reconcile(): Promise<{ queued: number }>
+  /** Embeds whatever has no vector yet (e.g. records just synced) without a full reconcile. */
+  embedNow(): void
   /** Resolves once the queue is empty and nothing is running. */
   idle(): Promise<void>
   pending(): number
@@ -166,10 +168,14 @@ export function createIndexer(deps: IndexerDeps): Indexer {
         const { indexingEnabled } = await deps.store.settings()
         if (!indexingEnabled) return false
         if (!(await session.stillActive())) return true
-        const batch = await index.chunksMissingVectors(EMBED_BATCH)
+        // File chunks first, then database records (lib/search/entities).
+        let batch = await index.chunksMissingVectors(EMBED_BATCH)
+        const records = !batch.length
+        if (records) batch = await index.entityChunksMissingVectors(EMBED_BATCH)
         if (!batch.length) return false
         const vectors = await session.embed(batch.map((b) => b.text))
-        await index.writeVectors(session.key, batch.map((b, i) => ({ chunkId: b.chunkId, vector: vectors[i] })))
+        const rows = batch.map((b, i) => ({ chunkId: b.chunkId, vector: vectors[i] }))
+        await (records ? index.writeEntityVectors(session.key, rows) : index.writeVectors(session.key, rows))
         await new Promise((resolve) => setImmediate(resolve))
       }
       return false
@@ -241,6 +247,9 @@ export function createIndexer(deps: IndexerDeps): Indexer {
   return {
     enqueue(id) {
       queue.add(id)
+      void drain()
+    },
+    embedNow() {
       void drain()
     },
     reconcile() {

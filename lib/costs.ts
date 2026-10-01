@@ -170,6 +170,33 @@ export function byAsset(rows: CostRow[]): Map<string, Bucket> {
   return rollup(rows, (r) => assetKey(r.assetType, r.assetId))
 }
 
+export type NestedAssets = {
+  /// Property totals include the equipment installed there.
+  top: Map<string, Bucket>
+  /// Per parent key: its own direct spend plus each equipment item, keyed by
+  /// asset key. Present only for properties that have equipment spend.
+  children: Map<string, Map<string, Bucket>>
+}
+
+/// Like byAsset, but equipment spend rolls into its property. Callers pass this
+/// only when equipment is part of the view — rolling it into a property the
+/// reader filtered down to alone would overstate that filter's total.
+export function nestedByAsset(rows: CostRow[], equipmentProperty: Map<string, string>): NestedAssets {
+  const parentOf = (r: CostRow) => {
+    const propertyId = r.assetType === "EQUIPMENT" ? equipmentProperty.get(r.assetId) : undefined
+    return propertyId ? assetKey("PROPERTY", propertyId) : assetKey(r.assetType, r.assetId)
+  }
+  const top = rollup(rows, parentOf)
+  const children = new Map<string, Map<string, Bucket>>()
+  for (const parent of top.keys()) {
+    const group = rows.filter((r) => parentOf(r) === parent)
+    if (group.some((r) => assetKey(r.assetType, r.assetId) !== parent)) {
+      children.set(parent, byAsset(group))
+    }
+  }
+  return { top, children }
+}
+
 export function byCategory(rows: CostRow[]): Map<CategoryKey, Bucket> {
   return rollup(rows, (r) => (r.category ?? UNCATEGORIZED) as CategoryKey)
 }

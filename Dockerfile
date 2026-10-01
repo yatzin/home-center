@@ -31,6 +31,10 @@ RUN npm run build
 # The built-in embedding model ships in the image so semantic search works
 # offline from the first start. Downloaded and checksum-verified here.
 RUN npm run models:fetch-builtin
+# Build and lint tools aren't needed past this point; dropping them keeps the
+# image smaller. tsx and dotenv stay — they're dependencies, used at runtime
+# by the seed and prisma.config.ts.
+RUN npm prune --omit=dev
 
 # ── runner: minimal production image ─────────────────────────────────────────
 FROM node:22-bookworm-slim AS runner
@@ -67,5 +71,6 @@ RUN chmod +x ./docker-entrypoint.sh
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV UPLOAD_DIR=/data/uploads
 ENV MODELS_DIR=/data/models
 ENTRYPOINT ["./docker-entrypoint.sh"]

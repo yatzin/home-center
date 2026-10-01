@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+import { Coffee } from "lucide-react"
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
@@ -5,19 +7,22 @@ import { Sidebar, MobileSidebarTrigger } from "@/components/sidebar"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { GlobalSearch } from "@/components/global-search"
 import { resolveNotificationHrefs } from "@/lib/notification-links"
 import { loadLlmStatus } from "@/lib/llm/config"
 import { ChatProvider } from "@/components/chat/chat-provider"
 import { ChatDock, ChatToggle } from "@/components/chat/chat-panel"
 import packageJson from "@/package.json"
+import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
 
+  const features = await loadFeatures()
   const [notifications, llm] = await Promise.all([
     prisma.notification.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, dismissedAt: null, ...(await visibleNotificationsWhere(features)) },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
@@ -33,11 +38,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ChatProvider userId={session.user.id} available={llm.available} isAdmin={isAdmin} model={llm.model}>
       <div className="flex h-svh overflow-hidden">
-        <Sidebar showAssistant={showAssistant} />
+        <Sidebar showAssistant={showAssistant} showHealth={features.health} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-card/80 backdrop-blur-sm px-4">
-            <MobileSidebarTrigger showAssistant={showAssistant} />
-            <div className="flex items-center gap-2 ml-auto">
+            <MobileSidebarTrigger showAssistant={showAssistant} showHealth={features.health} />
+            <div className="flex min-w-0 flex-1 justify-center">
+              <Suspense fallback={null}>
+                <GlobalSearch className="max-w-xl" />
+              </Suspense>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               {showAssistant && <ChatToggle />}
               <NotificationBell notifications={notificationItems} />
@@ -48,8 +58,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               <main className="flex-1 overflow-y-auto p-6">{children}</main>
-              <footer className="shrink-0 border-t border-border/60 px-4 py-2 text-center text-xs text-muted-foreground">
-                HomeCenter &middot; v{packageJson.version}
+              {/* Name and version centred; the empty first column balances the coffee link on the right. */}
+              <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
+                <span />
+                <span>
+                  <a
+                    href="https://github.com/yatzin/home-center"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    HomeCenter
+                  </a>{" "}
+                  &middot; v{packageJson.version}
+                </span>
+                <a
+                  href="https://buymeacoffee.com/yatzin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 justify-self-end whitespace-nowrap underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  <Coffee className="h-3 w-3" aria-hidden="true" />
+                  Buy me a coffee
+                </a>
               </footer>
             </div>
             {showAssistant && <ChatDock />}

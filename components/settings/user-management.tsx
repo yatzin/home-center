@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { signOut } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -11,7 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Badge } from "@/components/ui/badge"
-import { createUser, updateUserRole, resetUserPassword, deleteUser, updateSelf } from "@/lib/actions/users"
+import { createUser, updateUserRole, resetUserPassword, deleteUser, updateSelf, changeOwnPassword } from "@/lib/actions/users"
+import { MIN_PASSWORD_LENGTH } from "@/lib/password-change"
 import type { User } from "@/app/generated/prisma/client"
 
 const roleLabel: Record<string, string> = { ADMIN: "Admin", USER: "User" }
@@ -19,6 +21,7 @@ const roleLabel: Record<string, string> = { ADMIN: "Admin", USER: "User" }
 export function UserManagement({ users, currentUserId }: { users: User[]; currentUserId: string }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [editingSelf, setEditingSelf] = useState<User | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
   const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null)
 
   async function handleRoleChange(id: string, role: string) {
@@ -85,7 +88,10 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     {u.id === currentUserId ? (
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingSelf(u)}>Edit</Button>
+                      <>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setChangingPassword(true)}>Change pw</Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingSelf(u)}>Edit</Button>
+                      </>
                     ) : (
                       <>
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleResetPassword(u.id, u.name)}>Reset pw</Button>
@@ -114,6 +120,8 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
           onClose={() => setEditingSelf(null)}
         />
       )}
+
+      {changingPassword && <ChangePasswordDialog onClose={() => setChangingPassword(false)} />}
 
       {tempPassword && (
         <Dialog open onOpenChange={() => setTempPassword(null)}>
@@ -234,6 +242,61 @@ function EditSelfDialog({ user, onClose }: { user: User; onClose: () => void }) 
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Saving…" : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+const changePasswordSchema = z
+  .object({
+    current: z.string().min(1, "Enter your current password"),
+    next: z.string().min(MIN_PASSWORD_LENGTH, `At least ${MIN_PASSWORD_LENGTH} characters`),
+    confirm: z.string().min(1, "Confirm the new password"),
+  })
+  .refine((v) => v.next === v.confirm, { path: ["confirm"], message: "Passwords do not match" })
+
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const form = useForm({
+    resolver: zodResolver(changePasswordSchema),
+    defaultValues: { current: "", next: "", confirm: "" },
+  })
+
+  async function onSubmit(values: z.infer<typeof changePasswordSchema>) {
+    const result = await changeOwnPassword(values)
+    if ("error" in result && result.error) {
+      form.setError(result.field, { message: result.error })
+      return
+    }
+    // Every session for this account has just ended, this one included.
+    await signOut({ callbackUrl: "/login?message=password-changed" })
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Change Password</DialogTitle></DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField control={form.control} name="current" render={({ field }) => (
+              <FormItem><FormLabel>Current password</FormLabel><FormControl><Input type="password" autoComplete="current-password" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="next" render={({ field }) => (
+              <FormItem><FormLabel>New password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="confirm" render={({ field }) => (
+              <FormItem><FormLabel>Confirm new password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <p className="text-xs text-muted-foreground">
+              Changing it signs you out on every device, including this one.
+            </p>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Changing…" : "Change Password"}
               </Button>
             </DialogFooter>
           </form>

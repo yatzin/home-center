@@ -28,6 +28,10 @@ export default auth((req) => {
   return NextResponse.next()
 })
 
+// The two upload routes are left out: proxy buffers every request body it sees
+// (10 MB by default, truncating anything longer), which broke uploads between
+// that and MAX_UPLOAD_BYTES. Both routes check the session themselves and
+// refuse an oversized body from its headers before reading it.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/|api/uploads$|api/assets/[^/]+/[^/]+/image$).*)"],
 }

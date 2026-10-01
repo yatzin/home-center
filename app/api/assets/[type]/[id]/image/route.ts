@@ -5,6 +5,7 @@ import { writeFile, mkdir, rm } from "fs/promises"
 import path from "path"
 import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
+import { maxUploadBytes, oversizedBody } from "@/lib/upload-limits"
 import { extensionForFilename, mimeForFilename } from "@/lib/upload-types"
 
 const VALID_TYPES = ["properties", "vehicles", "equipment", "people"] as const
@@ -40,7 +41,9 @@ export async function POST(
     return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
   }
 
-  const maxBytes = parseInt(process.env.MAX_UPLOAD_BYTES ?? "26214400")
+  const maxBytes = maxUploadBytes()
+  const tooBig = oversizedBody(request.headers, maxBytes)
+  if (tooBig) return NextResponse.json({ error: tooBig.error }, { status: tooBig.status })
   const formData = await request.formData()
   const file = formData.get("file") as File | null
 

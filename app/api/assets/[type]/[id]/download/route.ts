@@ -6,6 +6,7 @@ import { readFileSync, existsSync } from "fs"
 import path from "path"
 import { parseAssetSegment } from "@/lib/report-server"
 import { resolveUploadPath } from "@/lib/upload-path"
+import { loadFeatures } from "@/lib/features-server"
 
 // Folder names inside the zip. originalName is client-supplied, so slashes are
 // flattened too — a name like "../../x" must not climb out when unzipped.
@@ -23,6 +24,7 @@ export async function GET(
   const assetType = parseAssetSegment(type)
   if (!assetType) return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
   const isPerson = assetType === "PERSON"
+  if (isPerson && !(await loadFeatures()).health) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const [serviceAttachments, warrantyAttachments, conditionAttachments, insuranceAttachments, observationAttachments, medicationAttachments, allergyAttachments, immunizationAttachments] = await Promise.all([
     prisma.attachment.findMany({

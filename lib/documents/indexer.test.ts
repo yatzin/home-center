@@ -17,6 +17,8 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
   const chunkIds = new Map<string, number[]>()
   const vectors = new Map<number, string>()
   const textOf = new Map<number, string>()
+  const entityText = new Map<number, string>()
+  const entityVectors = new Map<number, string>()
   const replaceChunks = (id: string, c: Chunk[]) => {
     for (const old of chunkIds.get(id) ?? []) {
       vectors.delete(old)
@@ -86,6 +88,18 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
     },
     vectorSearch: async () => [],
     vectorStats: async () => ({ chunks: textOf.size, withVectors: vectors.size }),
+    entityHashes: async () => new Map(),
+    replaceEntity: async (_kind, _id, _hash, texts) => {
+      for (const text of texts) entityText.set(nextChunkId++, text)
+    },
+    removeEntities: async () => {},
+    entityChunksMissingVectors: async (limit: number) =>
+      [...entityText].filter(([n]) => !entityVectors.has(n)).slice(0, limit).map(([chunkId, text]) => ({ chunkId, text })),
+    writeEntityVectors: async (key: string, rows: { chunkId: number; vector: number[] }[]) => {
+      for (const r of rows) if (entityText.has(r.chunkId)) entityVectors.set(r.chunkId, key)
+    },
+    entityVectorSearch: async () => [],
+    entityStats: async () => ({ chunks: entityText.size, withVectors: entityVectors.size }),
   }
   const extract = vi.fn<(filePath: string, ext: string | null, opts: { ocr: boolean }) => Promise<Extracted>>(async (filePath) => {
     const id = filePath.replace(/^\/u\/|\.pdf$/g, "")
@@ -105,7 +119,7 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
     ? { begin: vi.fn(async (): Promise<SemanticSession | null> => ({ key: "m@1", embed, stillActive: async () => true, end: ended })) }
     : undefined
   const indexer = createIndexer({ store, index: async () => index, extract, idle: idleHook, log, semantic })
-  return { settings, rows, add, chunks, replaceFails, extract, idleHook, log, indexer, vectors, embed, ended, semantic, embedCalls }
+  return { settings, rows, add, chunks, replaceFails, extract, idleHook, log, indexer, vectors, embed, ended, semantic, embedCalls, index, entityVectors }
 }
 
 describe("indexer", () => {
@@ -117,6 +131,25 @@ describe("indexer", () => {
     expect(t.vectors.size).toBe(2)
     expect(t.embedCalls.flat().sort()).toEqual(["one", "two"])
     expect(t.ended).toHaveBeenCalledTimes(1)
+  })
+
+  it("embeds database records after file chunks, in the same session", async () => {
+    const t = setup({ semantic: true, outcomes: { a: { kind: "text", method: "TEXT", pages: ["file text"] } } })
+    await t.index.replaceEntity("PROPERTY", "p1", "h", ["house text"])
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.embedCalls).toEqual([["file text"], ["house text"]])
+    expect(t.entityVectors.size).toBe(1)
+    expect(t.ended).toHaveBeenCalledTimes(1)
+  })
+
+  it("embedNow embeds records synced without any file work", async () => {
+    const t = setup({ semantic: true })
+    await t.index.replaceEntity("VEHICLE", "v1", "h", ["car text"])
+    t.indexer.embedNow()
+    await t.indexer.idle()
+    expect(t.embedCalls).toEqual([["car text"]])
   })
 
   it("embeds nothing when semantic search isn't available", async () => {

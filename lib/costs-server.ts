@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import type { AssetType } from "@/app/generated/prisma/client"
 import type { CostRow } from "@/lib/costs"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 /// One query, many rollups. Grouping happens in memory in lib/costs.ts because
 /// SQLite cannot group by an extracted year without raw SQL, because assetId is
@@ -12,11 +14,14 @@ export async function loadCostRecords(filter?: {
   assetId?: string
   assetType?: AssetType
 }): Promise<CostRow[]> {
+  const features = await loadFeatures()
+  if (!features.health && filter?.assetType === "PERSON") return []
   const rows = await prisma.serviceRecord.findMany({
     where: {
       cost: { not: null },
       ...(filter?.assetId ? { assetId: filter.assetId } : {}),
-      ...(filter?.assetType ? { assetType: filter.assetType } : {}),
+      // With Health off, people's visits drop out of every total.
+      ...(filter?.assetType ? { assetType: filter.assetType } : ownedWhere(features)),
     },
     select: {
       id: true,

@@ -1,3 +1,4 @@
+import { requireHealth } from "@/lib/features-server"
 import { prisma } from "@/lib/prisma"
 import { notFound } from "next/navigation"
 import Link from "next/link"
@@ -25,6 +26,7 @@ export default async function PersonDetailPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ tab?: string; open?: string }>
 }) {
+  await requireHealth()
   const { id } = await params
   const { tab, open } = await searchParams
   const person = await prisma.person.findUnique({

@@ -4,6 +4,7 @@ import { readFile, stat } from "fs/promises"
 import path from "path"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { UPLOAD_TYPES } from "@/lib/upload-types"
+import { loadFeatures } from "@/lib/features-server"
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,10 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { path: segments } = await params
+  // People's photos go with the rest of Health.
+  if (segments[0] === "people" && !(await loadFeatures()).health) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
   let filePath: string
   try {
     filePath = resolveUploadPath(...segments)

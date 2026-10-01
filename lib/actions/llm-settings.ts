@@ -3,6 +3,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 import { redirect } from "next/navigation"
 import { encrypt } from "@/lib/secret-box"
 import { loadLlmConfig, LLM_SETTINGS_ID } from "@/lib/llm/config"
@@ -43,6 +44,49 @@ export async function updateLlmSettings(data: LlmSettingsInput): Promise<{ error
   // The header button and sidebar item depend on this, on every page.
   revalidatePath("/", "layout")
   return { success: true }
+}
+
+const switchesSchema = z
+  .object({ enabled: z.boolean(), hidden: z.boolean(), documentsEnabled: z.boolean(), healthDocumentsEnabled: z.boolean() })
+  .partial()
+
+export type LlmSwitches = { enabled: boolean; hidden: boolean; documentsEnabled: boolean; healthDocumentsEnabled: boolean }
+
+/**
+ * The on/off switches, saved the moment they're clicked — separately from the
+ * connection fields, which wait for Save. Turning the assistant on needs a
+ * saved base URL and model, as a full save does.
+ */
+export async function updateLlmSwitches(patch: Partial<LlmSwitches>): Promise<{ error: string } | { success: true; values: LlmSwitches }> {
+  await requireAdmin()
+  const parsed = switchesSchema.safeParse(patch)
+  if (!parsed.success) return { error: "Invalid input." }
+
+  const saved = await prisma.llmSettings.findUnique({
+    where: { id: LLM_SETTINGS_ID },
+    select: { enabled: true, hidden: true, documentsEnabled: true, healthDocumentsEnabled: true, baseUrl: true, model: true },
+  })
+  const next: LlmSwitches = {
+    enabled: saved?.enabled ?? false,
+    hidden: saved?.hidden ?? false,
+    documentsEnabled: saved?.documentsEnabled ?? true,
+    healthDocumentsEnabled: saved?.healthDocumentsEnabled ?? false,
+    ...parsed.data,
+  }
+  if (next.enabled && !(saved?.baseUrl && saved?.model)) {
+    return { error: "Save a base URL and model under Advanced settings first." }
+  }
+  // Hidden only applies while off.
+  if (next.enabled) next.hidden = false
+
+  await prisma.llmSettings.upsert({
+    where: { id: LLM_SETTINGS_ID },
+    create: { id: LLM_SETTINGS_ID, ...next },
+    update: next,
+  })
+  // The header button and sidebar item depend on this, on every page.
+  revalidatePath("/", "layout")
+  return { success: true, values: next }
 }
 
 const PING_TOOL: OpenAiTool = {

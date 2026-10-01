@@ -13,6 +13,8 @@ import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { loadCostRecords } from "@/lib/costs-server"
 import { bucketed, formatMoney, priorPeriod, sum, yearToDate } from "@/lib/costs"
 import { SpendArea } from "@/components/charts/spend-area"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 // Months of history in the dashboard's spending chart. Twelve rather than six:
 // six months cannot show a season, and a household's spending is seasonal.
@@ -28,6 +30,8 @@ export default async function DashboardPage() {
 
   const now = new Date()
   const in60 = new Date(now.getTime() + 60 * 86400000)
+  const features = await loadFeatures()
+  const owned = ownedWhere(features)
 
   const [
     propertyCount, vehicleCount, equipmentCount, personCount, recordCount,
@@ -38,25 +42,25 @@ export default async function DashboardPage() {
     prisma.property.count(),
     prisma.vehicle.count(),
     prisma.equipment.count(),
-    prisma.person.count(),
-    prisma.serviceRecord.count(),
-    prisma.warranty.count({ where: { expirationDate: { gt: now } } }),
+    features.health ? prisma.person.count() : 0,
+    prisma.serviceRecord.count({ where: owned }),
+    prisma.warranty.count({ where: { ...owned, expirationDate: { gt: now } } }),
     // Everything that could be due either way; narrowed to what actually is,
     // and counted, below — mileage can't be filtered in SQL.
     prisma.maintenanceSchedule.findMany({
-      where: dueCandidateFilter(30, now),
+      where: { AND: [dueCandidateFilter(30, now), owned] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
     prisma.warranty.findMany({
-      where: { expirationDate: { gte: now, lte: in60 } },
+      where: { ...owned, expirationDate: { gte: now, lte: in60 } },
       orderBy: { expirationDate: "asc" },
       take: 6,
     }),
     prisma.property.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     prisma.vehicle.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
     prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
-    prisma.person.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
+    features.health ? prisma.person.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }) : [],
     loadAssetIndex(),
     loadActivityIndex(),
     loadCostRecords(),
@@ -110,9 +114,12 @@ export default async function DashboardPage() {
         <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} hero />
         <SummaryCard icon={<Car />} label="Vehicles" value={vehicleCount} href="/assets/vehicles" thumbnails={vehicleThumbnails} hero />
         {/* People and Equipment stack full-width in the third column, each with
-            room for its own thumbnail strip. */}
+            room for its own thumbnail strip. With Health off, Equipment has the
+            column to itself. */}
         <div className="col-span-2 grid grid-cols-1 gap-4 sm:col-span-3 lg:col-span-1">
-          <SummaryCard icon={<HeartPulse />} label="People" value={personCount} href="/assets/people" thumbnails={peopleThumbnails} compact hero />
+          {features.health && (
+            <SummaryCard icon={<HeartPulse />} label="People" value={personCount} href="/assets/people" thumbnails={peopleThumbnails} compact hero />
+          )}
           <SummaryCard icon={<Refrigerator />} label="Equipment" value={equipmentCount} href="/assets/equipment" thumbnails={equipmentThumbnails} compact hero />
         </div>
         {/* Records, Active Warranties, and Due stack vertically in a

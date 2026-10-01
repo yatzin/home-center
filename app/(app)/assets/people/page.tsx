@@ -1,9 +1,11 @@
+import { requireHealth } from "@/lib/features-server"
 import { cookies } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { PeopleList } from "@/components/people/people-list"
 import { assetViewCookieName, parseAssetView } from "@/lib/asset-view"
 
 export default async function PeoplePage() {
+  await requireHealth()
   // Start of today in UTC — dates are stored as UTC midnight, and a medication
   // counts as active through the whole of its end date (lib/health.ts).
   const today = new Date()

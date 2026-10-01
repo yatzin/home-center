@@ -11,6 +11,8 @@ import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/t
 import { scheduleDue, dueBadge, meterUnitShort, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { AssetType, Prisma } from "@/app/generated/prisma/client"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 const DEFAULT_SORT = "nextDue"
 const DEFAULT_DIR = "asc"
@@ -50,7 +52,7 @@ export default async function MaintenancePage({
     tiebreaker: { id: "asc" },
   })
 
-  const where: Prisma.MaintenanceScheduleWhereInput = { isActive: true }
+  const where: Prisma.MaintenanceScheduleWhereInput = { isActive: true, ...ownedWhere(await loadFeatures()) }
 
   const [schedules, total, statusRows, mileage, assets] = await Promise.all([
     prisma.maintenanceSchedule.findMany({ where, orderBy, skip, take }),
