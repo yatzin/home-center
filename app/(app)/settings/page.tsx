@@ -12,6 +12,7 @@ import { isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
 import { DocumentSettings } from "@/components/settings/document-settings"
 import { loadDocumentSettings } from "@/lib/documents/settings"
 import { documentIndexStats } from "@/lib/documents/indexer-server"
+import { loadModelStatus } from "@/lib/documents/embed/server"
 
 export default async function SettingsPage() {
   const session = await auth()
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
       ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } })
       : Promise.resolve(null),
     isAdmin ? loadLlmConfig() : Promise.resolve(null),
-    isAdmin ? Promise.all([loadDocumentSettings(), documentIndexStats()]) : Promise.resolve(null),
+    isAdmin ? Promise.all([loadDocumentSettings(), documentIndexStats(), loadModelStatus()]) : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -107,7 +108,17 @@ export default async function SettingsPage() {
         />
       )}
 
-      {isAdmin && docs && <DocumentSettings initial={docs[0]} stats={docs[1]} />}
+      {isAdmin && docs && (
+        <DocumentSettings
+          initial={{
+            indexingEnabled: docs[0].indexingEnabled,
+            ocrEnabled: docs[0].ocrEnabled,
+            semanticEnabled: docs[0].semanticEnabled,
+          }}
+          stats={docs[1]}
+          models={docs[2]}
+        />
+      )}
 
       {isAdmin && <UserManagement users={users} currentUserId={session.user.id} />}
     </div>
