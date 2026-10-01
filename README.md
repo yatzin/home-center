@@ -201,6 +201,34 @@ by default).
 
 Not indexed: iWork files, .zip, legacy .xls/.ppt and HEIC photos.
 
+#### Search by meaning
+
+Besides exact words, HomeCenter can find passages by meaning ("how often do I
+swap the furnace filter?" finds "replace every 90 days"). A small AI model runs
+**on your server** — no document text leaves it for this. The model loads only
+while documents are being indexed or searched, and unloads when idle.
+
+**Settings → Documents → Find documents by meaning** turns it on or off and
+picks the model:
+
+| Model | Size | Good for |
+|---|---|---|
+| BGE small (built in) | 34 MB | Fast, English |
+| Arctic Embed M | 110 MB | Best quality for its size, English (recommended upgrade) |
+| BGE base | 110 MB | Better quality, English |
+| Nomic Embed Text | 137 MB | Good quality, English |
+| E5 base | 279 MB | Many languages |
+| BGE large | 337 MB | Highest quality, slow on small hosts |
+
+Larger models download from Hugging Face when you click **Download** (the
+only time HomeCenter goes online for this) and are stored in `/data/models`.
+Switching models re-processes your documents in the background.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MODELS_DIR` | `/data/models` | Where downloaded models are kept. |
+| `EMBEDDING_IDLE_MINUTES` | `10` | Unload the model this long after the last search. `0` unloads right after each search. |
+
 ## Updating
 
 Pull the new image and recreate the container — your data folder is untouched:
@@ -210,6 +238,8 @@ docker compose pull && docker compose up -d
 ```
 
 In Portainer: **Pull and redeploy**.
+
+From this version the image is based on Debian slim instead of Alpine. Nothing changes for you: pull and recreate as usual.
 
 ## Local development
 
@@ -229,5 +259,7 @@ npm run db:migrate   # create/apply a migration
 npm run db:studio    # browse the database
 npm run build         # production build
 ```
+
+`npm run models:fetch-builtin` downloads the built-in model into `./models/builtin/` (needed once for meaning search in development).
 
 Images are built and published automatically by `.github/workflows/docker-publish.yml` on every push to `main`. To build locally: `docker build -t home-center .`
