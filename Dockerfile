@@ -1,6 +1,13 @@
 # ── deps: install production + dev deps ──────────────────────────────────────
 # Debian (glibc), not Alpine: onnxruntime-node's Linux binary needs glibc ≥ 2.28.
-FROM node:22-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS base
+# Prisma picks its engine by the OpenSSL it finds at install/generate time and
+# needs it at runtime; the slim image ships none.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
 WORKDIR /app
 # onnxruntime-node would otherwise fetch CUDA libraries on linux/x64; CPU only here.
 ENV ONNXRUNTIME_NODE_INSTALL=skip
@@ -10,7 +17,7 @@ COPY prisma.config.ts ./prisma.config.ts
 RUN npm install
 
 # ── builder: generate Prisma client, build Next.js, fetch the built-in model ──
-FROM node:22-bookworm-slim AS builder
+FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -31,9 +38,10 @@ ARG TARGETARCH
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# gosu drops root in the entrypoint; wget serves the compose healthcheck.
+# gosu drops root in the entrypoint; wget serves the compose healthcheck;
+# openssl is for Prisma (see base).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends gosu wget \
+  && apt-get install -y --no-install-recommends gosu wget openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs --create-home --home-dir /home/nextjs nextjs
 RUN mkdir -p /data/uploads && chown nextjs:nodejs /data
