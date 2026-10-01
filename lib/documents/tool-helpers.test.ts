@@ -77,7 +77,7 @@ describe("record type rules", () => {
 })
 
 describe("groupHits", () => {
-  const hit = (attachmentId: string, score: number, page = 1) => ({ attachmentId, score, page, text: `${attachmentId}@${score}` })
+  const hit = (attachmentId: string, score: number, page = 1) => ({ chunkId: Math.round(score * -100), attachmentId, score, page, text: `${attachmentId}@${score}` })
 
   it("groups by file in best-score order and keeps each file's best chunks", () => {
     const groups = groupHits([hit("b", -2), hit("a", -5), hit("a", -4), hit("a", -3), hit("a", -1), hit("c", -0.5)], 2)

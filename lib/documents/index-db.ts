@@ -10,7 +10,7 @@ import { INDEX_SCHEMA_VERSION } from "./limits"
 // nothing that isn't also in AttachmentText, so it can be deleted and rebuilt
 // at any time — reconcile() re-indexes every DONE row missing from it.
 
-export type Hit = { attachmentId: string; page: number; text: string; score: number }
+export type Hit = { chunkId: number; attachmentId: string; page: number; text: string; score: number }
 
 export type SearchFilter = {
   /** null/undefined = every attachment; [] = none. */
@@ -132,13 +132,14 @@ export async function openSearchIndex(file: string): Promise<SearchIndex> {
       }
       args.push(f.limit)
       const r = await db.execute({
-        sql: `SELECT c.attachment_id, c.page, c.text, bm25(chunk_fts, 1.0, 0.5) AS score
+        sql: `SELECT c.id, c.attachment_id, c.page, c.text, bm25(chunk_fts, 1.0, 0.5) AS score
               FROM chunk_fts JOIN chunk c ON c.id = chunk_fts.rowid
               WHERE ${where.join(" AND ")}
               ORDER BY score LIMIT ?`,
         args,
       })
       return r.rows.map((row) => ({
+        chunkId: Number(row.id),
         attachmentId: String(row.attachment_id),
         page: Number(row.page),
         text: String(row.text),
