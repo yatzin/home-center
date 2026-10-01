@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
     "tesseract.js",
     "@tesseract.js-data/eng",
     "@napi-rs/canvas",
+    "@huggingface/transformers",
+    "onnxruntime-node",
   ],
   experimental: {
     globalNotFound: true,

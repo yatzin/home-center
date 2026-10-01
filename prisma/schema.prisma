@@ -590,6 +590,10 @@ model DocumentSettings {
   indexingEnabled Boolean  @default(true)
   /// OCR images and scanned PDFs during indexing. CPU-heavy on small hosts.
   ocrEnabled      Boolean  @default(true)
+  /// Embed chunks and use them in search_documents. Needs indexingEnabled.
+  semanticEnabled Boolean  @default(true)
+  /// Vetted model id (lib/documents/embed/models.ts). Default is the built-in one.
+  embeddingModel  String   @default("bge-small-en-v1.5")
   updatedAt       DateTime @updatedAt
 }
 
