@@ -1,5 +1,5 @@
 import { signIn } from "@/auth"
-import { AuthError } from "next-auth"
+import { AuthError, CredentialsSignin } from "next-auth"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,9 @@ async function login(formData: FormData) {
       redirectTo: "/",
     })
   } catch (error) {
+    if (error instanceof CredentialsSignin && error.code === "rate_limited") {
+      redirect("/login?error=locked")
+    }
     if (error instanceof AuthError) {
       redirect("/login?error=1")
     }
@@ -46,7 +49,9 @@ export default async function LoginPage({
             <CardTitle className="text-base">Welcome back</CardTitle>
             {error && (
               <CardDescription className="text-destructive">
-                Invalid email or password.
+                {error === "locked"
+                  ? "Too many failed attempts. Wait 15 minutes, then try again."
+                  : "Invalid email or password."}
               </CardDescription>
             )}
           </CardHeader>
