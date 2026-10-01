@@ -195,6 +195,77 @@ describe("search index", () => {
       expect(await index.vectorStats()).toEqual({ chunks: 0, withVectors: 0 })
     })
 
+    it("embeds and finds database records separately from file chunks", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.replaceEntity("PROPERTY", "p1", "h1", ["east house", "notes about the east house"])
+      await index.replaceEntity("VEHICLE", "v1", "h2", ["north car"])
+      expect(await index.entityChunksMissingVectors(10)).toEqual([])
+      await index.useVectorModel("m@1", 3)
+      const missing = await index.entityChunksMissingVectors(10)
+      expect(missing.map((m) => m.text)).toEqual(["east house", "notes about the east house", "north car"])
+      const vec: Record<string, number[]> = { "east house": [1, 0, 0], "notes about the east house": [0.9, 0.2, 0], "north car": [0, 1, 0] }
+      await index.writeEntityVectors("m@1", missing.map((m) => ({ chunkId: m.chunkId, vector: vec[m.text] })))
+      // A file chunk is still waiting; records don't fill its slot.
+      expect((await index.chunksMissingVectors(10)).map((m) => m.text)).toEqual(["alpha"])
+      const hits = await index.entityVectorSearch([1, 0, 0], 5)
+      expect(hits.map((h) => `${h.kind}:${h.entityId}`)).toEqual(["PROPERTY:p1", "PROPERTY:p1", "VEHICLE:v1"])
+      expect(await index.entityStats()).toEqual({ chunks: 3, withVectors: 3 })
+    })
+
+    it("tracks record hashes and drops a record's chunks and vectors on replace or remove", async () => {
+      await index.useVectorModel("m@1", 3)
+      await index.replaceEntity("PROPERTY", "p1", "h1", ["old"])
+      const [m] = await index.entityChunksMissingVectors(10)
+      await index.writeEntityVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      await index.replaceEntity("PROPERTY", "p1", "h2", ["new"])
+      expect(await index.entityHashes()).toEqual(new Map([["PROPERTY:p1", "h2"]]))
+      expect(await index.entityStats()).toEqual({ chunks: 1, withVectors: 0 })
+      await index.removeEntities(["PROPERTY:p1"])
+      expect(await index.entityHashes()).toEqual(new Map())
+      expect(await index.entityStats()).toEqual({ chunks: 0, withVectors: 0 })
+    })
+
+    it("starts record vectors over on a model switch and on clear", async () => {
+      await index.replaceEntity("PROPERTY", "p1", "h1", ["house"])
+      await index.useVectorModel("m@1", 3)
+      const [m] = await index.entityChunksMissingVectors(10)
+      await index.writeEntityVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      await index.useVectorModel("other@2", 2)
+      expect(await index.entityStats()).toEqual({ chunks: 1, withVectors: 0 })
+      await index.writeEntityVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      expect(await index.entityStats()).toEqual({ chunks: 1, withVectors: 0 })
+      await index.clear()
+      expect(await index.entityHashes()).toEqual(new Map())
+    })
+
+    it("adds the record tables to an index made before they existed", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.useVectorModel("m@1", 3)
+      const [m] = await index.chunksMissingVectors(10)
+      await index.writeVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      index.close()
+      const raw = createClient({ url: `file:${file.replace(/\\/g, "/")}` })
+      await raw.batch(["DROP TABLE entity_vec", "DROP TABLE entity_chunk", "DROP TABLE entity_hash"], "write")
+      raw.close()
+      index = await openSearchIndex(file)
+      expect(await index.vectorModel()).toBe("m@1")
+      expect(await index.vectorStats()).toEqual({ chunks: 1, withVectors: 1 })
+      await index.replaceEntity("PROPERTY", "p1", "h1", ["house"])
+      const [e] = await index.entityChunksMissingVectors(10)
+      await index.writeEntityVectors("m@1", [{ chunkId: e.chunkId, vector: [0, 1, 0] }])
+      expect((await index.entityVectorSearch([0, 1, 0], 5)).map((h) => h.entityId)).toEqual(["p1"])
+    })
+
+    it("forgets the model of an old index with no stored vectors, so both tables are made fresh", async () => {
+      await index.useVectorModel("m@1", 3)
+      index.close()
+      const raw = createClient({ url: `file:${file.replace(/\\/g, "/")}` })
+      await raw.batch(["DROP TABLE entity_vec"], "write")
+      raw.close()
+      index = await openSearchIndex(file)
+      expect(await index.vectorModel()).toBeNull()
+    })
+
     it("keeps the model across reopen and forgets it on clear", async () => {
       await index.useVectorModel("m@1", 3)
       index.close()

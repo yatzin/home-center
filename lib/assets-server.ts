@@ -8,7 +8,7 @@ export async function loadAssetIndex() {
   const [properties, vehicles, equipment, people] = await Promise.all([
     prisma.property.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.vehicle.findMany({ select: { id: true, name: true, currentMileage: true }, orderBy: { name: "asc" } }),
-    prisma.equipment.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.equipment.findMany({ select: { id: true, name: true, propertyId: true }, orderBy: { name: "asc" } }),
     prisma.person.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ])
 
@@ -25,9 +25,14 @@ export async function loadAssetIndex() {
 
   const options = [...properties, ...vehicles, ...equipment, ...people].map((a) => ({ value: a.id, label: a.name }))
 
+  const equipmentProperty = new Map(
+    equipment.filter((e) => e.propertyId).map((e) => [e.id, e.propertyId!])
+  )
+
   return {
     names,
     mileage,
+    equipmentProperty,
     options,
     assetName: (assetType: AssetType, assetId: string): string | undefined => names[assetType]?.[assetId],
   }

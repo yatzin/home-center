@@ -3,6 +3,7 @@
   "version": "0.3.1",
   "private": true,
   "scripts": {
+    "predev": "prisma migrate deploy",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
@@ -5,6 +6,7 @@ import { Sidebar, MobileSidebarTrigger } from "@/components/sidebar"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { GlobalSearch } from "@/components/global-search"
 import { resolveNotificationHrefs } from "@/lib/notification-links"
 import { loadLlmStatus } from "@/lib/llm/config"
 import { ChatProvider } from "@/components/chat/chat-provider"
@@ -37,7 +39,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-card/80 backdrop-blur-sm px-4">
             <MobileSidebarTrigger showAssistant={showAssistant} />
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex min-w-0 flex-1 justify-center">
+              <Suspense fallback={null}>
+                <GlobalSearch className="max-w-xl" />
+              </Suspense>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <ThemeToggle />
               {showAssistant && <ChatToggle />}
               <NotificationBell notifications={notificationItems} />
