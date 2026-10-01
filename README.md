@@ -265,8 +265,20 @@ Two caveats worth knowing:
   `NOTIFY_INTERVAL_MINUTES` if you want tighter timing.
 - "As soon as possible" likewise means the next pass, not instantly.
 
-Emails are only sent for items you haven't already been emailed about, so
-lowering the interval doesn't mean repeat messages.
+**Who and how often.** An admin picks which accounts get notifications under
+**Settings → Notifications → Who gets notifications** (everyone, by default).
+Each person then chooses how often the same due item is raised again:
+
+| Option | What you get |
+|---|---|
+| When it's coming up, and on the due date *(default)* | One heads-up, then one on the day |
+| Only once | A single reminder |
+| Every check until dismissed | Comes back after you read it, until you dismiss it |
+
+A new due date always starts afresh, for example after you log the service or
+move a refill date. Emails cover only new or re-raised reminders, so lowering
+the interval doesn't mean repeat messages, except with "every check until
+dismissed".
 
 ### AI assistant (optional)
 

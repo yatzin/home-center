@@ -8,6 +8,8 @@ export interface NotificationPayload {
   message: string
   relatedEntityId?: string
   relatedEntityType?: string
+  cycleKey?: string
+  stage?: string
 }
 
 export interface NotificationChannel {

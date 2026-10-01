@@ -116,6 +116,12 @@ enum AttachmentRecordType {
   IMMUNIZATION
 }
 
+enum NotificationRepeat {
+  ONCE
+  REACHED_AND_DUE
+  UNTIL_DISMISSED
+}
+
 enum NotificationType {
   MAINTENANCE_DUE
   WARRANTY_EXPIRING
@@ -139,6 +145,11 @@ model User {
   createdAt         DateTime @default(now())
 
   emailDigest   EmailDigest @default(DAILY)
+  /// Chosen by an admin under Settings → Notifications. Off means no new
+  /// in-app notifications and no digest emails for this account.
+  receivesNotifications Boolean @default(true)
+  /// How often a due item is raised again — see lib/notifications/repeat.ts.
+  notificationRepeat NotificationRepeat @default(REACHED_AND_DUE)
   /// When this user was last emailed, so a cadence can be measured from it.
   lastDigestAt  DateTime?
 
@@ -626,6 +637,11 @@ model Notification {
   /// Set when the user dismisses it: hidden from the list and the bell until
   /// they choose to show hidden notifications.
   dismissedAt       DateTime?
+  /// Which due date of the item this is about, so a new due date starts afresh.
+  /// Null on rows from before cycles were tracked.
+  cycleKey          String?
+  /// REACHED (inside the warning window) or DUE (on or after the due date).
+  stage             String?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

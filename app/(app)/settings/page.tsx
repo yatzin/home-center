@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import { UserManagement } from "@/components/settings/user-management"
 import { EmailPreferences } from "@/components/settings/email-preferences"
+import { NotificationRecipients } from "@/components/settings/notification-recipients"
+import { RepeatPreferences } from "@/components/settings/repeat-preferences"
 import { MailSettings } from "@/components/settings/mail-settings"
 import { LlmSettings } from "@/components/settings/llm-settings"
 import { loadMailConfig, SETTINGS_ID } from "@/lib/notifications/mail-config"
@@ -35,12 +37,18 @@ export default async function SettingsPage({
   // gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. resolveSection keeps the admin-only sections from
   // non-admins, and only the open section's data is loaded.
-  const [me, users, mail, storedMail, llm, docs, features] = await Promise.all([
+  const [me, users, recipients, mail, storedMail, llm, docs, features] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { emailDigest: true, email: true },
+      select: { emailDigest: true, email: true, receivesNotifications: true, notificationRepeat: true },
     }),
     is("users") ? prisma.user.findMany({ orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    is("notifications") && isAdmin
+      ? prisma.user.findMany({
+          select: { id: true, name: true, email: true, role: true, receivesNotifications: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
     is("notifications") || is("mail") ? loadMailConfig() : Promise.resolve(null),
     is("mail") ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } }) : Promise.resolve(null),
     is("assistant") ? loadLlmConfig() : Promise.resolve(null),
@@ -84,11 +92,16 @@ export default async function SettingsPage({
 
         <div className={sections.length > 1 ? "min-w-0 max-w-3xl" : "min-w-0 max-w-3xl md:col-span-2"}>
           {is("notifications") && mail && (
-            <EmailPreferences
-              digest={me.emailDigest}
-              email={me.email}
-              mailConfigured={isMailConfigured(mail)}
-            />
+            <div className="space-y-6">
+              <EmailPreferences
+                digest={me.emailDigest}
+                email={me.email}
+                mailConfigured={isMailConfigured(mail)}
+                receivesNotifications={me.receivesNotifications}
+              />
+              <RepeatPreferences repeat={me.notificationRepeat} />
+              {isAdmin && <NotificationRecipients users={recipients} currentUserId={session.user.id} />}
+            </div>
           )}
 
           {is("features") && features && <FeatureSettings initial={{ healthEnabled: features.health }} />}

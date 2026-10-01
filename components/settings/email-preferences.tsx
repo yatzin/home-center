@@ -19,10 +19,12 @@ export function EmailPreferences({
   digest,
   email,
   mailConfigured,
+  receivesNotifications,
 }: {
   digest: EmailDigest
   email: string
   mailConfigured: boolean
+  receivesNotifications: boolean
 }) {
   const [value, setValue] = useState<EmailDigest>(digest)
   const [pending, startTransition] = useTransition()
@@ -73,6 +75,12 @@ export function EmailPreferences({
           </Select>
           <span className="text-sm text-muted-foreground">{hint}</span>
         </div>
+        {!receivesNotifications && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            An administrator has turned notifications off for your account, so nothing will be
+            sent to you whatever you choose here.
+          </p>
+        )}
         {!mailConfigured && (
           <p className="mt-3 text-sm text-muted-foreground">
             No mail server is set up yet, so nothing will be sent whatever you choose here. An

@@ -59,6 +59,38 @@ export async function updateEmailDigest(digest: string) {
   return { success: true }
 }
 
+export async function updateNotificationRepeat(repeat: string) {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  // Like the email cadence, this only ever affects the caller's own reminders.
+  const parsed = z.enum(["ONCE", "REACHED_AND_DUE", "UNTIL_DISMISSED"]).safeParse(repeat)
+  if (!parsed.success) return { error: "Invalid option." }
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { notificationRepeat: parsed.data },
+  })
+  revalidatePath("/settings")
+  return { success: true }
+}
+
+/** Admin-only: whether an account gets notifications (the bell and digest emails). */
+export async function setReceivesNotifications(id: string, receives: boolean) {
+  await requireAdmin()
+
+  const parsed = z.object({ id: z.string().min(1), receives: z.boolean() }).safeParse({ id, receives })
+  if (!parsed.success) return { error: "Invalid request." }
+
+  const updated = await prisma.user.updateMany({
+    where: { id: parsed.data.id },
+    data: { receivesNotifications: parsed.data.receives },
+  })
+  if (updated.count === 0) return { error: "That user no longer exists." }
+  revalidatePath("/settings")
+  return { success: true }
+}
+
 export async function createUser(data: { name: string; email: string; role: string }) {
   await requireAdmin()
 

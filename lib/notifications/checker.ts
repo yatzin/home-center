@@ -5,6 +5,7 @@ import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, isSupersededImmunization, refillDue } from "@/lib/health"
 import { ownedWhere } from "@/lib/features"
 import { loadFeatures } from "@/lib/features-server"
+import { cycleKeyOf, decide, type NotificationRepeat, type Stage } from "./repeat"
 
 const WARRANTY_WARN_DAYS = 60
 const MAINTENANCE_WINDOW_DAYS = 30
@@ -37,6 +38,8 @@ function dueMessage(title: string, due: Due) {
 
 const dedupKey = (userId: string, type: string, entityId: string) => `${userId}:${type}:${entityId}`
 
+const stageOf = (onOrPastDue: boolean): Stage => (onOrPastDue ? "DUE" : "REACHED")
+
 /**
  * Creates in-app notifications for due maintenance, expiring warranties, and health items (refills, vaccines, insurance).
  *
@@ -47,7 +50,11 @@ const dedupKey = (userId: string, type: string, entityId: string) => `${userId}:
  * Returns how many notifications it created, for the scheduler's log line.
  */
 export async function checkAndNotify(): Promise<number> {
-  const users = await prisma.user.findMany({ select: { id: true } })
+  // Only the accounts an admin has chosen under Settings → Notifications.
+  const users = await prisma.user.findMany({
+    where: { receivesNotifications: true },
+    select: { id: true, notificationRepeat: true },
+  })
   if (users.length === 0) return 0
 
   const now = new Date()
@@ -66,8 +73,10 @@ export async function checkAndNotify(): Promise<number> {
     prisma.warranty.findMany({
       where: {
         ...owned,
+        // From the start of today, so a warranty still gets its due-date
+        // reminder on the day it expires.
         expirationDate: {
-          gte: now,
+          gte: startOfToday,
           lte: new Date(now.getTime() + WARRANTY_WARN_DAYS * 86400000),
         },
       },
@@ -107,30 +116,39 @@ export async function checkAndNotify(): Promise<number> {
   for (const s of schedules) {
     const due = scheduleDue(s, mileage, now)
     if (!due.overdue && !due.dueSoon) continue
+    const stage = stageOf(due.overdue || due.daysLeft === 0 || due.milesLeft === 0)
+    const cycleKey = cycleKeyOf(s.nextDueDate, s.nextDueMileage)
 
     for (const user of users) {
       wanted.push({
         userId: user.id,
         type: "MAINTENANCE_DUE",
-        title: due.overdue ? `Overdue: ${s.title}` : `Due soon: ${s.title}`,
+        title: due.overdue ? `Overdue: ${s.title}` : stage === "DUE" ? `Due today: ${s.title}` : `Due soon: ${s.title}`,
         message: dueMessage(s.title, due),
         relatedEntityId: s.id,
         relatedEntityType: "MaintenanceSchedule",
+        cycleKey,
+        stage,
       })
     }
   }
 
   for (const w of warranties) {
-    const daysLeft = Math.ceil((new Date(w.expirationDate!).getTime() - now.getTime()) / 86400000)
+    const daysLeft = daysUntil(w.expirationDate!, now)
+    const stage = stageOf(daysLeft <= 0)
 
     for (const user of users) {
       wanted.push({
         userId: user.id,
         type: "WARRANTY_EXPIRING",
         title: `Warranty expiring: ${w.productName}`,
-        message: `Warranty for "${w.productName}" expires in ${plural(daysLeft, "day")}.`,
+        message: daysLeft <= 0
+          ? `Warranty for "${w.productName}" expires today.`
+          : `Warranty for "${w.productName}" expires in ${plural(daysLeft, "day")}.`,
         relatedEntityId: w.id,
         relatedEntityType: "Warranty",
+        cycleKey: cycleKeyOf(w.expirationDate),
+        stage,
       })
     }
   }
@@ -146,6 +164,8 @@ export async function checkAndNotify(): Promise<number> {
         message: `${m.person.name}'s ${m.name} refill ${dueWhen(days)}.`,
         relatedEntityId: m.id,
         relatedEntityType: "Medication",
+        cycleKey: cycleKeyOf(m.nextRefillDate),
+        stage: stageOf(days <= 0),
       })
     }
   }
@@ -161,6 +181,8 @@ export async function checkAndNotify(): Promise<number> {
         message: `${i.person.name}'s ${i.vaccine} ${dueWhen(days)}.`,
         relatedEntityId: i.id,
         relatedEntityType: "Immunization",
+        cycleKey: cycleKeyOf(i.nextDueDate),
+        stage: stageOf(days <= 0),
       })
     }
   }
@@ -177,28 +199,50 @@ export async function checkAndNotify(): Promise<number> {
         message: days === 0 ? `"${name}" coverage ends today.` : `"${name}" coverage ends in ${plural(days, "day")}.`,
         relatedEntityId: p.id,
         relatedEntityType: "InsurancePolicy",
+        cycleKey: cycleKeyOf(p.endDate),
+        stage: stageOf(days <= 0),
       })
     }
   }
 
   if (wanted.length === 0) return 0
 
-  // One read covers the whole run. An unread notification for the same entity
-  // means the user hasn't dealt with it yet, so don't pile on another.
+  // One read covers the whole run: every notification, in any state, for the
+  // items this run would raise. Each person's repeat setting then decides from
+  // their own history whether to create, bring one back, or stay quiet.
   const existing = await prisma.notification.findMany({
-    where: {
-      isRead: false,
-      relatedEntityId: { in: [...new Set(wanted.map((w) => w.relatedEntityId!))] },
-    },
-    select: { userId: true, type: true, relatedEntityId: true },
+    where: { relatedEntityId: { in: [...new Set(wanted.map((w) => w.relatedEntityId!))] } },
+    select: { id: true, userId: true, type: true, relatedEntityId: true, cycleKey: true, stage: true, isRead: true, dismissedAt: true, createdAt: true },
   })
-  const seen = new Set(existing.map((e) => dedupKey(e.userId, e.type, e.relatedEntityId!)))
+  const history = new Map<string, typeof existing>()
+  for (const e of existing) {
+    const key = dedupKey(e.userId, e.type, e.relatedEntityId!)
+    history.set(key, [...(history.get(key) ?? []), e])
+  }
+  const repeatOf = new Map(users.map((u) => [u.id, u.notificationRepeat as NotificationRepeat]))
 
-  const fresh = wanted.filter((w) => !seen.has(dedupKey(w.userId, w.type, w.relatedEntityId!)))
+  let fresh = 0
+  for (const w of wanted) {
+    const decision = decide(
+      repeatOf.get(w.userId)!,
+      w.stage as Stage,
+      w.cycleKey!,
+      history.get(dedupKey(w.userId, w.type, w.relatedEntityId!)) ?? [],
+    )
+    if (decision.action === "create") {
+      // Sent through the channel service rather than a bulk insert so that
+      // adding a push channel still delivers these.
+      await notificationService.send(w)
+      fresh++
+    } else if (decision.action === "resurface") {
+      // Back to unread with today's wording, and pending email again.
+      await prisma.notification.update({
+        where: { id: decision.id },
+        data: { title: w.title, message: w.message, stage: w.stage, isRead: false, emailedAt: null, createdAt: now },
+      })
+      fresh++
+    }
+  }
 
-  // Sent through the channel service rather than a bulk insert so that adding
-  // an email or push channel still delivers these.
-  for (const payload of fresh) await notificationService.send(payload)
-
-  return fresh.length
+  return fresh
 }

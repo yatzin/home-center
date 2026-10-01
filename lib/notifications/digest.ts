@@ -109,7 +109,7 @@ export async function sendPendingDigests(now: Date = new Date()): Promise<number
   }
 
   const users = await prisma.user.findMany({
-    where: { emailDigest: { not: "OFF" } },
+    where: { emailDigest: { not: "OFF" }, receivesNotifications: true },
     select: { id: true, name: true, email: true, emailDigest: true, lastDigestAt: true },
   })
 
