@@ -5,6 +5,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
+import { maxUploadBytes, oversizedBody } from "@/lib/upload-limits"
 import { extensionForFilename, UPLOAD_TYPES } from "@/lib/upload-types"
 import { enqueueDocument } from "@/lib/documents/indexer-server"
 
@@ -34,7 +35,9 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const maxBytes = parseInt(process.env.MAX_UPLOAD_BYTES ?? "26214400")
+  const maxBytes = maxUploadBytes()
+  const tooBig = oversizedBody(request.headers, maxBytes)
+  if (tooBig) return NextResponse.json({ error: tooBig.error }, { status: tooBig.status })
   const formData = await request.formData()
   const file = formData.get("file") as File | null
   const recordId = formData.get("recordId") as string | null
