@@ -73,7 +73,7 @@ export function searchDocumentsDescription(includeHealth: boolean): string {
     "Search the text of files uploaded to records — receipts, manuals, warranty cards, insurance policies" +
     (includeHealth ? ", medical documents" : "") +
     ". Use it when the answer is likely written in a document rather than stored as a field: filter sizes, part numbers, " +
-    "deductibles, coverage terms, instructions. Key words or a model number work better than a whole question. " +
+    "deductibles, coverage terms, instructions. Understands meaning as well as exact words: a plain question works, and model or part numbers match exactly. " +
     "Returns the best passages per file; call read_document for more."
   )
 }

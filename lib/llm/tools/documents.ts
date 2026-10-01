@@ -1,7 +1,10 @@
 import { z } from "zod/v4"
 import { prisma } from "@/lib/prisma"
 import { loadAssetIndex } from "@/lib/assets-server"
-import { searchIndex } from "@/lib/documents/indexer-server"
+import { searchIndex, semanticSearchModel } from "@/lib/documents/indexer-server"
+import { fuse } from "@/lib/documents/embed/fusion"
+import { embedderFor } from "@/lib/documents/embed/server"
+import type { Hit } from "@/lib/documents/index-db"
 import {
   attachmentIdsForAsset, countNotIndexed, healthAttachmentIds, listDocumentRefs, loadDocumentRefs, OWNER_SELECT,
 } from "@/lib/documents/scope"
@@ -80,7 +83,7 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
     name: "search_documents",
     description: searchDocumentsDescription(includeHealth),
     schema: z.object({
-      query: z.string().min(1).describe("Key words, a model or part number, or a \"quoted phrase\" — e.g. 'filter size', 'deductible', 'WDT730PAHZ0'."),
+      query: z.string().min(1).describe("What to look for: a plain question, key words, a model or part number, or a \"quoted phrase\"."),
       asset: z.string().optional().describe(ASSET_ARG),
       assetType: z.string().optional().describe("PROPERTY, VEHICLE, EQUIPMENT or PERSON, if known."),
       recordType: z.string().optional().describe(`Only files attached to one kind of record: ${visibleRecordTypes(includeHealth).join(", ")}.`),
@@ -89,13 +92,15 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
     label: (a) => `Searching documents for “${a.query}”…`,
     async run(a, ctx) {
       const parsed = parseSearch(a.query)
-      if (!parsed) throw new ToolInputError("Give some words to search for, e.g. 'filter size' or a model number.")
+      const model = await semanticSearchModel()
+      if (!parsed && !model) throw new ToolInputError("Give some words to search for, e.g. 'filter size' or a model number.")
       const recordTypes = a.recordType ? [toRecordType(a.recordType, includeHealth)] : null
       const resolved = await assetScope(a, ctx)
       if ("reply" in resolved) return resolved.reply
       const { attachmentIds, scope } = resolved
 
-      const hits = await (await searchIndex()).search(parsed.match, {
+      const chunkIndex = await searchIndex()
+      const filter = {
         attachmentIds,
         recordTypes,
         excludeRecordTypes: hidden,
@@ -103,7 +108,19 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
         // so the index can only exclude them by id.
         excludeAttachmentIds: includeHealth ? [] : await healthAttachmentIds(),
         limit: SEARCH_POOL,
-      })
+      }
+      const keyword = parsed ? await chunkIndex.search(parsed.match, filter) : []
+      let semantic: Hit[] = []
+      if (model) {
+        try {
+          // Waits for the model to load if it was unloaded.
+          semantic = await chunkIndex.vectorSearch(await embedderFor(model).embedQuery(a.query), filter)
+        } catch (error) {
+          // The semantic layer never fails a search: fall back to keywords.
+          console.error("[documents] semantic search failed:", error instanceof Error ? error.name : typeof error)
+        }
+      }
+      const hits = semantic.length ? fuse([keyword, semantic], SEARCH_POOL) : keyword
       const groups = groupHits(hits, a.limit ?? DEFAULT_LIMIT)
       const [refs, index, notIndexed] = await Promise.all([
         loadDocumentRefs(groups.map((g) => g.attachmentId)),
@@ -124,7 +141,7 @@ export function documentTools(includeHealth: boolean): RegisteredTool[] {
           record: ref.record,
           asset: ref.asset ? compact({ type: ref.asset.type, name: index.names[ref.asset.type]?.[ref.asset.id] }) : null,
           pages: pages > 1 ? pages : null,
-          passages: g.hits.map((h) => compact({ page: pages > 1 ? h.page : null, text: passage(h.text, parsed.terms) })),
+          passages: g.hits.map((h) => compact({ page: pages > 1 ? h.page : null, text: passage(h.text, parsed?.terms ?? []) })),
         })]
       })
 

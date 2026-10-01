@@ -51,6 +51,10 @@ describe("listedDocument", () => {
 })
 
 describe("record type rules", () => {
+  it("tells the model the search understands meaning", () => {
+    expect(searchDocumentsDescription(false)).toMatch(/meaning/i)
+  })
+
   it("hides exactly the five health types unless health documents are on", () => {
     expect(hiddenRecordTypes(false)).toEqual(["CONDITION", "OBSERVATION", "MEDICATION", "ALLERGY", "IMMUNIZATION"])
     expect(hiddenRecordTypes(true)).toEqual([])
