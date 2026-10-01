@@ -1,5 +1,6 @@
 import nodemailer, { type Transporter } from "nodemailer"
 import { loadMailConfig, transportSignature, type MailConfig } from "./mail-config"
+import { isEmailAddress } from "@/lib/email-address"
 
 // SMTP rather than a hosted API: HomeCenter runs on somebody's own box, often
 // without a public domain, and SMTP works against a household mail account or a
@@ -36,6 +37,8 @@ export async function sendMail(
   message: { to: string; subject: string; text: string; html: string },
   config?: MailConfig
 ) {
+  // Addresses are validated when saved; this catches any stored before that.
+  if (!isEmailAddress(message.to)) throw new Error("Refusing to send to an invalid recipient address")
   const resolved = config ?? (await loadMailConfig())
   const info = await transportFor(resolved).sendMail({ from: resolved.from, ...message })
   if (resolved.dryRun) {

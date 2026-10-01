@@ -7,6 +7,7 @@ import { redirect } from "next/navigation"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
+import { emailAddress } from "@/lib/email-address"
 
 async function requireAdmin() {
   const session = await auth()
@@ -24,7 +25,7 @@ export async function updateSelf(data: { name: string; email: string }) {
 
   const parsed = z.object({
     name: z.string().min(1),
-    email: z.string().min(1),
+    email: emailAddress,
   }).safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
@@ -62,7 +63,7 @@ export async function createUser(data: { name: string; email: string; role: stri
 
   const parsed = z.object({
     name: z.string().min(1),
-    email: z.string().min(1),
+    email: emailAddress,
     role: z.enum(["ADMIN", "USER"]),
   }).safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
