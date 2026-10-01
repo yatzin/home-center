@@ -26,6 +26,10 @@ beforeAll(async () => {
     const prefix = `/org/t/resolve/${"a".repeat(40)}/`
     const rel = req.url?.startsWith(prefix) ? req.url.slice(prefix.length) : ""
     if (rel === "drop") return req.socket.destroy()
+    if (rel === "stall") {
+      res.write("x") // then nothing more, without closing the connection
+      return
+    }
     if (!(rel in served)) {
       res.statusCode = 404
       return res.end()
@@ -35,7 +39,10 @@ beforeAll(async () => {
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
-afterAll(() => server.close())
+afterAll(() => {
+  server.closeAllConnections()
+  server.close()
+})
 
 const fresh = () => {
   const dir = mkdtempSync(path.join(tmpdir(), "hc-dl-"))
@@ -76,6 +83,14 @@ describe("downloadModelFiles", () => {
     const m = model()
     m.files = [{ path: "drop", size: 1, sha256: sha("z") }]
     await expect(downloadModelFiles(m, r, { baseUrl })).rejects.toEqual(new DownloadError("Download failed"))
+    expect(leftovers(r)).toEqual([])
+  })
+
+  it("gives up on a download that stops sending data", async () => {
+    const r = fresh()
+    const m = model()
+    m.files = [{ path: "stall", size: 10, sha256: sha("z") }]
+    await expect(downloadModelFiles(m, r, { baseUrl, stallMs: 200 })).rejects.toEqual(new DownloadError("Download stalled"))
     expect(leftovers(r)).toEqual([])
   })
 })

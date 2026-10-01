@@ -18,11 +18,13 @@ export class DownloadError extends Error {
 export type DownloadProgress = { received: number; total: number }
 
 const HF = "https://huggingface.co"
+/** A connection that sends nothing for this long is given up on (it may never close). */
+const STALL_MS = 60_000
 
 export async function downloadModelFiles(
   m: EmbeddingModel,
   root: string,
-  opts: { baseUrl?: string; fetchImpl?: typeof fetch; onProgress?: (p: DownloadProgress) => void } = {}
+  opts: { baseUrl?: string; fetchImpl?: typeof fetch; onProgress?: (p: DownloadProgress) => void; stallMs?: number } = {}
 ): Promise<void> {
   const fetchImpl = opts.fetchImpl ?? fetch
   const total = modelSize(m)
@@ -33,25 +35,40 @@ export async function downloadModelFiles(
     const dest = path.join(dir, ...file.path.split("/"))
     const part = `${dest}.part`
     await mkdir(path.dirname(dest), { recursive: true })
+    const abort = new AbortController()
+    let stalled = false
+    let timer: NodeJS.Timeout | undefined
+    const watch = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        stalled = true
+        abort.abort()
+      }, opts.stallMs ?? STALL_MS)
+    }
     try {
-      const res = await fetchImpl(`${opts.baseUrl ?? HF}/${m.repo}/resolve/${m.revision}/${file.path}`)
+      watch()
+      const res = await fetchImpl(`${opts.baseUrl ?? HF}/${m.repo}/resolve/${m.revision}/${file.path}`, { signal: abort.signal })
       if (!res.ok || !res.body) throw new DownloadError(`Download failed (HTTP ${res.status})`)
       const hash = createHash("sha256")
       let size = 0
       const body = Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>)
       body.on("data", (chunk: Buffer) => {
+        watch()
         hash.update(chunk)
         size += chunk.length
         received += chunk.length
         opts.onProgress?.({ received, total })
       })
-      await pipeline(body, createWriteStream(part))
+      await pipeline(body, createWriteStream(part), { signal: abort.signal })
       if (size !== file.size || hash.digest("hex") !== file.sha256) throw new DownloadError("Download failed checksum")
       await rename(part, dest)
     } catch (error) {
       await rm(part, { force: true })
+      if (stalled) throw new DownloadError("Download stalled")
       if (error instanceof DownloadError) throw error
       throw new DownloadError("Download failed")
+    } finally {
+      clearTimeout(timer)
     }
   }
 }
