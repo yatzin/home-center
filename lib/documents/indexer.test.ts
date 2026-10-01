@@ -47,6 +47,12 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
     indexedIds: async () => new Set(chunks.keys()),
     clear: async () => chunks.clear(),
     close: () => {},
+    vectorModel: async () => null,
+    useVectorModel: async () => {},
+    chunksMissingVectors: async () => [],
+    writeVectors: async () => {},
+    vectorSearch: async () => [],
+    vectorStats: async () => ({ chunks: 0, withVectors: 0 }),
   }
   const extract = vi.fn<(filePath: string, ext: string | null, opts: { ocr: boolean }) => Promise<Extracted>>(async (filePath) => {
     const id = filePath.replace(/^\/u\/|\.pdf$/g, "")

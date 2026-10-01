@@ -113,6 +113,97 @@ describe("search index", () => {
     const parsed = parseSearch(input)
     if (parsed) await expect(index.search(parsed.match, { limit: 5 })).resolves.toBeInstanceOf(Array)
   })
+
+  describe("vectors", () => {
+    const meta = { originalName: "a.txt", recordType: "SERVICE" }
+
+    it("has no vector model until one is chosen", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      expect(await index.vectorModel()).toBeNull()
+      expect(await index.chunksMissingVectors(10)).toEqual([])
+    })
+
+    it("stores vectors and finds the nearest chunks first", async () => {
+      await index.replace("a1", meta, [chunk("east"), chunk("north", 1, 1)])
+      await index.useVectorModel("m@1", 3)
+      const missing = await index.chunksMissingVectors(10)
+      expect(missing.map((m) => m.text).sort()).toEqual(["east", "north"])
+      const byText = Object.fromEntries(missing.map((m) => [m.text, m.chunkId]))
+      await index.writeVectors("m@1", [
+        { chunkId: byText.east, vector: [1, 0, 0] },
+        { chunkId: byText.north, vector: [0, 1, 0] },
+      ])
+      expect(await index.chunksMissingVectors(10)).toEqual([])
+      const hits = await index.vectorSearch([0.9, 0.1, 0], { limit: 5 })
+      expect(hits.map((h) => h.text)).toEqual(["east", "north"])
+      expect(hits[0].chunkId).toBe(byText.east)
+      expect(await index.vectorStats()).toEqual({ chunks: 2, withVectors: 2 })
+    })
+
+    it("applies the same filters as keyword search, including health exclusions", async () => {
+      await index.replace("s1", { originalName: "s.txt", recordType: "SERVICE" }, [chunk("visit")])
+      await index.replace("m1", { originalName: "m.txt", recordType: "MEDICATION" }, [chunk("pill")])
+      await index.useVectorModel("m@1", 3)
+      const missing = await index.chunksMissingVectors(10)
+      await index.writeVectors("m@1", missing.map((m) => ({ chunkId: m.chunkId, vector: [1, 0, 0] })))
+      const ids = async (f: object) => (await index.vectorSearch([1, 0, 0], { limit: 5, ...f })).map((h) => h.attachmentId).sort()
+      expect(await ids({})).toEqual(["m1", "s1"])
+      expect(await ids({ excludeRecordTypes: ["MEDICATION"] })).toEqual(["s1"])
+      expect(await ids({ excludeAttachmentIds: ["s1"] })).toEqual(["m1"])
+      expect(await ids({ attachmentIds: ["s1"] })).toEqual(["s1"])
+      expect(await ids({ attachmentIds: [] })).toEqual([])
+    })
+
+    it("drops a file's vectors with its chunks", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.useVectorModel("m@1", 3)
+      const [m] = await index.chunksMissingVectors(10)
+      await index.writeVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      await index.replace("a1", meta, [chunk("beta")])
+      expect(await index.vectorStats()).toEqual({ chunks: 1, withVectors: 0 })
+      await index.remove(["a1"])
+      expect(await index.vectorSearch([1, 0, 0], { limit: 5 })).toEqual([])
+    })
+
+    it("starts over when the model changes, even to a different vector size", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.useVectorModel("m@1", 3)
+      const [m] = await index.chunksMissingVectors(10)
+      await index.writeVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      await index.useVectorModel("other@2", 2)
+      expect(await index.vectorModel()).toBe("other@2")
+      expect(await index.vectorStats()).toEqual({ chunks: 1, withVectors: 0 })
+      await index.writeVectors("other@2", [{ chunkId: m.chunkId, vector: [0, 1] }])
+      expect((await index.vectorSearch([0, 1], { limit: 5 })).length).toBe(1)
+    })
+
+    it("ignores vectors written for a model that is no longer active", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.useVectorModel("old@1", 3)
+      const [m] = await index.chunksMissingVectors(10)
+      await index.useVectorModel("new@1", 3)
+      await index.writeVectors("old@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      expect(await index.vectorStats()).toEqual({ chunks: 1, withVectors: 0 })
+    })
+
+    it("skips vectors for chunks deleted while they were being embedded", async () => {
+      await index.replace("a1", meta, [chunk("alpha")])
+      await index.useVectorModel("m@1", 3)
+      const [m] = await index.chunksMissingVectors(10)
+      await index.remove(["a1"])
+      await index.writeVectors("m@1", [{ chunkId: m.chunkId, vector: [1, 0, 0] }])
+      expect(await index.vectorStats()).toEqual({ chunks: 0, withVectors: 0 })
+    })
+
+    it("keeps the model across reopen and forgets it on clear", async () => {
+      await index.useVectorModel("m@1", 3)
+      index.close()
+      index = await openSearchIndex(file)
+      expect(await index.vectorModel()).toBe("m@1")
+      await index.clear()
+      expect(await index.vectorModel()).toBeNull()
+    })
+  })
 })
 
 describe("searchIndexPath", () => {
