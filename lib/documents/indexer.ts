@@ -49,6 +49,11 @@ export type IndexerStore = {
   loadText(id: string): Promise<{ text: string; originalName: string; recordType: string } | null>
 }
 
+export const EMBED_BATCH = 16
+
+/** An open embedding session for the active model; end() lets the model unload. */
+export type SemanticSession = { key: string; embed(texts: string[]): Promise<number[][]>; end(): void }
+
 export type IndexerDeps = {
   store: IndexerStore
   index: () => Promise<SearchIndex>
@@ -56,6 +61,8 @@ export type IndexerDeps = {
   /** Called whenever the queue empties — frees the OCR worker. */
   idle?: () => Promise<void>
   log?: Pick<Console, "info" | "error">
+  /** Present when the semantic layer is wired up; begin() returns null when it can't run right now. */
+  semantic?: { begin(): Promise<SemanticSession | null> }
 }
 
 export type Indexer = {
@@ -127,6 +134,33 @@ export function createIndexer(deps: IndexerDeps): Indexer {
     await indexText(id, joined.text, job)
   }
 
+  // Chunks without a vector for the active model get one. Runs after the file
+  // queue drains, so extraction (and keyword search) never waits for it. New
+  // files arriving meanwhile pause it; drain() starts it again afterwards.
+  async function embedBacklog() {
+    if (!deps.semantic) return
+    let session: SemanticSession | null = null
+    try {
+      session = await deps.semantic.begin()
+      if (!session) return
+      const index = await deps.index()
+      while (!queue.size) {
+        const { indexingEnabled } = await deps.store.settings()
+        if (!indexingEnabled) break
+        const batch = await index.chunksMissingVectors(EMBED_BATCH)
+        if (!batch.length) break
+        const vectors = await session.embed(batch.map((b) => b.text))
+        await index.writeVectors(session.key, batch.map((b, i) => ({ chunkId: b.chunkId, vector: vectors[i] })))
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+    } catch (error) {
+      // Left for the next reconcile; keyword search is unaffected.
+      log.error("[documents] embedding failed:", nameOf(error))
+    } finally {
+      session?.end()
+    }
+  }
+
   function drain(): Promise<void> {
     if (draining) return draining
     const current = (async () => {
@@ -150,6 +184,7 @@ export function createIndexer(deps: IndexerDeps): Indexer {
           // Let requests in between files.
           await new Promise((resolve) => setImmediate(resolve))
         }
+        await embedBacklog()
       } finally {
         await deps.idle?.().catch(() => {})
       }

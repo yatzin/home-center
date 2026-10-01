@@ -1,18 +1,35 @@
 import { describe, expect, it, vi } from "vitest"
-import { createIndexer, type IndexerStore, type Job, type SaveResult } from "./indexer"
+import { createIndexer, type IndexerStore, type Job, type SaveResult, type SemanticSession } from "./indexer"
 import type { SearchIndex } from "./index-db"
 import type { Chunk } from "./chunk"
 import { ExtractError, type Extracted } from "./types"
 
 type Row = { job: Job; result?: SaveResult; text?: string }
 
-function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<string, Extracted | Error> } = {}) {
+function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<string, Extracted | Error>; semantic?: boolean } = {}) {
   const settings = { indexingEnabled: opts.enabled ?? true, ocrEnabled: opts.ocr ?? true }
   const rows = new Map<string, Row>()
   const add = (id: string, over: Partial<Job> = {}) =>
     rows.set(id, { job: { attachmentId: id, filePath: `/u/${id}.pdf`, ext: ".pdf", originalName: `${id}.pdf`, recordType: "SERVICE", attempts: 0, ...over } })
   const chunks = new Map<string, Chunk[]>()
   const replaceFails = { value: false }
+  let nextChunkId = 1
+  const chunkIds = new Map<string, number[]>()
+  const vectors = new Map<number, string>()
+  const textOf = new Map<number, string>()
+  const replaceChunks = (id: string, c: Chunk[]) => {
+    for (const old of chunkIds.get(id) ?? []) {
+      vectors.delete(old)
+      textOf.delete(old)
+    }
+    const ids = c.map((x) => {
+      const n = nextChunkId++
+      textOf.set(n, x.text)
+      return n
+    })
+    chunkIds.set(id, ids)
+    chunks.set(id, c)
+  }
 
   const store: IndexerStore = {
     settings: async () => ({ ...settings }),
@@ -40,19 +57,35 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
   const index: SearchIndex = {
     replace: async (id, _meta, c) => {
       if (replaceFails.value) throw new Error("disk full")
-      chunks.set(id, c)
+      replaceChunks(id, c)
     },
-    remove: async (ids) => ids.forEach((id) => chunks.delete(id)),
+    remove: async (ids) =>
+      ids.forEach((id) => {
+        for (const n of chunkIds.get(id) ?? []) {
+          vectors.delete(n)
+          textOf.delete(n)
+        }
+        chunkIds.delete(id)
+        chunks.delete(id)
+      }),
     search: async () => [],
     indexedIds: async () => new Set(chunks.keys()),
-    clear: async () => chunks.clear(),
+    clear: async () => {
+      chunks.clear()
+      chunkIds.clear()
+      vectors.clear()
+      textOf.clear()
+    },
     close: () => {},
-    vectorModel: async () => null,
+    vectorModel: async () => "m@1",
     useVectorModel: async () => {},
-    chunksMissingVectors: async () => [],
-    writeVectors: async () => {},
+    chunksMissingVectors: async (limit: number) =>
+      [...textOf].filter(([n]) => !vectors.has(n)).slice(0, limit).map(([chunkId, text]) => ({ chunkId, text })),
+    writeVectors: async (key: string, rows: { chunkId: number; vector: number[] }[]) => {
+      for (const r of rows) if (textOf.has(r.chunkId)) vectors.set(r.chunkId, key)
+    },
     vectorSearch: async () => [],
-    vectorStats: async () => ({ chunks: 0, withVectors: 0 }),
+    vectorStats: async () => ({ chunks: textOf.size, withVectors: vectors.size }),
   }
   const extract = vi.fn<(filePath: string, ext: string | null, opts: { ocr: boolean }) => Promise<Extracted>>(async (filePath) => {
     const id = filePath.replace(/^\/u\/|\.pdf$/g, "")
@@ -62,11 +95,62 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
   })
   const idleHook = vi.fn(async () => {})
   const log = { info: vi.fn(), error: vi.fn() }
-  const indexer = createIndexer({ store, index: async () => index, extract, idle: idleHook, log })
-  return { settings, rows, add, chunks, replaceFails, extract, idleHook, log, indexer }
+  const embedCalls: string[][] = []
+  const embed = vi.fn(async (texts: string[]) => {
+    embedCalls.push(texts)
+    return texts.map(() => [1, 0, 0])
+  })
+  const ended = vi.fn()
+  const semantic = opts.semantic
+    ? { begin: vi.fn(async (): Promise<SemanticSession | null> => ({ key: "m@1", embed, end: ended })) }
+    : undefined
+  const indexer = createIndexer({ store, index: async () => index, extract, idle: idleHook, log, semantic })
+  return { settings, rows, add, chunks, replaceFails, extract, idleHook, log, indexer, vectors, embed, ended, semantic, embedCalls }
 }
 
 describe("indexer", () => {
+  it("embeds a new file's chunks after it's indexed, then lets the model go", async () => {
+    const t = setup({ semantic: true, outcomes: { a: { kind: "text", method: "TEXT", pages: ["one", "two"] } } })
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.vectors.size).toBe(2)
+    expect(t.embedCalls.flat().sort()).toEqual(["one", "two"])
+    expect(t.ended).toHaveBeenCalledTimes(1)
+  })
+
+  it("embeds nothing when semantic search isn't available", async () => {
+    const t = setup({ semantic: true })
+    t.semantic!.begin.mockResolvedValueOnce(null)
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.embed).not.toHaveBeenCalled()
+  })
+
+  it("survives an embedding failure and finishes the job on the next reconcile", async () => {
+    const t = setup({ semantic: true })
+    t.add("a")
+    t.embed.mockRejectedValueOnce(new Error("worker crashed"))
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.vectors.size).toBe(0)
+    expect(t.log.error).toHaveBeenCalled()
+    expect(t.ended).toHaveBeenCalled()
+    await t.indexer.reconcile()
+    await t.indexer.idle()
+    expect(t.vectors.size).toBe(1)
+  })
+
+  it("embeds in batches of 16", async () => {
+    const pages = Array.from({ length: 20 }, (_, i) => `page ${i}`)
+    const t = setup({ semantic: true, outcomes: { a: { kind: "text", method: "TEXT", pages } } })
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(t.embedCalls.map((c) => c.length)).toEqual([16, 4])
+  })
+
   it("extracts, saves normalised text and indexes chunks", async () => {
     const t = setup({ outcomes: { a: { kind: "text", method: "TEXT", pages: ["Filter  size\t16x25x1", "page two"] } } })
     t.add("a")

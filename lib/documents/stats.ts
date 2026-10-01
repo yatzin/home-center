@@ -1,7 +1,11 @@
 export type StatusCounts = Partial<Record<"DONE" | "PENDING" | "EMPTY" | "UNSUPPORTED" | "FAILED", number>>
 
 /** The status line under the Documents settings card. */
-export function formatIndexStats(c: StatusCounts, indexingEnabled: boolean): string {
+export function formatIndexStats(
+  c: StatusCounts,
+  indexingEnabled: boolean,
+  vectors?: { withVectors: number; chunks: number } | null
+): string {
   const n = (k: keyof StatusCounts) => c[k] ?? 0
   if (!indexingEnabled) {
     const waiting = n("PENDING")
@@ -12,5 +16,8 @@ export function formatIndexStats(c: StatusCounts, indexingEnabled: boolean): str
   if (n("FAILED")) parts.push(`${n("FAILED")} failed`)
   if (n("UNSUPPORTED")) parts.push(`${n("UNSUPPORTED")} not supported`)
   if (n("EMPTY")) parts.push(`${n("EMPTY")} with no text`)
+  if (vectors && vectors.chunks > 0) {
+    parts.push(vectors.withVectors >= vectors.chunks ? "meaning search ready" : `${vectors.withVectors} of ${vectors.chunks} chunks have meaning vectors`)
+  }
   return parts.join(" · ")
 }

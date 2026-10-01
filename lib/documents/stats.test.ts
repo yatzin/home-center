@@ -12,4 +12,10 @@ describe("formatIndexStats", () => {
     expect(formatIndexStats({ PENDING: 1 }, false)).toBe("Indexing is off — 1 upload waiting.")
     expect(formatIndexStats({ DONE: 4 }, false)).toBe("Indexing is off.")
   })
+
+  it("shows meaning-vector progress while embedding, and readiness when done", () => {
+    expect(formatIndexStats({ DONE: 3 }, true, { withVectors: 40, chunks: 100 })).toBe("3 searchable · 40 of 100 chunks have meaning vectors")
+    expect(formatIndexStats({ DONE: 3 }, true, { withVectors: 100, chunks: 100 })).toBe("3 searchable · meaning search ready")
+    expect(formatIndexStats({ DONE: 3 }, true, null)).toBe("3 searchable")
+  })
 })

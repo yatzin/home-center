@@ -5,6 +5,8 @@ import { prismaIndexerStore } from "./store"
 import { loadDocumentSettings } from "./settings"
 import { formatIndexStats, type StatusCounts } from "./stats"
 import { MAX_ATTEMPTS, OCR_EXTENSIONS } from "./limits"
+import { activeModel, embedderFor } from "./embed/server"
+import { modelKey, type EmbeddingModel } from "./embed/models"
 
 // instrumentation.ts, route handlers and server actions can each load their
 // own copy of this module, so the one indexer and index handle per process
@@ -31,8 +33,25 @@ export function documentIndexer(): Indexer {
     index: searchIndex,
     extract: async (filePath, ext, opts) => (await import("./extract")).extractFile(filePath, ext, opts),
     idle: async () => (await import("./extract/ocr")).terminateOcr(),
+    semantic: {
+      async begin() {
+        const m = await activeModel()
+        if (!m) return null
+        const key = modelKey(m)
+        await (await searchIndex()).useVectorModel(key, m.dims)
+        const embedder = embedderFor(m)
+        return { key, embed: (texts) => embedder.embedPassages(texts), end: () => embedder.indexingDrained() }
+      },
+    },
   })
   return state.indexer
+}
+
+/** The active model, if the index's vectors were made with it — otherwise search stays keyword-only. */
+export async function semanticSearchModel(): Promise<EmbeddingModel | null> {
+  const m = await activeModel()
+  if (!m) return null
+  return (await (await searchIndex()).vectorModel()) === modelKey(m) ? m : null
 }
 
 export function enqueueDocument(id: string): void {
@@ -123,5 +142,7 @@ export async function documentIndexStats(): Promise<string> {
     prisma.attachmentText.groupBy({ by: ["status"], _count: { _all: true } }),
   ])
   const counts: StatusCounts = Object.fromEntries(groups.map((g) => [g.status, g._count._all]))
-  return formatIndexStats(counts, settings.indexingEnabled)
+  const vectors =
+    settings.semanticEnabled && (await semanticSearchModel()) ? await (await searchIndex()).vectorStats() : null
+  return formatIndexStats(counts, settings.indexingEnabled, vectors)
 }
