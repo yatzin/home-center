@@ -52,7 +52,16 @@ export type IndexerStore = {
 export const EMBED_BATCH = 16
 
 /** An open embedding session for the active model; end() lets the model unload. */
-export type SemanticSession = { key: string; embed(texts: string[]): Promise<number[][]>; end(): void }
+export type SemanticSession = {
+  key: string
+  embed(texts: string[]): Promise<number[][]>
+  /** False once the active model changed or semantic search was turned off. */
+  stillActive(): Promise<boolean>
+  end(): void
+}
+
+/** Bounds model switches handled in one drain, should an admin keep switching. */
+const MAX_EMBED_PASSES = 3
 
 export type IndexerDeps = {
   store: IndexerStore
@@ -137,25 +146,37 @@ export function createIndexer(deps: IndexerDeps): Indexer {
   // Chunks without a vector for the active model get one. Runs after the file
   // queue drains, so extraction (and keyword search) never waits for it. New
   // files arriving meanwhile pause it; drain() starts it again afterwards.
+  // A model switch (or semantic off) ends the session between batches, and
+  // the next pass begins with whatever is active now.
   async function embedBacklog() {
     if (!deps.semantic) return
+    for (let pass = 0; pass < MAX_EMBED_PASSES; pass++) {
+      if (!(await embedPass(deps.semantic))) return
+    }
+  }
+
+  /** True when the session went stale and another pass should begin. */
+  async function embedPass(semantic: NonNullable<IndexerDeps["semantic"]>): Promise<boolean> {
     let session: SemanticSession | null = null
     try {
-      session = await deps.semantic.begin()
-      if (!session) return
+      session = await semantic.begin()
+      if (!session) return false
       const index = await deps.index()
       while (!queue.size) {
         const { indexingEnabled } = await deps.store.settings()
-        if (!indexingEnabled) break
+        if (!indexingEnabled) return false
+        if (!(await session.stillActive())) return true
         const batch = await index.chunksMissingVectors(EMBED_BATCH)
-        if (!batch.length) break
+        if (!batch.length) return false
         const vectors = await session.embed(batch.map((b) => b.text))
         await index.writeVectors(session.key, batch.map((b, i) => ({ chunkId: b.chunkId, vector: vectors[i] })))
         await new Promise((resolve) => setImmediate(resolve))
       }
+      return false
     } catch (error) {
       // Left for the next reconcile; keyword search is unaffected.
       log.error("[documents] embedding failed:", nameOf(error))
+      return false
     } finally {
       session?.end()
     }

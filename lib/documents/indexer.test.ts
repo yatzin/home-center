@@ -102,7 +102,7 @@ function setup(opts: { enabled?: boolean; ocr?: boolean; outcomes?: Record<strin
   })
   const ended = vi.fn()
   const semantic = opts.semantic
-    ? { begin: vi.fn(async (): Promise<SemanticSession | null> => ({ key: "m@1", embed, end: ended })) }
+    ? { begin: vi.fn(async (): Promise<SemanticSession | null> => ({ key: "m@1", embed, stillActive: async () => true, end: ended })) }
     : undefined
   const indexer = createIndexer({ store, index: async () => index, extract, idle: idleHook, log, semantic })
   return { settings, rows, add, chunks, replaceFails, extract, idleHook, log, indexer, vectors, embed, ended, semantic, embedCalls }
@@ -149,6 +149,34 @@ describe("indexer", () => {
     t.indexer.enqueue("a")
     await t.indexer.idle()
     expect(t.embedCalls.map((c) => c.length)).toEqual([16, 4])
+  })
+
+  it("stops the old model mid-backlog when the model is switched and starts the new one in the same run", async () => {
+    const pages = Array.from({ length: 40 }, (_, i) => `page ${i}`)
+    const t = setup({ semantic: true, outcomes: { a: { kind: "text", method: "TEXT", pages } } })
+    let active = "A@1"
+    const keys: string[] = []
+    const batchesBy: Record<string, number> = {}
+    t.semantic!.begin.mockImplementation(async () => {
+      const key = active
+      keys.push(key)
+      return {
+        key,
+        embed: async (texts: string[]) => {
+          batchesBy[key] = (batchesBy[key] ?? 0) + 1
+          active = "B@1" // the admin switches models while the first batch runs
+          return texts.map(() => [1, 0, 0])
+        },
+        stillActive: async () => active === key,
+        end: t.ended,
+      }
+    })
+    t.add("a")
+    t.indexer.enqueue("a")
+    await t.indexer.idle()
+    expect(keys).toEqual(["A@1", "B@1"])
+    expect(batchesBy).toEqual({ "A@1": 1, "B@1": 2 })
+    expect(t.ended).toHaveBeenCalledTimes(2)
   })
 
   it("extracts, saves normalised text and indexes chunks", async () => {

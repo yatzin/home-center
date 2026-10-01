@@ -40,7 +40,15 @@ export function documentIndexer(): Indexer {
         const key = modelKey(m)
         await (await searchIndex()).useVectorModel(key, m.dims)
         const embedder = embedderFor(m)
-        return { key, embed: (texts) => embedder.embedPassages(texts), end: () => embedder.indexingDrained() }
+        return {
+          key,
+          embed: (texts) => embedder.embedPassages(texts),
+          stillActive: async () => {
+            const now = await activeModel()
+            return now !== null && modelKey(now) === key
+          },
+          end: () => embedder.indexingDrained(),
+        }
       },
     },
   })
