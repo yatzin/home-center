@@ -98,7 +98,8 @@ export async function resetUserPassword(id: string) {
 
   const tempPassword = generateTempPassword()
   const passwordHash = await bcrypt.hash(tempPassword, 12)
-  await prisma.user.update({ where: { id }, data: { passwordHash, mustResetPassword: true } })
+  // Ends that user's sessions everywhere: the old password is no longer theirs.
+  await prisma.user.update({ where: { id }, data: { passwordHash, mustResetPassword: true, sessionVersion: { increment: 1 } } })
   revalidatePath("/settings")
   return { success: true, tempPassword }
 }

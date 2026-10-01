@@ -15,6 +15,7 @@ type StoredUser = {
   email: string
   role: string
   mustResetPassword: boolean
+  sessionVersion: number
   passwordHash: string
 }
 
@@ -47,6 +48,13 @@ export async function verifyLogin(input: unknown, ip: string, deps: LoginDeps): 
   deps.throttle.recordSuccess(email)
   return {
     status: "ok",
-    user: { id: user.id, name: user.name, email: user.email, role: user.role, mustResetPassword: user.mustResetPassword },
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustResetPassword: user.mustResetPassword,
+      sessionVersion: user.sessionVersion,
+    },
   }
 }

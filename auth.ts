@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { verifyLogin } from "@/lib/auth-credentials"
+import { refreshClaims } from "@/lib/auth-session"
 import { clientIp, createLoginThrottle } from "@/lib/login-throttle"
 
 // One throttle per process, kept on globalThis because route handlers and
@@ -34,13 +35,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    // Runs on every session read, not only at sign-in: the account is re-read
+    // so a role change, a deleted account or a revoked session (password
+    // change, admin reset) takes effect on the next request. Returning null
+    // ends the session.
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id
-        token.role = (user as { role: string }).role
-        token.mustResetPassword = (user as { mustResetPassword: boolean }).mustResetPassword
+        token.sessionVersion = (user as { sessionVersion: number }).sessionVersion
       }
-      return token
+      if (typeof token.id !== "string") return null
+      const account = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { role: true, mustResetPassword: true, sessionVersion: true },
+      })
+      return refreshClaims(token as typeof token & { sessionVersion?: number }, account)
     },
     session({ session, token }) {
       session.user.id = token.id as string

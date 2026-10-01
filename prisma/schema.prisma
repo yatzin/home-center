@@ -134,6 +134,8 @@ model User {
   passwordHash      String
   role              Role     @default(USER)
   mustResetPassword Boolean  @default(false)
+  /// Bumped to end every session this account has (password change, admin reset).
+  sessionVersion    Int      @default(0)
   createdAt         DateTime @default(now())
 
   emailDigest   EmailDigest @default(DAILY)
