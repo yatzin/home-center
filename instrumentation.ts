@@ -9,6 +9,9 @@ export async function register() {
   const { startNotificationScheduler } = await import("@/lib/notifications/scheduler")
   startNotificationScheduler()
 
+  const { listenForEntityChanges } = await import("@/lib/search/entities/sync-server")
+  listenForEntityChanges()
+
   const { startDocumentIndexer } = await import("@/lib/documents/indexer-server")
   startDocumentIndexer()
 }

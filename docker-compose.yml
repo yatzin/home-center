@@ -19,9 +19,6 @@ services:
       # blank, so it's fine not to know this until after you've deployed.
       AUTH_URL: ""
 
-      # Where uploaded receipts/photos are stored inside the container. Leave as-is.
-      UPLOAD_DIR: "/data/uploads"
-
       # Max size (bytes) for a single upload. 26214400 = 25 MiB.
       MAX_UPLOAD_BYTES: "26214400"
 

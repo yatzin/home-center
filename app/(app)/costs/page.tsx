@@ -6,13 +6,14 @@ import { TrendChart } from "@/components/charts/trend-chart"
 import { CompositionBar } from "@/components/charts/composition-bar"
 import { Sparkline } from "@/components/charts/sparkline"
 import { loadCostRecords } from "@/lib/costs-server"
+import { loadFeatures } from "@/lib/features-server"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 import { withParams } from "@/lib/table-params"
 import type { AssetType } from "@/app/generated/prisma/client"
 import {
-  CATEGORY_ORDER, averagePerMonth, bucketed, byAsset, byCategory, byVendor, categoryColor,
+  CATEGORY_ORDER, assetKey, averagePerMonth, nestedByAsset, bucketed, byAsset, byCategory, byVendor, categoryColor,
   categoryLabel, costRange, formatMoney, inYear, isGranularity, parseAssetKey, ranked,
   rollingAverage, stackedBuckets, sum, yearToDate, type CategoryKey, type CostRow,
   type Granularity,
@@ -49,7 +50,8 @@ export default async function CostsPage({
 }) {
   const params = await searchParams
   const now = new Date()
-  const [allRows, assets] = await Promise.all([loadCostRecords(), loadAssetIndex()])
+  const [allRows, assets, features] = await Promise.all([loadCostRecords(), loadAssetIndex(), loadFeatures()])
+  const typeFilters = features.health ? ASSET_TYPE_FILTERS : ASSET_TYPE_FILTERS.filter((t) => t.value !== "PERSON")
 
   if (allRows.length === 0) {
     return (
@@ -68,11 +70,25 @@ export default async function CostsPage({
   // Every one of these arrives from the query string, so every one is whitelisted
   // against a known set before it reaches a filter.
   const typeParam = typeof params.type === "string" ? params.type : undefined
-  const assetType = ASSET_TYPE_FILTERS.some((t) => t.value === typeParam)
+  const assetType = typeFilters.some((t) => t.value === typeParam)
     ? (typeParam as AssetType)
     : undefined
-  const yearParam = Number(typeof params.year === "string" ? params.year : NaN)
-  const year = Number.isInteger(yearParam) ? yearParam : undefined
+  const yearRaw = typeof params.year === "string" ? params.year : undefined
+  const yearParam = Number(yearRaw ?? NaN)
+  // The page opens on the current year, monthly, across all assets. "all" is an
+  // explicit value because an absent param now means "the default", not "no filter".
+  // Falls back to every year when the current one has no costs, so a fresh January
+  // doesn't open on an empty page.
+  const years = [...new Set(allRows.map((r) => r.date.getFullYear()))].sort((a, b) => b - a)
+  const thisYear = now.getFullYear()
+  const year =
+    yearRaw === "all"
+      ? undefined
+      : Number.isInteger(yearParam)
+        ? yearParam
+        : years.includes(thisYear)
+          ? thisYear
+          : undefined
   const bucketParam = typeof params.bucket === "string" ? params.bucket : undefined
   const granularity: Granularity = isGranularity(bucketParam) ? bucketParam : "month"
   const categoryParam = typeof params.category === "string" ? params.category : undefined
@@ -82,8 +98,6 @@ export default async function CostsPage({
 
   // Years come from the unfiltered set so the list doesn't shift when an asset
   // type is picked.
-  const years = [...new Set(allRows.map((r) => r.date.getFullYear()))].sort((a, b) => b - a)
-
   const typeRows = assetType ? allRows.filter((r) => r.assetType === assetType) : allRows
   const yearRows = year != null ? inYear(typeRows, year) : typeRows
   // The category filter stops here. The composition bar below is what sets it, so
@@ -96,6 +110,7 @@ export default async function CostsPage({
     <FilterRow
       params={params}
       years={years}
+      types={typeFilters}
       assetType={assetType}
       year={year}
       granularity={granularity}
@@ -116,7 +131,6 @@ export default async function CostsPage({
     )
   }
 
-  const thisYear = now.getFullYear()
   const range = costRange(typeRows, now, year)
   const buckets = stackedBuckets(rows, granularity, range)
   const trend = rollingAverage(buckets, TREND_WINDOW)
@@ -133,30 +147,46 @@ export default async function CostsPage({
     { start: new Date(now.getFullYear(), now.getMonth() - (TILE_MONTHS - 1), 1), end: now }
   ).map((p) => p.total)
 
-  const assetEntries = ranked(byAsset(rows), {
+  // Equipment rolls into its property only when the view includes equipment (All).
+  // Filtered to Properties it is not in the rows at all, and filtered to Equipment
+  // the properties are not in the view, so there is nothing to nest under.
+  const nested = assetType == null ? nestedByAsset(rows, assets.equipmentProperty) : null
+  const assetLabel = (key: string) => {
+    const { assetType: t, assetId } = parseAssetKey(key)
+    return assets.assetName(t, assetId) ?? "Unknown"
+  }
+  const assetEntries = ranked(nested ? nested.top : byAsset(rows), {
     limit: TOP_ASSETS,
-    label: (key) => {
-      const { assetType, assetId } = parseAssetKey(key)
-      return assets.assetName(assetType, assetId) ?? "Unknown"
-    },
+    label: assetLabel,
   })
   // Each asset's own history, on the same monthly grid, so the sparklines beside
   // the bars are comparable with one another rather than each self-scaled to a
-  // different span of time.
-  const assetHistory = new Map(
-    assetEntries.map((entry) => {
-      const { assetType: t, assetId } = parseAssetKey(entry.key)
-      const own = rows.filter((r) => r.assetType === t && r.assetId === assetId)
-      return [entry.key, bucketed(own, granularity, range).map((p) => p.total)]
-    })
-  )
+  // different span of time. A property's history includes its equipment.
+  const historyOf = (keys: string[]) => {
+    const wanted = new Set(keys)
+    const own = rows.filter((r) => wanted.has(assetKey(r.assetType, r.assetId)))
+    return bucketed(own, granularity, range).map((p) => p.total)
+  }
 
   // Colours and links are resolved here rather than passed to the charts as
   // callbacks: the chart components are client components, and a function cannot
   // cross the server/client boundary.
-  const assetRows = assetEntries.map((entry) => {
-    const { assetType: t, assetId } = parseAssetKey(entry.key)
-    return { ...entry, history: assetHistory.get(entry.key), href: assetHref(t, assetId) }
+  const assetRows = assetEntries.flatMap((entry) => {
+    const hrefOf = (key: string) => {
+      const { assetType: t, assetId } = parseAssetKey(key)
+      return assetHref(t, assetId)
+    }
+    const kids = nested?.children.get(entry.key)
+    const parent = {
+      ...entry,
+      history: historyOf(kids ? [...kids.keys()] : [entry.key]),
+      href: hrefOf(entry.key),
+    }
+    if (!kids) return [parent]
+    const childRows = ranked(kids, {
+      label: (key) => (key === entry.key ? "Property itself" : assetLabel(key)),
+    }).map((c) => ({ ...c, depth: 1, history: historyOf([c.key]), href: hrefOf(c.key) }))
+    return [parent, ...childRows]
   })
 
   // No cast needed: Map's methods are bivariant in TypeScript, so a
@@ -382,6 +412,7 @@ function BiggestRow({
 function FilterRow({
   params,
   years,
+  types,
   assetType,
   year,
   granularity,
@@ -389,6 +420,7 @@ function FilterRow({
 }: {
   params: Record<string, string | string[] | undefined>
   years: number[]
+  types: { value: AssetType; label: string }[]
   assetType?: AssetType
   year?: number
   granularity: Granularity
@@ -401,7 +433,7 @@ function FilterRow({
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
       <FilterGroup label="Assets">
         <FilterLink label="All" href={`/costs${withParams(params, { type: undefined })}`} active={!assetType} />
-        {ASSET_TYPE_FILTERS.map((t) => (
+        {types.map((t) => (
           <FilterLink
             key={t.value}
             label={t.label}
@@ -412,7 +444,7 @@ function FilterRow({
       </FilterGroup>
 
       <FilterGroup label="Year">
-        <FilterLink label="All" href={`/costs${withParams(params, { year: undefined })}`} active={year == null} />
+        <FilterLink label="All" href={`/costs${withParams(params, { year: "all" })}`} active={year == null} />
         {years.map((y) => (
           <FilterLink
             key={y}

@@ -1,5 +1,5 @@
 import { signIn } from "@/auth"
-import { AuthError } from "next-auth"
+import { AuthError, CredentialsSignin } from "next-auth"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,9 @@ async function login(formData: FormData) {
       redirectTo: "/",
     })
   } catch (error) {
+    if (error instanceof CredentialsSignin && error.code === "rate_limited") {
+      redirect("/login?error=locked")
+    }
     if (error instanceof AuthError) {
       redirect("/login?error=1")
     }
@@ -26,9 +29,9 @@ async function login(formData: FormData) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; message?: string }>
 }) {
-  const { error } = await searchParams
+  const { error, message } = await searchParams
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">
@@ -46,7 +49,14 @@ export default async function LoginPage({
             <CardTitle className="text-base">Welcome back</CardTitle>
             {error && (
               <CardDescription className="text-destructive">
-                Invalid email or password.
+                {error === "locked"
+                  ? "Too many failed attempts. Wait 15 minutes, then try again."
+                  : "Invalid email or password."}
+              </CardDescription>
+            )}
+            {!error && message === "password-changed" && (
+              <CardDescription className="text-emerald-700 dark:text-emerald-400">
+                Password changed. Sign in with your new password.
               </CardDescription>
             )}
           </CardHeader>

@@ -9,6 +9,8 @@ import { assetHref, assetIcon } from "@/lib/assets"
 import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
 import type { Prisma } from "@/app/generated/prisma/client"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 const WARN_DAYS = 60
 const DEFAULT_SORT = "expires"
@@ -65,8 +67,10 @@ export default async function WarrantiesPage({
     : status === "active" ? { expirationDate: { gt: warnCutoff } }
     : {}
 
+  const owned = ownedWhere(await loadFeatures())
   const where: Prisma.WarrantyWhereInput = {
     AND: [
+      owned,
       statusWhere,
       q ? { OR: [{ productName: { contains: q } }, { vendor: { contains: q } }] } : {},
     ],
@@ -76,7 +80,7 @@ export default async function WarrantiesPage({
     prisma.warranty.findMany({ where, orderBy, skip, take }),
     prisma.warranty.count({ where }),
     // Headline stat stays global, not filter-scoped, matching prior behaviour.
-    prisma.warranty.count({ where: { expirationDate: { gte: now, lte: warnCutoff } } }),
+    prisma.warranty.count({ where: { ...owned, expirationDate: { gte: now, lte: warnCutoff } } }),
     loadAssetIndex(),
   ])
 

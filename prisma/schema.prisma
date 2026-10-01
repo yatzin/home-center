@@ -134,6 +134,8 @@ model User {
   passwordHash      String
   role              Role     @default(USER)
   mustResetPassword Boolean  @default(false)
+  /// Bumped to end every session this account has (password change, admin reset).
+  sessionVersion    Int      @default(0)
   createdAt         DateTime @default(now())
 
   emailDigest   EmailDigest @default(DAILY)
@@ -597,6 +599,16 @@ model DocumentSettings {
   updatedAt       DateTime @updatedAt
 }
 
+/// Optional parts of the site an admin can switch off. Turning one off hides
+/// it everywhere — nav, pages, search, notifications, the assistant — without
+/// touching its data, so switching it back on brings everything back.
+model FeatureSettings {
+  id            String   @id @default("singleton")
+  /// People, providers, insurance and everything owned by a person.
+  healthEnabled Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 model Notification {
@@ -611,7 +623,12 @@ model Notification {
   /// Set once this notification has gone out in a digest email. Null means it
   /// is still pending delivery, so a failed send is simply retried next pass.
   emailedAt         DateTime?
+  /// Set when the user dismisses it: hidden from the list and the bell until
+  /// they choose to show hidden notifications.
+  dismissedAt       DateTime?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
 }

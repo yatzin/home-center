@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
+import { checkPasswordChange, MIN_PASSWORD_LENGTH, PASSWORD_ERROR_TEXT, type PasswordChangeError } from "@/lib/password-change"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,23 +13,32 @@ async function changePassword(formData: FormData) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const newPassword = formData.get("newPassword") as string
-  const confirm = formData.get("confirm") as string
+  const account = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { mustResetPassword: true, passwordHash: true },
+  })
+  if (!account) redirect("/login")
 
-  if (!newPassword || newPassword.length < 8) {
-    redirect("/change-password?error=short")
-  }
-  if (newPassword !== confirm) {
-    redirect("/change-password?error=mismatch")
-  }
+  const newPassword = String(formData.get("newPassword") ?? "")
+  const error = await checkPasswordChange(
+    {
+      current: String(formData.get("currentPassword") ?? ""),
+      next: newPassword,
+      confirm: String(formData.get("confirm") ?? ""),
+    },
+    account,
+    (password, hash) => bcrypt.compare(password, hash)
+  )
+  if (error) redirect(`/change-password?error=${error}`)
 
   const passwordHash = await bcrypt.hash(newPassword, 12)
+  // The version bump signs this account out on every device, including any
+  // that someone else may have been using.
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { passwordHash, mustResetPassword: false },
+    data: { passwordHash, mustResetPassword: false, sessionVersion: { increment: 1 } },
   })
 
-  // Force re-login to refresh the JWT with mustResetPassword: false
   await signOut({ redirectTo: "/login?message=password-changed" })
 }
 
@@ -37,14 +47,12 @@ export default async function ChangePasswordPage({
 }: {
   searchParams: Promise<{ error?: string; message?: string }>
 }) {
-  const { error, message } = await searchParams
+  const [{ error, message }, session] = await Promise.all([searchParams, auth()])
+  // A forced reset (first sign-in, or an admin reset) just used the temporary
+  // password, so it isn't asked for again.
+  const askCurrent = !session?.user?.mustResetPassword
 
-  const errorText =
-    error === "short"
-      ? "Password must be at least 8 characters."
-      : error === "mismatch"
-        ? "Passwords do not match."
-        : null
+  const errorText = error && error in PASSWORD_ERROR_TEXT ? PASSWORD_ERROR_TEXT[error as PasswordChangeError] : null
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">
@@ -70,6 +78,18 @@ export default async function ChangePasswordPage({
           </CardHeader>
           <CardContent>
             <form action={changePassword} className="space-y-4">
+              {askCurrent && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="currentPassword">Current password</Label>
+                  <Input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="newPassword">New password</Label>
                 <Input
@@ -78,7 +98,7 @@ export default async function ChangePasswordPage({
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
               <div className="space-y-1.5">
@@ -89,7 +109,7 @@ export default async function ChangePasswordPage({
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
               <Button type="submit" className="w-full">

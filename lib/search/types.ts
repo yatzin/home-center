@@ -1,0 +1,76 @@
+import type { AssetType } from "@/app/generated/prisma/client"
+
+// What /search renders. Plain data, built on the server: each record type is
+// turned into the handful of facts worth showing for it.
+
+export type Fact = { label: string; value: string }
+export type Tone = "default" | "secondary" | "destructive" | "outline"
+export type Status = { label: string; tone: Tone }
+
+export type AssetThumb = { type: AssetType; id: string; name: string; imageFilename: string | null; href: string }
+
+/** A property, vehicle, piece of equipment or person: a photo card. */
+export type AssetResult = {
+  type: AssetType
+  id: string
+  href: string
+  name: string
+  imageFilename: string | null
+  badge: string | null
+  subtitle: string | null
+  facts: Fact[]
+  status: Status | null
+}
+
+export type RecordKind =
+  | "service" | "visit" | "maintenance" | "warranty" | "insurance" | "provider"
+  | "condition" | "medication" | "allergy" | "immunization" | "observation"
+
+/** Anything that belongs to an asset or person, or stands alone (providers, insurance). */
+export type RecordResult = {
+  kind: RecordKind
+  id: string
+  href: string
+  title: string
+  subtitle: string | null
+  /** Display date, already formatted. */
+  date: string | null
+  /** e.g. a visit's cost, already formatted. */
+  amount: string | null
+  status: Status | null
+  facts: Fact[]
+  owner: AssetThumb | null
+  /** Shown instead of an owner, e.g. an insurance policy's members. */
+  people: string | null
+}
+
+export type DocumentResult = {
+  attachmentId: string
+  fileName: string
+  fileHref: string | null
+  record: { type: string; title: string; href: string | null }
+  owner: AssetThumb | null
+  pages: number | null
+  passages: { page: number | null; text: string }[]
+  matchedBy: "keyword" | "semantic"
+}
+
+export type Section =
+  | { key: string; title: string; layout: "assets"; items: AssetResult[]; more: boolean }
+  | { key: string; title: string; layout: "records"; items: RecordResult[]; more: boolean }
+  | { key: string; title: string; layout: "documents"; items: DocumentResult[]; more: boolean }
+
+export type SemanticState =
+  | { state: "off" }
+  | { state: "unavailable" }
+  | { state: "failed" }
+  /** Records and files found by meaning that keyword search didn't return, grouped like the keyword sections. */
+  | { state: "ok"; sections: Section[] }
+
+export type SearchResults = {
+  query: string
+  terms: string[]
+  sections: Section[]
+  semantic: SemanticState
+  total: number
+}

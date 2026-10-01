@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Fragment, useState } from "react"
 import { cn } from "@/lib/utils"
+import { isHealthPath } from "@/lib/features"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import {
   LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
@@ -57,7 +58,9 @@ function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: st
   )
 }
 
-function SidebarContent({ onNavClick, showAssistant }: { onNavClick?: () => void; showAssistant: boolean }) {
+type NavProps = { showAssistant: boolean; showHealth: boolean }
+
+function SidebarContent({ onNavClick, showAssistant, showHealth }: NavProps & { onNavClick?: () => void }) {
   return (
     <div className="flex flex-col h-full px-3 py-4">
       <div className="mb-6 flex items-center gap-2 px-3">
@@ -65,7 +68,9 @@ function SidebarContent({ onNavClick, showAssistant }: { onNavClick?: () => void
         <span className="font-heading font-semibold tracking-tight">HomeCenter</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1">
-        {navItems.filter((item) => showAssistant || item.href !== "/chat").map(({ section, ...item }) => (
+        {navItems
+          .filter((item) => (showAssistant || item.href !== "/chat") && (showHealth || !isHealthPath(item.href)))
+          .map(({ section, ...item }) => (
           <Fragment key={item.href}>
             {section && (
               <p className="mt-3 px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">{section}</p>
@@ -81,15 +86,15 @@ function SidebarContent({ onNavClick, showAssistant }: { onNavClick?: () => void
   )
 }
 
-export function Sidebar({ showAssistant }: { showAssistant: boolean }) {
+export function Sidebar(props: NavProps) {
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-card">
-      <SidebarContent showAssistant={showAssistant} />
+      <SidebarContent {...props} />
     </aside>
   )
 }
 
-export function MobileSidebarTrigger({ showAssistant }: { showAssistant: boolean }) {
+export function MobileSidebarTrigger(props: NavProps) {
   const [open, setOpen] = useState(false)
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -98,7 +103,7 @@ export function MobileSidebarTrigger({ showAssistant }: { showAssistant: boolean
         <span className="sr-only">Menu</span>
       </SheetTrigger>
       <SheetContent side="left" className="w-56 p-0">
-        <SidebarContent showAssistant={showAssistant} onNavClick={() => setOpen(false)} />
+        <SidebarContent {...props} onNavClick={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   )

@@ -1,8 +1,10 @@
+import { requireHealth } from "@/lib/features-server"
 import { prisma } from "@/lib/prisma"
 import { ProvidersTable } from "@/components/providers/providers-table"
 import { cents } from "@/lib/costs"
 
 export default async function ProvidersPage() {
+  await requireHealth()
   const [providers, visits] = await Promise.all([
     prisma.provider.findMany({ orderBy: { name: "asc" } }),
     prisma.serviceRecord.groupBy({

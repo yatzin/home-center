@@ -2,7 +2,7 @@ import path from "path"
 
 // Every filesystem path built from a record id goes through here. Ids arrive
 // from the client, so a path is only trusted once it is proven to sit strictly
-// inside the upload root — see SEC-001 and SEC-004 in SECURITY-REVIEW.md.
+// inside the upload root.
 
 export function uploadRoot(): string {
   return path.resolve(process.env.UPLOAD_DIR ?? "./uploads")

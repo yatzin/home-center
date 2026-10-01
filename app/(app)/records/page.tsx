@@ -10,6 +10,8 @@ import { assetHref, assetIcon } from "@/lib/assets"
 import { UrlSortHead, UrlPaginationBar } from "@/components/ui/url-table"
 import { parseTableParams, pageCountOf, withParams, type SortMap } from "@/lib/table-params"
 import type { AssetType, Prisma } from "@/app/generated/prisma/client"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 const DEFAULT_SORT = "date"
 const DEFAULT_DIR = "desc"
@@ -45,6 +47,7 @@ export default async function RecordsPage({
 
   const where: Prisma.ServiceRecordWhereInput = {
     AND: [
+      ownedWhere(await loadFeatures()),
       assetId ? { assetId } : {},
       q ? { OR: [{ title: { contains: q } }, { vendor: { contains: q } }, { description: { contains: q } }] } : {},
     ],

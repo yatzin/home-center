@@ -13,28 +13,43 @@ import { DocumentSettings } from "@/components/settings/document-settings"
 import { loadDocumentSettings } from "@/lib/documents/settings"
 import { documentIndexStats } from "@/lib/documents/indexer-server"
 import { loadModelStatus } from "@/lib/documents/embed/server"
+import { SettingsNav } from "@/components/settings/settings-nav"
+import { FeatureSettings } from "@/components/settings/feature-settings"
+import { loadFeatures } from "@/lib/features-server"
+import { resolveSection, visibleSections, type SettingsSectionId } from "@/lib/settings-sections"
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>
+}) {
   const session = await auth()
   if (!session) redirect("/login")
 
   const isAdmin = session.user.role === "ADMIN"
+  const sections = visibleSections(isAdmin)
+  const section = resolveSection((await searchParams).tab, isAdmin)
+  const is = (id: SettingsSectionId) => section.id === id
 
-  // Every account reaches Settings now: email cadence is a personal preference,
-  // so gating the whole page on ADMIN would leave ordinary users unable to turn
-  // their own mail off. User and server management stay admin-only.
-  const [me, users, mail, storedMail, llm, docs] = await Promise.all([
+  // Every account reaches Settings: email cadence is a personal preference, so
+  // gating the whole page on ADMIN would leave ordinary users unable to turn
+  // their own mail off. resolveSection keeps the admin-only sections from
+  // non-admins, and only the open section's data is loaded.
+  const [me, users, mail, storedMail, llm, docs, features] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true },
     }),
-    isAdmin ? prisma.user.findMany({ orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
-    loadMailConfig(),
-    isAdmin
-      ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } })
-      : Promise.resolve(null),
-    isAdmin ? loadLlmConfig() : Promise.resolve(null),
-    isAdmin ? Promise.all([loadDocumentSettings(), documentIndexStats(), loadModelStatus()]) : Promise.resolve(null),
+    is("users") ? prisma.user.findMany({ orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    is("notifications") || is("mail") ? loadMailConfig() : Promise.resolve(null),
+    is("mail") ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } }) : Promise.resolve(null),
+    is("assistant") ? loadLlmConfig() : Promise.resolve(null),
+    is("documents")
+      ? Promise.all([loadDocumentSettings(), documentIndexStats(), loadModelStatus()])
+      : is("assistant")
+        ? loadDocumentSettings().then((d) => [d, null, null] as const)
+        : Promise.resolve(null),
+    is("features") || is("assistant") ? loadFeatures() : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -54,73 +69,91 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-3xl">
-      <h1 className="font-heading text-2xl font-semibold">Settings</h1>
+    <div className="max-w-5xl space-y-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold">Settings</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">{section.description}</p>
+      </div>
 
-      <EmailPreferences
-        digest={me.emailDigest}
-        email={me.email}
-        mailConfigured={isMailConfigured(mail)}
-      />
+      <div className="grid gap-6 md:grid-cols-[12.5rem_minmax(0,1fr)]">
+        {sections.length > 1 && (
+          <aside className="md:sticky md:top-0 md:self-start">
+            <SettingsNav sections={sections} active={section.id} />
+          </aside>
+        )}
 
-      {isAdmin && (
-        <MailSettings
-          // Seeded from the resolved config so the form shows what is actually
-          // in effect, whether that came from Settings or the environment. The
-          // password is never sent — only whether one is stored.
-          initial={{
-            host: mail.host ?? "",
-            port: String(mail.port),
-            username: mail.username ?? "",
-            secure: storedMail?.secure == null ? "auto" : String(storedMail.secure),
-            fromAddress: mail.from,
-            digestHour: String(mail.digestHour),
-          }}
-          sources={mail.sources}
-          hasStoredPassword={Boolean(storedMail?.passwordEnc)}
-          passwordUnreadable={mail.passwordUnreadable}
-          configured={isMailConfigured(mail)}
-          dryRun={mail.dryRun}
-        />
-      )}
+        <div className={sections.length > 1 ? "min-w-0 max-w-3xl" : "min-w-0 max-w-3xl md:col-span-2"}>
+          {is("notifications") && mail && (
+            <EmailPreferences
+              digest={me.emailDigest}
+              email={me.email}
+              mailConfigured={isMailConfigured(mail)}
+            />
+          )}
 
-      {isAdmin && llm && (
-        <LlmSettings
-          // The key itself is never sent — only whether one is stored.
-          initial={{
-            enabled: llm.enabled,
-            hidden: llm.hidden,
-            baseUrl: llm.baseUrl ?? "",
-            model: llm.model ?? "",
-            temperature: llm.temperature?.toString() ?? "",
-            maxTokens: llm.maxTokens?.toString() ?? "",
-            systemPrompt: llm.systemPrompt ?? "",
-            timeoutSeconds: llm.timeoutSeconds?.toString() ?? "",
-            maxToolRounds: llm.maxToolRounds?.toString() ?? "",
-            extraBody: llm.extraBody ? JSON.stringify(parseExtraBody(llm.extraBody), null, 2) : "",
-            documentsEnabled: llm.documentsEnabled,
-            healthDocumentsEnabled: llm.healthDocumentsEnabled,
-          }}
-          indexingEnabled={docs?.[0].indexingEnabled ?? true}
-          hasStoredKey={llm.hasStoredKey}
-          keyUnreadable={llm.keyUnreadable}
-          ready={isLlmReady(llm)}
-        />
-      )}
+          {is("features") && features && <FeatureSettings initial={{ healthEnabled: features.health }} />}
 
-      {isAdmin && docs && (
-        <DocumentSettings
-          initial={{
-            indexingEnabled: docs[0].indexingEnabled,
-            ocrEnabled: docs[0].ocrEnabled,
-            semanticEnabled: docs[0].semanticEnabled,
-          }}
-          stats={docs[1]}
-          models={docs[2]}
-        />
-      )}
+          {is("mail") && mail && (
+            <MailSettings
+              // Seeded from the resolved config so the form shows what is actually
+              // in effect, whether that came from Settings or the environment. The
+              // password is never sent — only whether one is stored.
+              initial={{
+                host: mail.host ?? "",
+                port: String(mail.port),
+                username: mail.username ?? "",
+                secure: storedMail?.secure == null ? "auto" : String(storedMail.secure),
+                fromAddress: mail.from,
+                digestHour: String(mail.digestHour),
+              }}
+              sources={mail.sources}
+              hasStoredPassword={Boolean(storedMail?.passwordEnc)}
+              passwordUnreadable={mail.passwordUnreadable}
+              configured={isMailConfigured(mail)}
+              dryRun={mail.dryRun}
+            />
+          )}
 
-      {isAdmin && <UserManagement users={users} currentUserId={session.user.id} />}
+          {is("assistant") && llm && (
+            <LlmSettings
+              // The key itself is never sent — only whether one is stored.
+              initial={{
+                enabled: llm.enabled,
+                hidden: llm.hidden,
+                baseUrl: llm.baseUrl ?? "",
+                model: llm.model ?? "",
+                temperature: llm.temperature?.toString() ?? "",
+                maxTokens: llm.maxTokens?.toString() ?? "",
+                systemPrompt: llm.systemPrompt ?? "",
+                timeoutSeconds: llm.timeoutSeconds?.toString() ?? "",
+                maxToolRounds: llm.maxToolRounds?.toString() ?? "",
+                extraBody: llm.extraBody ? JSON.stringify(parseExtraBody(llm.extraBody), null, 2) : "",
+                documentsEnabled: llm.documentsEnabled,
+                healthDocumentsEnabled: llm.healthDocumentsEnabled,
+              }}
+              indexingEnabled={docs?.[0].indexingEnabled ?? true}
+              healthEnabled={features?.health ?? true}
+              hasStoredKey={llm.hasStoredKey}
+              keyUnreadable={llm.keyUnreadable}
+              ready={isLlmReady(llm)}
+            />
+          )}
+
+          {is("documents") && docs && docs[1] !== null && docs[2] !== null && (
+            <DocumentSettings
+              initial={{
+                indexingEnabled: docs[0].indexingEnabled,
+                ocrEnabled: docs[0].ocrEnabled,
+                semanticEnabled: docs[0].semanticEnabled,
+              }}
+              stats={docs[1]}
+              models={docs[2]}
+            />
+          )}
+
+          {is("users") && <UserManagement users={users} currentUserId={session.user.id} />}
+        </div>
+      </div>
     </div>
   )
 }
