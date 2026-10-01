@@ -1,3 +1,4 @@
+import { requireHealth } from "@/lib/features-server"
 import { prisma } from "@/lib/prisma"
 import { InsuranceList } from "@/components/insurance/insurance-list"
 
@@ -6,6 +7,7 @@ export default async function InsurancePage({
 }: {
   searchParams: Promise<{ open?: string }>
 }) {
+  await requireHealth()
   const { open } = await searchParams
   const [policies, people] = await Promise.all([
     prisma.insurancePolicy.findMany({

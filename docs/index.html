@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HomeCenter — Your home's memory, on your own server</title>
+<meta name="description" content="HomeCenter is a self-hosted app for your home, vehicles, equipment and family health: service history, costs, warranties, reminders, documents and an optional AI assistant.">
+<meta name="theme-color" content="#1b1b1b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens mirror app/globals.css (.dark) so the page reads as the same product. */
+  :root {
+    --bg: #1b1b1b;
+    --bg-2: #222222;
+    --card: #2e2e2e;
+    --card-2: #282828;
+    --fg: #fafafa;
+    --muted: #b4b4b4;
+    --faint: #7c7c7c;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --primary: #1d4ed8;           /* oklch(0.488 0.243 264.376) */
+    --primary-bright: #4f7cff;
+    --primary-soft: rgba(29, 78, 216, 0.18);
+    --green: #1baf7a;
+    --amber: #eda100;
+    --rose: #eb6834;
+    --radius: 14px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --font-sans: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-head: "Poppins", var(--font-sans);
+    --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3 { font-family: var(--font-head); line-height: 1.15; margin: 0; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  .wrap { width: min(1180px, 100% - 32px); margin-inline: auto; }
+  .icon { width: 20px; height: 20px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── Nav ─────────────────────────────────────────── */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    background: rgba(27, 27, 27, 0.6);
+    border-bottom: 1px solid transparent;
+    transition: border-color .4s var(--ease), background .4s var(--ease);
+  }
+  .nav.scrolled { border-bottom-color: var(--border); background: rgba(27, 27, 27, 0.82); }
+  .nav .wrap { display: flex; align-items: center; gap: 24px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-head); font-weight: 600; font-size: 17px; }
+  .logo {
+    display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px;
+    background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .02em;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 6px 20px -6px rgba(29,78,216,.8);
+  }
+  .nav-links { display: flex; gap: 4px; margin-left: auto; }
+  .nav-links a { padding: 8px 12px; border-radius: 8px; font-size: 14px; color: var(--muted); transition: color .2s, background .2s; }
+  .nav-links a:hover { color: var(--fg); background: rgba(255,255,255,.05); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border-radius: 10px; font-weight: 600; font-size: 15px;
+    border: 1px solid var(--border-strong); background: rgba(255,255,255,.03);
+    transition: transform .25s var(--ease), background .25s, border-color .25s, box-shadow .25s;
+  }
+  .btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.24); }
+  .btn.primary { background: var(--primary); border-color: transparent; color: #fff; box-shadow: 0 10px 30px -10px rgba(29,78,216,.9); }
+  .btn.primary:hover { background: #2457e6; box-shadow: 0 14px 34px -10px rgba(29,78,216,1); }
+  .btn.sm { padding: 8px 14px; font-size: 14px; }
+
+  /* ── Hero ────────────────────────────────────────── */
+  .hero { position: relative; padding: 96px 0 40px; text-align: center; isolation: isolate; }
+  .hero::before {
+    /* faint grid, masked to fade out */
+    content: ""; position: absolute; inset: -64px 0 0; z-index: -2;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 30%, #000 30%, transparent 75%);
+  }
+  .glow {
+    position: absolute; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(80px); opacity: .55;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .glow.a { width: 520px; height: 380px; left: calc(50% - 520px); top: 120px; background: rgba(29,78,216,.55); }
+  .glow.b { width: 460px; height: 340px; left: calc(50% + 40px); top: 220px; background: rgba(79,124,255,.32); animation-delay: -9s; }
+  @keyframes drift {
+    from { transform: translate3d(0,0,0) scale(1); }
+    to   { transform: translate3d(40px,-30px,0) scale(1.08); }
+  }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 999px;
+    border: 1px solid var(--border-strong); background: rgba(255,255,255,.03);
+    font-size: 13px; color: var(--muted);
+  }
+  .pill b { padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: #a9c0ff; font-weight: 600; font-size: 12px; }
+  .hero h1 { margin: 22px auto 0; max-width: 860px; font-size: clamp(38px, 6.2vw, 68px); font-weight: 600; }
+  .grad {
+    background: linear-gradient(100deg, #fff 10%, #a9c0ff 45%, #4f7cff 70%, #fff 95%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: sheen 9s ease-in-out infinite;
+  }
+  @keyframes sheen { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  .hero .lead { margin: 22px auto 0; max-width: 640px; font-size: clamp(17px, 2vw, 19px); color: var(--muted); }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
+  .hero-meta { margin-top: 20px; font-size: 13px; color: var(--faint); }
+
+  .stage { perspective: 1800px; margin-top: 64px; }
+  .hero-shot {
+    --tilt: 1;
+    transform: rotateX(calc(var(--tilt) * 14deg)) scale(calc(1 - var(--tilt) * .06)) translateY(calc(var(--tilt) * -10px));
+    transform-origin: 50% 0;
+    transition: transform .1s linear;
+    will-change: transform;
+  }
+
+  /* ── Screenshot frame ────────────────────────────── */
+  .frame {
+    position: relative; border-radius: var(--radius); overflow: hidden;
+    background: var(--card-2);
+    border: 1px solid var(--border-strong);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,.4),
+      0 30px 80px -20px rgba(0,0,0,.75),
+      0 0 120px -40px rgba(29,78,216,.45);
+  }
+  .frame-bar { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; background: #262626; border-bottom: 1px solid var(--border); }
+  .frame-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3c3c3c; }
+  .frame-bar span { margin-left: 12px; font-size: 12px; color: var(--faint); font-family: var(--font-mono); }
+  .shot { position: relative; aspect-ratio: 1918 / 935; overflow: hidden; background: var(--bg); cursor: zoom-in; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; }
+
+  .placeholder {
+    cursor: default; display: grid; place-items: center; text-align: center;
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(29,78,216,.14), transparent 65%),
+      repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 12px, transparent 12px 24px),
+      var(--bg-2);
+  }
+  .placeholder > div { display: grid; justify-items: center; gap: 10px; padding: 24px; }
+  .placeholder .icon { width: 34px; height: 34px; color: #7d9cff; stroke-width: 1.5; }
+  .placeholder strong { font-family: var(--font-head); font-weight: 600; font-size: 17px; }
+  .placeholder small { color: var(--faint); font-size: 13px; }
+  .placeholder code { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.05); border: 1px dashed var(--border-strong); }
+
+  /* ── Sections ────────────────────────────────────── */
+  section { position: relative; }
+  .block { padding: 120px 0; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8eaaff;
+  }
+  .eyebrow .icon { width: 16px; height: 16px; }
+  .head { max-width: 720px; }
+  .head.center { margin-inline: auto; text-align: center; }
+  .head h2 { margin-top: 14px; font-size: clamp(30px, 4vw, 44px); font-weight: 600; }
+  .head p { margin-top: 16px; color: var(--muted); font-size: 17.5px; }
+
+  /* Trust strip */
+  .strip { padding: 28px 0 0; }
+  .strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 34px; color: var(--muted); font-size: 14.5px; }
+  .strip li { display: flex; align-items: center; gap: 9px; }
+  .strip .icon { width: 18px; height: 18px; color: var(--green); }
+
+  /* Feature bento */
+  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; }
+  .tile {
+    position: relative; padding: 26px; border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+    border: 1px solid var(--border);
+    overflow: hidden;
+    transition: border-color .35s var(--ease), transform .35s var(--ease);
+  }
+  .tile::after {
+    /* pointer-following highlight */
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s;
+    background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(79,124,255,.12), transparent 60%);
+  }
+  .tile:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+  .tile:hover::after { opacity: 1; }
+  .tile h3 { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+  .tile h3 .badge {
+    display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+    background: var(--primary-soft); color: #a9c0ff; border: 1px solid rgba(79,124,255,.25);
+  }
+  .tile ul { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 11px; }
+  .tile li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+  .tile li .icon { width: 18px; height: 18px; margin-top: 2px; color: #7d9cff; }
+  .tile li b { color: var(--fg); font-weight: 600; }
+  .tile.wide { grid-column: span 2; }
+  .tile .opt { margin-left: auto; font-family: var(--font-sans); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); border: 1px solid var(--border-strong); padding: 3px 8px; border-radius: 999px; }
+
+  /* Spotlights */
+  .spot { display: grid; grid-template-columns: 5fr 7fr; gap: 64px; align-items: center; }
+  .spot.flip { grid-template-columns: 7fr 5fr; }
+  .spot.flip .copy { order: 2; }
+  .spot > *, .install > *, .bento > * { min-width: 0; }
+  .copy h2 { margin-top: 14px; font-size: clamp(28px, 3.4vw, 40px); font-weight: 600; }
+  .copy > p { margin-top: 16px; color: var(--muted); font-size: 17px; }
+  .checks { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 12px; }
+  .checks li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; font-size: 15.5px; color: var(--muted); }
+  .checks li b { color: var(--fg); font-weight: 600; }
+  .checks .icon { width: 20px; height: 20px; color: var(--green); margin-top: 2px; }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .tab {
+    position: relative; padding: 7px 13px; border-radius: 8px; font: 600 13px/1 var(--font-sans);
+    color: var(--muted); background: transparent; border: 1px solid transparent; cursor: pointer; overflow: hidden;
+    transition: color .2s, background .2s, border-color .2s;
+  }
+  .tab:hover { color: var(--fg); }
+  .tab[aria-selected="true"] { color: var(--fg); background: rgba(255,255,255,.06); border-color: var(--border-strong); }
+  .tab .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--primary-bright); }
+  .tab[aria-selected="true"] .bar { animation: fill var(--dwell, 5s) linear forwards; }
+  .gallery.paused .tab .bar { animation-play-state: paused; }
+  @keyframes fill { to { width: 100%; } }
+  .slides { position: relative; display: grid; }
+  .slides > .shot { grid-area: 1 / 1; opacity: 0; transform: scale(1.012); transition: opacity .7s var(--ease), transform 1.2s var(--ease); pointer-events: none; }
+  .slides > .shot.on { opacity: 1; transform: none; pointer-events: auto; }
+
+  /* Live mini-demos inside placeholders */
+  .placeholder > .demo { width: min(440px, 88%); display: grid; justify-items: stretch; gap: 10px; text-align: left; }
+  .demo .label { font-size: 12px; color: var(--faint); letter-spacing: .06em; text-transform: uppercase; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .searchbox {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border-strong); font-size: 14.5px;
+  }
+  .searchbox .icon { width: 18px; height: 18px; color: var(--faint); }
+  .caret { display: inline-block; width: 1px; height: 1.05em; margin-left: 1px; background: var(--fg); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .hit {
+    padding: 11px 14px; border-radius: 10px; background: rgba(255,255,255,.035); border: 1px solid var(--border);
+    font-size: 13.5px; color: var(--muted); opacity: 0; transform: translateY(6px);
+    transition: opacity .5s var(--ease), transform .5s var(--ease);
+  }
+  .hit.show { opacity: 1; transform: none; }
+  .hit b { color: var(--fg); font-weight: 600; }
+  .hit mark { background: rgba(79,124,255,.25); color: #dce5ff; padding: 0 2px; border-radius: 3px; }
+  .hit .src { display: block; margin-top: 3px; font-size: 12px; color: var(--faint); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; margin-right: 6px; background: rgba(27,175,122,.15); color: #57d3a5; }
+  .tag.sem { background: var(--primary-soft); color: #a9c0ff; }
+
+  .bubble { max-width: 86%; padding: 11px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; opacity: 0; transform: translateY(8px); transition: opacity .5s var(--ease), transform .5s var(--ease); }
+  .bubble.show { opacity: 1; transform: none; }
+  .bubble.me { justify-self: end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+  .bubble.ai { justify-self: start; background: var(--card); border: 1px solid var(--border); color: var(--muted); border-bottom-left-radius: 4px; }
+  .bubble.ai b { color: var(--fg); }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); animation: bob 1.2s ease-in-out infinite; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bob { 0%,60%,100% { transform: none; opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+
+  /* Privacy */
+  .privacy { background: linear-gradient(180deg, transparent, rgba(29,78,216,.06) 40%, transparent); }
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 52px; }
+  .trio .tile p { margin-top: 10px; color: var(--muted); font-size: 15px; }
+
+  /* Install */
+  .install { display: grid; grid-template-columns: 5fr 7fr; gap: 56px; align-items: start; }
+  .steps { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 18px; counter-reset: s; }
+  .steps li { position: relative; padding-left: 46px; color: var(--muted); font-size: 15.5px; }
+  .steps li::before {
+    counter-increment: s; content: counter(s);
+    position: absolute; left: 0; top: -2px; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; font: 600 13px/1 var(--font-head); color: #a9c0ff;
+    background: var(--primary-soft); border: 1px solid rgba(79,124,255,.3);
+  }
+  .steps b { color: var(--fg); }
+  .steps code, .copy code { font-family: var(--font-mono); font-size: 13px; padding: 2px 6px; border-radius: 5px; background: rgba(255,255,255,.06); color: var(--fg); }
+  .code { position: relative; border-radius: var(--radius); border: 1px solid var(--border-strong); background: #161616; overflow: hidden; box-shadow: 0 30px 70px -30px rgba(0,0,0,.8); }
+  .code .frame-bar { background: #1f1f1f; }
+  .code pre { margin: 0; padding: 20px 22px; overflow-x: auto; font: 13.5px/1.7 var(--font-mono); color: #d4d4d4; }
+  .code .k { color: #8eaaff; } .code .s { color: #8fd3b0; } .code .c { color: #6b6b6b; }
+  .copybtn { position: absolute; top: 4px; right: 8px; padding: 5px 10px; font: 600 12px/1 var(--font-sans); color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--border-strong); border-radius: 7px; cursor: pointer; transition: color .2s, background .2s; }
+  .copybtn:hover { color: var(--fg); background: rgba(255,255,255,.1); }
+
+  /* Closing CTA */
+  .closing { text-align: center; padding: 110px 0 120px; }
+  .closing h2 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 600; max-width: 760px; margin-inline: auto; }
+  .closing p { margin: 16px auto 0; max-width: 560px; color: var(--muted); font-size: 17px; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0 40px; color: var(--faint); font-size: 13.5px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+  footer a:hover { color: var(--fg); }
+
+  /* Scroll reveal */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .9s var(--ease), transform .9s var(--ease); transition-delay: var(--d, 0s); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* Lightbox */
+  dialog.lightbox {
+    padding: 0; border: 0; background: transparent; color: var(--fg);
+    width: 100vw; height: 100vh; max-width: none; max-height: none;
+    display: none; place-items: center; overflow: hidden;
+  }
+  dialog.lightbox[open] { display: grid; }
+  dialog.lightbox::backdrop { background: rgba(8,8,8,.86); backdrop-filter: blur(6px); }
+  .lb-stage { display: grid; justify-items: center; gap: 12px; max-width: calc(100vw - 160px); }
+  .lb-stage img {
+    max-height: 84vh; max-width: 100%; width: auto; border-radius: 12px;
+    border: 1px solid var(--border-strong); box-shadow: 0 40px 120px -20px #000;
+    user-select: none; -webkit-user-drag: none;
+  }
+  .lb-stage img.swap { animation: pop .4s var(--ease); }
+  .lb-cap { display: flex; gap: 12px; align-items: baseline; color: var(--muted); font-size: 14px; }
+  .lb-cap span:last-child { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .lb-btn {
+    position: fixed; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%;
+    color: var(--fg); background: rgba(40,40,40,.7); border: 1px solid var(--border-strong); cursor: pointer;
+    backdrop-filter: blur(8px); transition: background .2s, transform .25s var(--ease), border-color .2s;
+  }
+  .lb-btn:hover { background: rgba(29,78,216,.85); border-color: transparent; }
+  .lb-btn:focus-visible { outline: 2px solid var(--primary-bright); outline-offset: 2px; }
+  .lb-btn .icon { width: 22px; height: 22px; }
+  .lb-prev { left: 24px; top: 50%; transform: translateY(-50%); }
+  .lb-next { right: 24px; top: 50%; transform: translateY(-50%); }
+  .lb-prev:hover { transform: translateY(-50%) translateX(-2px); }
+  .lb-next:hover { transform: translateY(-50%) translateX(2px); }
+  .lb-close { top: 20px; right: 24px; width: 42px; height: 42px; }
+  @media (max-width: 680px) {
+    .lb-stage { max-width: calc(100vw - 24px); }
+    .lb-prev, .lb-next { top: auto; bottom: 20px; transform: none; }
+    .lb-prev:hover, .lb-next:hover { transform: none; }
+    .lb-prev { left: calc(50% - 60px); } .lb-next { right: calc(50% - 60px); }
+    .lb-close { top: 12px; right: 12px; }
+  }
+  @keyframes pop { from { opacity: 0; transform: scale(.97); } }
+
+  /* ── Responsive ──────────────────────────────────── */
+  @media (max-width: 980px) {
+    .bento { grid-template-columns: 1fr 1fr; }
+    .tile.wide { grid-column: span 2; }
+    .spot, .spot.flip, .install { grid-template-columns: 1fr; gap: 36px; }
+    .spot.flip .copy { order: 0; }
+    .trio { grid-template-columns: 1fr; }
+    .block { padding: 88px 0; }
+  }
+  @media (max-width: 680px) {
+    .nav-links { display: none; }
+    .nav .btn { margin-left: auto; }
+    .bento { grid-template-columns: 1fr; }
+    .tile.wide { grid-column: auto; }
+    .hero { padding-top: 64px; }
+    .stage { margin-top: 44px; }
+    .frame-bar span { display: none; }
+    .demo { width: 94%; }
+    .placeholder .hide-sm { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+    .reveal, .hit, .bubble { opacity: 1; transform: none; }
+    .hero-shot { --tilt: 0 !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite (Lucide, ISC licence) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></symbol>
+  <symbol id="i-fridge" viewBox="0 0 24 24"><path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z"/><path d="M5 10h14M15 7v6"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-shield-plus" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9 12h6M12 9v6"/></symbol>
+  <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4M12 16h.01"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></symbol>
+  <symbol id="i-steth" viewBox="0 0 24 24"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-file-search" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><circle cx="11.5" cy="14.5" r="2.5"/><path d="M13.3 16.3 15 18"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/><path d="M19 3v4M17 5h4"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+  <symbol id="i-toggle" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="6"/><circle cx="16" cy="12" r="2"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></symbol>
+  <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="logo">HC</span>HomeCenter</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#home">Home</a>
+      <a href="#health">Health</a>
+      <a href="#costs">Costs</a>
+      <a href="#search">Search</a>
+      <a href="#install">Install</a>
+    </nav>
+    <a class="btn sm" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ── Hero ─────────────────────────────────────── -->
+  <section class="hero">
+    <div class="glow a"></div><div class="glow b"></div>
+    <div class="wrap">
+      <span class="pill reveal"><b>Self-hosted</b> Open source · MIT · Docker</span>
+      <h1 class="reveal" style="--d:.08s">Your home's memory, <span class="grad">kept on your own server.</span></h1>
+      <p class="lead reveal" style="--d:.16s">Track homes, vehicles, equipment and family health in one calm place — service history, costs, warranties, reminders and every receipt, searchable in seconds.</p>
+      <div class="cta reveal" style="--d:.24s">
+        <a class="btn primary" href="#install">Install with Docker <svg class="icon"><use href="#i-arrow"/></svg></a>
+        <a class="btn" href="#features">See every feature</a>
+      </div>
+      <p class="hero-meta reveal" style="--d:.3s">No accounts. No cloud. No subscription.</p>
+
+      <div class="stage reveal" style="--d:.36s">
+        <div class="hero-shot" id="heroShot">
+          <div class="frame">
+            <div class="frame-bar"><i></i><i></i><i></i><span>homecenter.local:3000</span></div>
+            <div class="shot" data-caption="Dashboard"><img src="screenshots/1.Dashboard.png" alt="HomeCenter dashboard showing properties, vehicles, people, equipment, reminders, expiring warranties and spending" fetchpriority="high"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip">
+    <div class="wrap">
+      <ul class="reveal">
+        <li><svg class="icon"><use href="#i-check"/></svg>Runs on your NAS or server</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>No third-party sign-in</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>OCR and search run on-device</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>Works with local AI models</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── Feature overview ─────────────────────────── -->
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="head center reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-dash"/></svg>Everything in one place</span>
+        <h2>One app for everything you maintain</h2>
+        <p>From the furnace filter to a prescription refill, HomeCenter remembers what was done, what it cost and what's coming up.</p>
+      </div>
+
+      <div class="bento">
+        <article class="tile reveal">
+          <h3><span class="badge"><svg class="icon"><use href="#i-building"/></svg></span>Home</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-building"/></svg><span><b>Properties, vehicles &amp; equipment</b> with photos, purchase info and model/serial numbers</span></li>
+            <li><svg class="icon"><use href="#i-wrench"/></svg><span><b>Service records</b> with vendor, cost and category</span></li>
+            <li><svg class="icon"><use href="#i-shield-check"/></svg><span><b>Warranties</b> with expiry status at a glance</span></li>
+            <li><svg class="icon"><use href="#i-calendar"/></svg><span><b>Maintenance reminders</b> by date or mileage</span></li>
+          </ul>
+        </article>
+
+        <article class="tile reveal" style="--d:.06s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-heart"/></svg></span>Health <span class="opt">Optional</span></h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-users"/></svg><span><b>People</b> — conditions, medications, allergies, immunizations, visits</span></li>
+            <li><svg class="icon"><use href="#i-heart"/></svg><span><b>Observation logs</b> for symptoms and patterns</span></li>
+            <li><svg class="icon"><use href="#i-steth"/></svg><span><b>Providers</b> with visit counts and spend</span></li>
+            <li><svg class="icon"><use href="#i-shield-plus"/></svg><span><b>Insurance</b> policies, members and deductibles</span></li>
+          </ul>
+        </article>
+
+        <article class="tile reveal" style="--d:.12s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-chart"/></svg></span>Money</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-chart"/></svg><span><b>Costs</b> by month, quarter or year</span></li>
+            <li><svg class="icon"><use href="#i-chart"/></svg><span>Breakdowns by <b>asset, category and vendor</b></span></li>
+            <li><svg class="icon"><use href="#i-wrench"/></svg><span><b>Biggest expenses</b> and per-asset cost panels</span></li>
+            <li><svg class="icon"><use href="#i-dash"/></svg><span><b>Dashboard</b> with a 12-month spending chart</span></li>
+          </ul>
+        </article>
+
+        <article class="tile wide reveal">
+          <h3><span class="badge"><svg class="icon"><use href="#i-search"/></svg></span>Finding things</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-search"/></svg><span><b>Global search</b> across assets, records and the text of every document — by keyword or by meaning</span></li>
+            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Document indexing</b> for PDF, Word, Excel, PowerPoint, OpenDocument, text, and photos or scans via OCR — all on your server</span></li>
+            <li><svg class="icon"><use href="#i-sparkles"/></svg><span><b>AI assistant</b> that answers questions about your data, using OpenAI, OpenRouter, or a local model in Ollama or LM Studio</span></li>
+          </ul>
+        </article>
+
+        <article class="tile reveal" style="--d:.06s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-bell"/></svg></span>Reminders</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-bell"/></svg><span><b>In-app bell</b> for maintenance, warranties, insurance, refills and immunizations</span></li>
+            <li><svg class="icon"><use href="#i-mail"/></svg><span><b>Email</b> per user: instant, daily or weekly</span></li>
+          </ul>
+        </article>
+
+        <article class="tile reveal">
+          <h3><span class="badge"><svg class="icon"><use href="#i-clip"/></svg></span>Records &amp; export</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Attachments</b> — receipts, manuals and photos on any record</span></li>
+            <li><svg class="icon"><use href="#i-printer"/></svg><span><b>Printable reports</b> and medical summaries, ready for PDF</span></li>
+            <li><svg class="icon"><use href="#i-download"/></svg><span><b>One-click zip</b> of an asset's data and files</span></li>
+          </ul>
+        </article>
+
+        <article class="tile wide reveal" style="--d:.06s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span>Accounts &amp; security</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-lock"/></svg><span><b>Local login</b> — no third-party account, data stays on your hardware</span></li>
+            <li><svg class="icon"><use href="#i-users"/></svg><span><b>Multiple users</b> with admin and standard roles</span></li>
+            <li><svg class="icon"><use href="#i-shield-alert"/></svg><span><b>Sign-in throttling</b> per account and per address; secrets encrypted at rest</span></li>
+            <li><svg class="icon"><use href="#i-sun"/></svg><span><b>Light and dark themes</b>, and optional sections you can switch off</span></li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Home ─────────────────────────────────────── -->
+  <section class="block" id="home" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-building"/></svg>Home</span>
+        <h2>Every house, car and appliance, with its whole history</h2>
+        <p>Give each thing you own a page: photo, details, and every repair, warranty and reminder attached to it.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Properties</b> — houses, condos, cabins, land</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Vehicles</b> with mileage-aware service history</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Equipment</b> linked to the property it lives in</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Download all files</b> for any asset as a zip</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Properties<span class="bar"></span></button>
+          <button class="tab" role="tab">House<span class="bar"></span></button>
+          <button class="tab" role="tab">Vehicles<span class="bar"></span></button>
+          <button class="tab" role="tab">Vehicle service<span class="bar"></span></button>
+          <button class="tab" role="tab">Equipment<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Properties"><img src="screenshots/2.Properties.png" alt="Properties list" loading="lazy"></div>
+          <div class="shot" data-caption="A house and its service records"><img src="screenshots/3.House.png" alt="Maple Street House detail page with service records" loading="lazy"></div>
+          <div class="shot" data-caption="Vehicles"><img src="screenshots/7.Vehicles.png" alt="Vehicles list" loading="lazy"></div>
+          <div class="shot" data-caption="Vehicle service history"><img src="screenshots/8.VehicleService.png" alt="Vehicle service history" loading="lazy"></div>
+          <div class="shot" data-caption="Equipment"><img src="screenshots/9.Equipment.png" alt="Equipment list" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Maintenance & warranties ─────────────────── -->
+  <section class="block" id="maintenance" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-calendar"/></svg>Maintenance &amp; warranties</span>
+        <h2>Know what's due before it's overdue</h2>
+        <p>Set a reminder once by days or miles. HomeCenter works out the next due date and tells you in time.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Date or mileage</b> intervals, with your own lead time</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Warranty status</b> — active, expiring, expired</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Overviews</b> across every asset, sortable and filterable</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Service records</b> log a completion and roll the reminder forward</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Reminders<span class="bar"></span></button>
+          <button class="tab" role="tab">All reminders<span class="bar"></span></button>
+          <button class="tab" role="tab">Warranties<span class="bar"></span></button>
+          <button class="tab" role="tab">All warranties<span class="bar"></span></button>
+          <button class="tab" role="tab">Service record<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Maintenance reminders on an asset"><img src="screenshots/6.MaintenanceReminders.png" alt="Maintenance reminders" loading="lazy"></div>
+          <div class="shot" data-caption="Maintenance overview"><img src="screenshots/11.MaintenanceReminderOverview.png" alt="Maintenance reminder overview" loading="lazy"></div>
+          <div class="shot" data-caption="Warranties on an asset"><img src="screenshots/5.Warranties.png" alt="Warranties" loading="lazy"></div>
+          <div class="shot" data-caption="Warranty overview"><img src="screenshots/10.WarrantyOverview.png" alt="Warranty overview" loading="lazy"></div>
+          <div class="shot" data-caption="Service record"><img src="screenshots/4.ServiceRecord.png" alt="Service record" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Health ───────────────────────────────────── -->
+  <section class="block" id="health" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-heart"/></svg>Health · optional</span>
+        <h2>Your family's health records, close at hand</h2>
+        <p>Keep each person's medical picture in one place — and print a clean summary for the next appointment.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Conditions, medications, allergies</b> and immunizations</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Visits</b> linked to providers, with costs</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Observation logs</b> to spot symptom patterns</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Refill, vaccine and insurance</b> reminders</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Not needed? <b>Turn the whole section off</b> in Settings</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Person<span class="bar"></span></button>
+          <button class="tab" role="tab">Providers<span class="bar"></span></button>
+          <button class="tab" role="tab">Insurance<span class="bar"></span></button>
+          <button class="tab" role="tab">Medical summary<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Person profile"><img src="screenshots/13.Person.png" alt="Person profile with visits, conditions, medications and allergies" loading="lazy"></div>
+          <div class="shot" data-caption="Providers"><img src="screenshots/14.Providers.png" alt="Providers list with visit counts and spend" loading="lazy"></div>
+          <div class="shot" data-caption="Insurance"><img src="screenshots/15.Insurance.png" alt="Insurance policies" loading="lazy"></div>
+          <div class="shot" data-caption="Medical summary"><img src="screenshots/16.MedicalSummary.png" alt="Printable medical summary" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Costs ────────────────────────────────────── -->
+  <section class="block" id="costs" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-chart"/></svg>Costs</span>
+        <h2>See where the money actually goes</h2>
+        <p>Every service record carries a cost. HomeCenter adds them up across your whole household.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Monthly, quarterly or yearly</b> trends with a rolling average</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Top <b>assets, categories and vendors</b></span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Biggest expenses</b> and year-to-date totals</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Filter to <b>properties, vehicles, equipment or people</b></span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Spend over time<span class="bar"></span></button>
+          <button class="tab" role="tab">By asset &amp; vendor<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Costs: totals and spend over time"><img src="screenshots/17.Costs1.png" alt="Costs page with year-to-date totals and monthly spend chart" loading="lazy"></div>
+          <div class="shot" data-caption="Costs: by category, asset and vendor"><img src="screenshots/17.Costs2.png" alt="Costs by category, asset and vendor" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Search & documents ───────────────────────── -->
+  <section class="block" id="search" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-search"/></svg>Search &amp; documents</span>
+        <h2>Find anything — even inside the manual</h2>
+        <p>One search box covers assets, records and the text of every file you've uploaded. Ask in your own words; it finds what you meant.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Reads</b> PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>OCR</b> for photos and scanned PDFs</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Search by meaning</b> with a small model that runs on your server</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Indexing happens in the background — <b>nothing leaves the box</b></span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame"><div class="shot placeholder" id="searchDemo">
+          <div class="demo">
+            <span class="label">Global search</span>
+            <div class="searchbox"><svg class="icon"><use href="#i-search"/></svg><span><span class="typed"></span><span class="caret"></span></span></div>
+            <div class="hit"><span class="tag sem">Meaning</span><b>Furnace manual.pdf</b> — "<mark>replace every 90 days</mark> or sooner in heavy use"<span class="src">Gas Furnace · page 14</span></div>
+            <div class="hit"><span class="tag">Record</span><b>Replace furnace filter</b> — due in 6 days<span class="src">Maintenance · Gas Furnace</span></div>
+            <div class="hit"><span class="tag">Record</span><b>Annual furnace service</b> — $189<span class="src">Service record · 8/19/2026</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Assistant ────────────────────────────────── -->
+  <section class="block" id="assistant" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>AI assistant · optional</span>
+        <h2>Ask your house a question</h2>
+        <p>The assistant looks up your records and documents to answer plain-language questions, with links back to the source.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Works with <b>OpenAI, OpenRouter, Ollama, LM Studio</b> or any OpenAI-compatible server</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Run it fully local</b> for total privacy</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>You choose whether it may <b>read documents and health data</b></span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Chats stay in your browser — <b>never stored on the server</b></span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame"><div class="shot placeholder" id="chatDemo">
+          <div class="demo">
+            <span class="label">Assistant</span>
+            <div class="bubble me">What did we spend on the truck last year?</div>
+            <div class="bubble ai" data-typing><span class="dots"><i></i><i></i><i></i></span></div>
+            <div class="bubble ai" data-answer><b>$2,184</b> across 7 service records — mostly the <b>brake pads &amp; rotors</b> ($640) and two oil changes. The next oil change is <b>4 days overdue</b>.</div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Notifications & reports ──────────────────── -->
+  <section class="block" id="notify" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-bell"/></svg>Reminders &amp; reports</span>
+        <h2>A nudge when it matters, a report when you need it</h2>
+        <p>Reminders land in the app and, if you like, your inbox. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Email digests</b> — as soon as possible, daily or weekly, per person</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Mail server set up in Settings</b>, with a test button</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Dismiss and restore</b> notifications</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Printable asset reports</b> and medical summaries</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Email settings<span class="bar"></span></button>
+          <button class="tab" role="tab">Notifications<span class="bar"></span></button>
+          <button class="tab" role="tab">Asset report<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Email notification settings"><img src="screenshots/12.EmailNotifications.png" alt="Email notification settings" loading="lazy"></div>
+          <div class="shot" data-caption="Notifications"><img src="screenshots/18.Notifications.png" alt="Notifications list" loading="lazy"></div>
+          <div class="shot" data-caption="Asset report"><img src="screenshots/19.AssetReport.png" alt="Printable asset report" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Privacy ──────────────────────────────────── -->
+  <section class="block privacy">
+    <div class="wrap">
+      <div class="head center reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-lock"/></svg>Private by design</span>
+        <h2>Your records stay in your house</h2>
+        <p>HomeCenter is one container and one data folder. You own both.</p>
+      </div>
+      <div class="trio">
+        <div class="tile reveal">
+          <h3><span class="badge"><svg class="icon"><use href="#i-server"/></svg></span>Self-hosted</h3>
+          <p>Runs on a Synology, Unraid, a Raspberry Pi-class box or any Docker host. Updates never touch your data folder.</p>
+        </div>
+        <div class="tile reveal" style="--d:.08s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-cpu"/></svg></span>On-device smarts</h3>
+          <p>OCR and meaning search run inside the container. The only network call is an optional model download.</p>
+        </div>
+        <div class="tile reveal" style="--d:.16s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-toggle"/></svg></span>You decide</h3>
+          <p>AI is off until you turn it on. Health can be hidden entirely. Mail and API keys are encrypted at rest.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Install ──────────────────────────────────── -->
+  <section class="block" id="install">
+    <div class="wrap install">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-server"/></svg>Install</span>
+        <h2>Up and running in about five minutes</h2>
+        <ol class="steps">
+          <li><b>Make a data folder</b> on your server, e.g. <code>/volume1/docker/homecenter</code>.</li>
+          <li><b>Save the compose file</b> and set <code>AUTH_SECRET</code> — <code>openssl rand -base64 32</code>.</li>
+          <li><b>Start it</b> with <code>docker compose up -d</code>, or deploy as a Portainer stack.</li>
+          <li><b>Sign in</b> at <code>http://&lt;server&gt;:3000</code>. The database and admin account are created on first boot.</li>
+        </ol>
+      </div>
+      <div class="code reveal" style="--d:.1s">
+        <div class="frame-bar"><i></i><i></i><i></i><span>docker-compose.yml</span></div>
+        <button class="copybtn" type="button" id="copyBtn">Copy</button>
+<pre id="compose"><span class="k">services:</span>
+  <span class="k">homecenter:</span>
+    <span class="k">image:</span> <span class="s">ghcr.io/yatzin/homecenter:latest</span>
+    <span class="k">ports:</span>
+      - <span class="s">"3000:3000"</span>
+    <span class="k">volumes:</span>
+      - <span class="s">/volume1/docker/homecenter:/data</span>
+    <span class="k">environment:</span>
+      <span class="k">DATABASE_URL:</span> <span class="s">"file:/data/homecenter.db"</span>
+      <span class="k">AUTH_SECRET:</span> <span class="s">""</span>   <span class="c"># required</span>
+      <span class="k">ADMIN_EMAIL:</span> <span class="s">"your@email.com"</span>
+      <span class="k">ADMIN_PASSWORD:</span> <span class="s">"changeme"</span>
+    <span class="k">restart:</span> <span class="s">unless-stopped</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Closing ──────────────────────────────────── -->
+  <section class="closing">
+    <div class="glow a" style="top:0;opacity:.3"></div>
+    <div class="wrap reveal">
+      <h2>Stop digging for the receipt. <span class="grad">Start knowing.</span></h2>
+      <p>Free and open source under the MIT licence.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Install HomeCenter <svg class="icon"><use href="#i-arrow"/></svg></a>
+        <a class="btn" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>Star on GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="brand" style="font-size:15px"><span class="logo" style="width:26px;height:26px;font-size:10px">HC</span>HomeCenter</span>
+    <span>MIT licence · Photos in screenshots from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, under their individual licences.</span>
+    <a href="https://github.com/yatzin/home-center">github.com/yatzin/home-center</a>
+  </div>
+</footer>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot viewer">
+  <div class="lb-stage">
+    <img alt="">
+    <p class="lb-cap"><span></span><span></span></p>
+  </div>
+  <button class="lb-btn lb-prev" type="button" aria-label="Previous screenshot"><svg class="icon"><use href="#i-chev-left"/></svg></button>
+  <button class="lb-btn lb-next" type="button" aria-label="Next screenshot"><svg class="icon"><use href="#i-chev-right"/></svg></button>
+  <button class="lb-btn lb-close" type="button" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+</dialog>
+
+<script>
+(() => {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches
+
+  // Nav border once the page moves.
+  const nav = document.getElementById("nav")
+  const onScrollNav = () => nav.classList.toggle("scrolled", scrollY > 8)
+  addEventListener("scroll", onScrollNav, { passive: true }); onScrollNav()
+
+  // Hero screenshot settles flat as you scroll toward it.
+  const hero = document.getElementById("heroShot")
+  if (!reduced) {
+    let ticking = false
+    const update = () => {
+      const r = hero.getBoundingClientRect()
+      const t = Math.min(1, Math.max(0, (r.top - innerHeight * 0.15) / (innerHeight * 0.55)))
+      hero.style.setProperty("--tilt", t.toFixed(3))
+      ticking = false
+    }
+    addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update) } }, { passive: true })
+    addEventListener("resize", update); update()
+  } else hero.style.setProperty("--tilt", 0)
+
+  // Reveal on scroll, plus per-section hooks for the mini demos.
+  const hooks = new Map()
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue
+      e.target.classList.add("in")
+      io.unobserve(e.target)
+    }
+  }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" })
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el))
+
+  const once = (el, fn) => {
+    const o = new IntersectionObserver(([e]) => { if (e.isIntersecting) { o.disconnect(); fn() } }, { threshold: 0.35 })
+    o.observe(el)
+  }
+
+  // Pointer-following highlight on feature tiles.
+  document.querySelectorAll(".tile").forEach((t) => {
+    t.addEventListener("pointermove", (e) => {
+      const r = t.getBoundingClientRect()
+      t.style.setProperty("--mx", `${e.clientX - r.left}px`)
+      t.style.setProperty("--my", `${e.clientY - r.top}px`)
+    })
+  })
+
+  // Tabbed galleries: auto-advance while visible, pause on hover or focus.
+  const DWELL = 5200
+  document.querySelectorAll(".gallery").forEach((g) => {
+    const tabs = [...g.querySelectorAll(".tab")]
+    const slides = [...g.querySelectorAll(".slides > .shot")]
+    g.style.setProperty("--dwell", `${DWELL}ms`)
+    let i = 0, timer = null, visible = false, hover = false
+    const show = (n) => {
+      i = (n + slides.length) % slides.length
+      tabs.forEach((t, k) => {
+        t.setAttribute("aria-selected", k === i)
+        // restart the progress bar
+        const b = t.querySelector(".bar"); b.style.animation = "none"; void b.offsetWidth; b.style.animation = ""
+      })
+      slides.forEach((s, k) => s.classList.toggle("on", k === i))
+    }
+    const schedule = () => {
+      clearTimeout(timer)
+      if (!reduced && visible && !hover) timer = setTimeout(() => { show(i + 1); schedule() }, DWELL)
+    }
+    tabs.forEach((t, k) => t.addEventListener("click", () => { show(k); schedule() }))
+    g.addEventListener("pointerenter", () => { hover = true; g.classList.add("paused"); clearTimeout(timer) })
+    g.addEventListener("pointerleave", () => { hover = false; g.classList.remove("paused"); show(i); schedule() })
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? schedule() : clearTimeout(timer) }, { threshold: 0.3 }).observe(g)
+    show(0)
+    if (reduced) g.querySelectorAll(".bar").forEach((b) => b.remove())
+  })
+
+  // Search demo: type a question, then reveal results.
+  const searchDemo = document.getElementById("searchDemo")
+  const typed = searchDemo.querySelector(".typed")
+  const hits = [...searchDemo.querySelectorAll(".hit")]
+  const query = "how often do I swap the furnace filter?"
+  const runSearch = () => {
+    if (reduced) { typed.textContent = query; hits.forEach((h) => h.classList.add("show")); return }
+    let n = 0
+    typed.textContent = ""; hits.forEach((h) => h.classList.remove("show"))
+    const tick = () => {
+      typed.textContent = query.slice(0, ++n)
+      if (n < query.length) setTimeout(tick, 38 + Math.random() * 40)
+      else hits.forEach((h, k) => setTimeout(() => h.classList.add("show"), 350 + k * 220))
+    }
+    setTimeout(tick, 400)
+  }
+  once(searchDemo, runSearch)
+
+  // Assistant demo: question, typing dots, answer.
+  const chatDemo = document.getElementById("chatDemo")
+  const [q, typing, answer] = chatDemo.querySelectorAll(".bubble")
+  once(chatDemo, () => {
+    if (reduced) { q.classList.add("show"); answer.classList.add("show"); typing.remove(); return }
+    setTimeout(() => q.classList.add("show"), 200)
+    setTimeout(() => typing.classList.add("show"), 900)
+    setTimeout(() => { typing.remove(); answer.classList.add("show") }, 2400)
+  })
+
+  // Copy compose file.
+  const copyBtn = document.getElementById("copyBtn")
+  copyBtn.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(document.getElementById("compose").innerText); copyBtn.textContent = "Copied" }
+    catch { copyBtn.textContent = "Select & copy" }
+    setTimeout(() => (copyBtn.textContent = "Copy"), 1800)
+  })
+
+  // Lightbox: every real screenshot on the page, in page order, with
+  // prev/next buttons, arrow keys and swipe.
+  const lb = document.getElementById("lightbox")
+  const lbImg = lb.querySelector(".lb-stage img")
+  const [lbTitle, lbCount] = lb.querySelectorAll(".lb-cap span")
+  const shots = [...document.querySelectorAll(".shot:not(.placeholder)")]
+  let cur = 0
+  const preload = (k) => { const im = shots[(k + shots.length) % shots.length].querySelector("img"); new Image().src = im.src }
+  const view = (k) => {
+    cur = (k + shots.length) % shots.length
+    const s = shots[cur], img = s.querySelector("img")
+    lbImg.classList.remove("swap"); void lbImg.offsetWidth
+    lbImg.src = img.src; lbImg.alt = img.alt
+    if (!reduced) lbImg.classList.add("swap")
+    lbTitle.textContent = s.dataset.caption || img.alt
+    lbCount.textContent = `${cur + 1} / ${shots.length}`
+    preload(cur + 1); preload(cur - 1)
+  }
+  shots.forEach((s, k) => s.addEventListener("click", () => { view(k); lb.showModal(); lb.querySelector(".lb-next").focus() }))
+  lb.querySelector(".lb-prev").addEventListener("click", () => view(cur - 1))
+  lb.querySelector(".lb-next").addEventListener("click", () => view(cur + 1))
+  lb.querySelector(".lb-close").addEventListener("click", () => lb.close())
+  // Clicking the dark area around the image closes; the image and buttons don't.
+  lb.addEventListener("click", (e) => { if (e.target === lb) lb.close() })
+  lb.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") { e.preventDefault(); view(cur - 1) }
+    else if (e.key === "ArrowRight") { e.preventDefault(); view(cur + 1) }
+  })
+  let touchX = null
+  lb.addEventListener("touchstart", (e) => { touchX = e.touches[0].clientX }, { passive: true })
+  lb.addEventListener("touchend", (e) => {
+    if (touchX === null) return
+    const dx = e.changedTouches[0].clientX - touchX
+    if (Math.abs(dx) > 40) view(cur + (dx < 0 ? 1 : -1))
+    touchX = null
+  })
+})()
+</script>
+</body>
+</html>

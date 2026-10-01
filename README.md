@@ -1,50 +1,163 @@
+<div align="center">
+
 # HomeCenter
 
-A self-hosted app for tracking your homes and vehicles — service history, warranties, maintenance reminders, and receipts — in one place, behind your own login.
+**Your home's memory, kept on your own server.**
 
-## Features
+Track homes, vehicles, equipment and family health in one calm place: service history, costs, warranties, reminders and every receipt, searchable in seconds.
 
-- **Properties & vehicles** — houses, condos, land, cars, whatever you own
-- **Equipment** — appliances, HVAC, tools, electronics, and other gear tied to a property, with category, manufacturer, model/serial, and purchase info
-- **Service records** — log repairs and maintenance as they happen
-- **Warranties** — track coverage on a property, vehicle, or piece of equipment so you know what's still protected
-- **Maintenance reminders** — get notified before something's due
-- **Receipts & photos** — attach files to any record
-- **Multiple users** — admin and standard accounts
-- **Local login** — no third-party account required, your data stays on your hardware
-- **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
-- **AI assistant** — optional chat that answers questions about your data ("what did we spend on the truck last year?", "which meds need refills?") using any OpenAI-compatible model, including local ones via Ollama or LM Studio
-- **Search inside uploaded documents** — the assistant reads manuals, receipts and policies, with OCR for photos and scans
+[Get started](#get-started) · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Updating](#updating)
 
-## Screenshots
+![MIT licence](https://img.shields.io/badge/licence-MIT-blue) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![No cloud](https://img.shields.io/badge/cloud-none-success)
+
+</div>
 
 ![HomeCenter dashboard](docs/screenshots/1.Dashboard.png)
 
-<p>
-<a href="docs/screenshots/2.Properties.png"><img src="docs/screenshots/2.Properties.png" width="32%" alt="Properties"></a>
-<a href="docs/screenshots/3.House.png"><img src="docs/screenshots/3.House.png" width="32%" alt="House"></a>
-<a href="docs/screenshots/4.ServiceRecord.png"><img src="docs/screenshots/4.ServiceRecord.png" width="32%" alt="Service record"></a>
-<a href="docs/screenshots/5.Warranties.png"><img src="docs/screenshots/5.Warranties.png" width="32%" alt="Warranties"></a>
-<a href="docs/screenshots/6.MaintenanceReminders.png"><img src="docs/screenshots/6.MaintenanceReminders.png" width="32%" alt="Maintenance reminders"></a>
-<a href="docs/screenshots/7.Vehicles.png"><img src="docs/screenshots/7.Vehicles.png" width="32%" alt="Vehicles"></a>
-<a href="docs/screenshots/8.VehicleService.png"><img src="docs/screenshots/8.VehicleService.png" width="32%" alt="Vehicle service"></a>
-<a href="docs/screenshots/9.Equipment.png"><img src="docs/screenshots/9.Equipment.png" width="32%" alt="Equipment"></a>
-<a href="docs/screenshots/10.WarrantyOverview.png"><img src="docs/screenshots/10.WarrantyOverview.png" width="32%" alt="Warranty overview"></a>
-<a href="docs/screenshots/11.MaintenanceReminderOverview.png"><img src="docs/screenshots/11.MaintenanceReminderOverview.png" width="32%" alt="Maintenance reminder overview"></a>
-<a href="docs/screenshots/12.EmailNotifications.png"><img src="docs/screenshots/12.EmailNotifications.png" width="32%" alt="Email notifications"></a>
+<p align="center">
+✓ Runs on your NAS or server &nbsp;·&nbsp; ✓ No third-party sign-in &nbsp;·&nbsp; ✓ OCR and search run on-device &nbsp;·&nbsp; ✓ Works with local AI models
 </p>
+
+## Features
+
+When was the furnace last serviced? Is the fridge still under warranty? What did the truck cost last year? HomeCenter keeps the answers in one place, and reminds you before things are due.
+
+| | |
+|---|---|
+| **Home** | Properties, vehicles and equipment, with service records, warranties and reminders |
+| **Health** *(optional)* | People, providers and insurance, with visits, medications and immunizations |
+| **Money** | Costs by asset, category and vendor, and a 12-month spending chart |
+| **Finding things** | Global search across records and documents, plus an optional AI assistant |
+| **Reminders** | In-app bell and per-person email digests |
+| **Records & export** | Attachments, printable reports and one-click zip downloads |
+| **Security** | Local login, admin and standard users, sign-in throttling, encrypted secrets |
+
+### Every house, car and appliance, with its whole history
+
+Give each thing you own a page: photo, details, and every repair, warranty and reminder attached to it.
+
+- **Properties.** Houses, condos, cabins and land.
+- **Vehicles.** Service history that tracks mileage.
+- **Equipment.** Linked to the property it's in, with model and serial numbers.
+- **Download all files** for any asset as a zip.
+
+![A house and its service records](docs/screenshots/3.House.png)
+
+<p>
+<a href="docs/screenshots/2.Properties.png"><img src="docs/screenshots/2.Properties.png" width="24%" alt="Properties"></a>
+<a href="docs/screenshots/7.Vehicles.png"><img src="docs/screenshots/7.Vehicles.png" width="24%" alt="Vehicles"></a>
+<a href="docs/screenshots/8.VehicleService.png"><img src="docs/screenshots/8.VehicleService.png" width="24%" alt="Vehicle service"></a>
+<a href="docs/screenshots/9.Equipment.png"><img src="docs/screenshots/9.Equipment.png" width="24%" alt="Equipment"></a>
+</p>
+
+### Know what's due before it's overdue
+
+Set a reminder once, by days or miles. HomeCenter works out the next due date and tells you in time.
+
+- **Date or mileage** intervals, with as much warning as you want.
+- **Warranty status** at a glance: active, expiring or expired.
+- **Overviews** across every asset, sortable and filterable.
+- **Logging a service** moves the reminder forward.
+
+![Maintenance overview](docs/screenshots/11.MaintenanceReminderOverview.png)
+
+<p>
+<a href="docs/screenshots/6.MaintenanceReminders.png"><img src="docs/screenshots/6.MaintenanceReminders.png" width="24%" alt="Maintenance reminders"></a>
+<a href="docs/screenshots/5.Warranties.png"><img src="docs/screenshots/5.Warranties.png" width="24%" alt="Warranties"></a>
+<a href="docs/screenshots/10.WarrantyOverview.png"><img src="docs/screenshots/10.WarrantyOverview.png" width="24%" alt="Warranty overview"></a>
+<a href="docs/screenshots/4.ServiceRecord.png"><img src="docs/screenshots/4.ServiceRecord.png" width="24%" alt="Service record"></a>
+</p>
+
+### Your family's health records, close at hand *(optional)*
+
+Keep each person's medical picture in one place, and print a clean summary for the next appointment.
+
+- **Conditions, medications, allergies** and immunizations.
+- **Visits** linked to providers, with costs.
+- **Observation logs** to spot symptom patterns.
+- **Refill, vaccine and insurance** reminders.
+- Not needed? Turn the whole section off in **Settings → Features**.
+
+![A person's health record](docs/screenshots/13.Person.png)
+
+<p>
+<a href="docs/screenshots/14.Providers.png"><img src="docs/screenshots/14.Providers.png" width="32%" alt="Providers"></a>
+<a href="docs/screenshots/15.Insurance.png"><img src="docs/screenshots/15.Insurance.png" width="32%" alt="Insurance"></a>
+<a href="docs/screenshots/16.MedicalSummary.png"><img src="docs/screenshots/16.MedicalSummary.png" width="32%" alt="Medical summary"></a>
+</p>
+
+### See where the money actually goes
+
+Every service record carries a cost. HomeCenter adds them up across the whole household.
+
+- **Monthly, quarterly or yearly** trends with a rolling average.
+- Top **assets, categories and vendors**.
+- **Biggest expenses** and year-to-date totals.
+- Filter to **properties, vehicles, equipment or people**.
+
+<p>
+<a href="docs/screenshots/17.Costs1.png"><img src="docs/screenshots/17.Costs1.png" width="49%" alt="Costs over time"></a>
+<a href="docs/screenshots/17.Costs2.png"><img src="docs/screenshots/17.Costs2.png" width="49%" alt="Costs by asset and vendor"></a>
+</p>
+
+### Find anything, even inside the manual
+
+One search box covers assets, records and the text of every file you've uploaded. Ask in your own words and it finds what you meant.
+
+- **Reads** PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text files.
+- **OCR** for photos and scanned PDFs.
+- **Search by meaning**, using a small model that runs on your server.
+- Indexing runs in the background, and **document text never leaves your server**.
+
+![Global search results](docs/screenshots/20.Search.png)
+
+### Ask your house a question
+
+The assistant *(optional)* looks up your records and documents to answer plain-language questions, with links back to the source.
+
+- Works with **OpenAI, OpenRouter, Ollama, LM Studio** or any OpenAI-compatible server.
+- **Run it fully local** for total privacy.
+- You choose whether it may **read documents and health data**.
+- Chats stay in your browser and are **never stored on the server**.
+
+![The assistant answering a spending question](docs/screenshots/21.Assistant.png)
+
+### A nudge when it matters, a report when you need it
+
+Reminders arrive in the app and, if you like, by email. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.
+
+- **Email digests** for each person: as soon as possible, daily or weekly.
+- **Mail server set up in Settings**, with a test button.
+- **Dismiss and restore** notifications.
+- **Printable asset reports** and medical summaries.
+
+<p>
+<a href="docs/screenshots/18.Notifications.png"><img src="docs/screenshots/18.Notifications.png" width="32%" alt="Notifications"></a>
+<a href="docs/screenshots/12.EmailNotifications.png"><img src="docs/screenshots/12.EmailNotifications.png" width="32%" alt="Email notification settings"></a>
+<a href="docs/screenshots/19.AssetReport.png"><img src="docs/screenshots/19.AssetReport.png" width="32%" alt="Asset report"></a>
+</p>
+
+## Private by design
+
+HomeCenter is one container and one data folder, and you own both.
+
+- **Self-hosted.** Runs on a Synology, Unraid or any Docker host. Updates never touch your data folder.
+- **On-device processing.** OCR and meaning search run inside the container. The only network call is an optional model download.
+- **You decide.** The AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest.
 
 <sub>Photos in the screenshots are from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, by various authors, under their individual licenses (mostly CC BY-SA).</sub>
 
-## Requirements
+## Get started
+
+Up and running in about five minutes. All you need:
 
 | Requirement | Why |
 |---|---|
-| Docker + Docker Compose | How the app runs — no manual Node.js/build setup needed |
-| A folder on the host for data | Holds the database and uploaded files, survives updates |
-| ~5 minutes | To set two required values and start the container |
+| Docker + Docker Compose | How the app runs. No Node.js or build setup needed. |
+| A folder on the host for data | Holds the database and uploaded files, and survives updates |
+| ~5 minutes | To set one required value and start the container |
 
-## Install (Docker)
+### Install (Docker)
 
 This is the recommended way to run HomeCenter.
 
@@ -68,7 +181,6 @@ services:
       DATABASE_URL: "file:/data/homecenter.db"
       AUTH_SECRET: ""
       AUTH_URL: ""
-      UPLOAD_DIR: "/data/uploads"
       MAX_UPLOAD_BYTES: "26214400"
       ADMIN_NAME: "Admin"
       ADMIN_EMAIL: "your@email.com"
@@ -94,7 +206,23 @@ Update the volume path to the folder you created in step 1.
 | `NOTIFY_INTERVAL_MINUTES` | No | How often to check for due maintenance and expiring warranties. Defaults to `360` (6 hours). Set `0` to turn reminders off. |
 | `SMTP_HOST` | No | Your mail server, e.g. `smtp.gmail.com`. **Leave blank and no email is ever sent** — the in-app bell still works. |
 
-Everything else can stay at its default.
+Everything else can stay at its default. Uploads (`/data/uploads`) and downloaded models (`/data/models`) are kept in the data folder automatically.
+
+**4. Start it:**
+
+```bash
+docker compose up -d
+```
+
+(Portainer: click **Deploy the stack**.)
+
+The container sets up its database and admin account automatically on first boot.
+
+**5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3.
+
+## Optional extras
+
+HomeCenter works fully without these. Add them when you want them.
 
 ### Email notifications (optional)
 
@@ -126,7 +254,7 @@ Because the stored password is encrypted with `AUTH_SECRET`, **changing
 `AUTH_SECRET` makes it unreadable**. The app detects this, stops sending rather
 than failing silently, and Settings prompts you to enter the password again.
 
-Each user picks their own cadence under **Settings → Email notifications**: off,
+Each user picks their own cadence under **Settings → Notifications**: off,
 as soon as possible, daily, or weekly. New accounts default to daily.
 
 Two caveats worth knowing:
@@ -139,18 +267,6 @@ Two caveats worth knowing:
 
 Emails are only sent for items you haven't already been emailed about, so
 lowering the interval doesn't mean repeat messages.
-
-**4. Start it:**
-
-```bash
-docker compose up -d
-```
-
-(Portainer: click **Deploy the stack**.)
-
-The container sets up its database and admin account automatically on first boot.
-
-**5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3.
 
 ### AI assistant (optional)
 
@@ -190,7 +306,7 @@ scanned PDFs via OCR — and indexes it so the assistant can search it. It runs
 entirely inside the container; nothing is sent anywhere until the assistant
 uses a passage to answer a question.
 
-**Settings → Documents** turns indexing and OCR on or off and shows progress.
+**Settings → Documents & search** turns indexing and OCR on or off and shows progress.
 **Settings → Assistant** decides whether the assistant may read documents at
 all, and separately whether it may read health documents — files on anything
 that belongs to a person, such as their visits, reminders and medications (off
@@ -210,7 +326,7 @@ swap the furnace filter?" finds "replace every 90 days"). A small AI model runs
 **on your server** — no document text leaves it for this. The model loads only
 while documents are being indexed or searched, and unloads when idle.
 
-**Settings → Documents → Find documents by meaning** turns it on or off and
+**Settings → Documents & search → Find documents by meaning** turns it on or off and
 picks the model:
 
 | Model | Size | Good for |
@@ -265,3 +381,7 @@ npm run build         # production build
 `npm run models:fetch-builtin` downloads the built-in model into `./models/builtin/` (needed once for meaning search in development).
 
 Images are built and published automatically by `.github/workflows/docker-publish.yml` on every push to `main`. To build locally: `docker build -t home-center .`
+
+---
+
+<p align="center"><b>Stop digging for the receipt. Start knowing.</b><br>Free and open source under the MIT licence.</p>

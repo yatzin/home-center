@@ -22,6 +22,15 @@ export const ENTITY_KEYS = [
 ] as const
 export type EntityKey = (typeof ENTITY_KEYS)[number]
 
+/** Health's entities: out of reach, and out of the prompt, while Health is off (Settings → Features). */
+export const HEALTH_ENTITIES: ReadonlySet<EntityKey> = new Set<EntityKey>([
+  "person", "provider", "healthCondition", "medication", "allergy", "immunization", "insurancePolicy", "observation",
+])
+
+/** The entities the assistant can reach. */
+export const entityKeysFor = (health: boolean): EntityKey[] =>
+  health ? [...ENTITY_KEYS] : ENTITY_KEYS.filter((k) => !HEALTH_ENTITIES.has(k))
+
 /** Relation names equal the Prisma relation field names for one/many. */
 export type RelationDef =
   | { kind: "one" | "many"; entity: EntityKey }
@@ -282,17 +291,19 @@ function describeField(name: string, f: FieldDef) {
   return f.type === "enum" ? `${name}(${f.values!.join("|")})` : `${name}(${f.type})`
 }
 
-function describeRelation(name: string, r: RelationDef) {
-  if (r.kind === "asset") return "asset→property|vehicle|equipment|person"
+function describeRelation(name: string, r: RelationDef, health: boolean) {
+  if (r.kind === "asset") return health ? "asset→property|vehicle|equipment|person" : "asset→property|vehicle|equipment"
   return `${name}→${r.entity}${r.kind === "one" ? "" : "[]"}`
 }
 
 /** One line per entity, for the system prompt. */
-export function describeOntology(): string {
-  return ENTITY_KEYS.map((key) => {
+export function describeOntology(health = true): string {
+  return entityKeysFor(health).map((key) => {
     const d = ENTITIES[key]
     const fields = Object.entries(d.fields).map(([n, f]) => describeField(n, f)).join(", ")
-    const rels = Object.entries(d.relations).map(([n, r]) => describeRelation(n, r))
+    const rels = Object.entries(d.relations)
+      .filter(([, r]) => health || !("entity" in r) || !HEALTH_ENTITIES.has(r.entity))
+      .map(([n, r]) => describeRelation(n, r, health))
     return `- ${key}: ${d.description} Fields: ${fields}.${rels.length ? ` Relations: ${rels.join(", ")}.` : ""}`
   }).join("\n")
 }

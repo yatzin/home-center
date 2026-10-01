@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 import { Check } from "lucide-react"
+import { settingsHref } from "@/lib/settings-sections"
 import { testLlmConnection, updateLlmSettings, updateLlmSwitches, type LlmSwitches } from "@/lib/actions/llm-settings"
 import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS, TOOL_ROUNDS_RANGE, LLM_PRESETS } from "@/lib/llm/settings-schema"
 
@@ -36,6 +37,7 @@ export function LlmSettings({
   keyUnreadable,
   ready,
   indexingEnabled,
+  healthEnabled,
 }: {
   initial: Omit<Values, "apiKey">
   hasStoredKey: boolean
@@ -43,6 +45,8 @@ export function LlmSettings({
   ready: boolean
   /** Document switches only matter while indexing is on (Settings → Documents). */
   indexingEnabled: boolean
+  /** Health on or off under Settings → Features. */
+  healthEnabled: boolean
 }) {
   const form = useForm<Values>({ defaultValues: { ...initial, apiKey: "" } })
   const [clearApiKey, setClearApiKey] = useState(false)
@@ -144,9 +148,10 @@ export function LlmSettings({
                 />
                 <SwitchRow
                   label="Hide the assistant from the nav menu and the top-right button"
-                  muted
+                  nested
                   checked={hidden}
                   disabled={switchPending || enabled}
+                  disabledReason={enabled ? "only while the assistant is off" : undefined}
                   onChange={(v) => toggle({ hidden: v })}
                 />
                 <SwitchRow
@@ -162,9 +167,21 @@ export function LlmSettings({
                 />
                 <SwitchRow
                   label="Include health record documents"
-                  muted
-                  checked={healthDocumentsEnabled}
-                  disabled={switchPending || !indexingEnabled || !documentsEnabled}
+                  nested
+                  checked={healthDocumentsEnabled && healthEnabled}
+                  disabled={switchPending || !healthEnabled || !indexingEnabled || !documentsEnabled}
+                  disabledReason={
+                    !healthEnabled ? (
+                      <>
+                        Health is turned off under{" "}
+                        <Link href={settingsHref("features")} className="underline underline-offset-2 hover:text-foreground">
+                          Features
+                        </Link>
+                      </>
+                    ) : indexingEnabled && !documentsEnabled ? (
+                      "needs the option above"
+                    ) : undefined
+                  }
                   onChange={(v) => toggle({ healthDocumentsEnabled: v })}
                   hint="Files on anything that belongs to a person: their visits, reminders and warranties, plus conditions, observations, medications, allergies and immunizations. With a cloud provider, their text leaves this server."
                 />
@@ -324,19 +341,21 @@ export function LlmSettings({
 }
 
 function SwitchRow({
-  label, checked, disabled, onChange, hint, muted,
+  label, checked, disabled, disabledReason, onChange, hint, nested,
 }: {
   label: string
   checked: boolean
   disabled?: boolean
   onChange: (checked: boolean) => void
   hint?: string
-  /** A secondary option under the one above it. */
-  muted?: boolean
+  /** Why it can't be changed right now, shown beside the label. */
+  disabledReason?: React.ReactNode
+  /** Depends on the option above it: indented beneath it. */
+  nested?: boolean
 }) {
   return (
     <div className="space-y-1">
-      <label className={`flex items-center gap-2 text-sm ${muted ? "font-normal" : "font-medium"} ${disabled ? "opacity-60" : ""}`}>
+      <label className={`flex items-center gap-2 text-sm ${nested ? "ml-6 font-normal" : "font-medium"} ${disabled ? "opacity-60" : ""}`}>
         <input
           type="checkbox"
           className="h-4 w-4 accent-primary"
@@ -344,9 +363,12 @@ function SwitchRow({
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <span className={muted ? "text-muted-foreground" : undefined}>{label}</span>
+        <span>{label}</span>
       </label>
-      {hint && <p className="ml-6 text-xs text-muted-foreground">{hint}</p>}
+      {disabledReason && (
+        <p className={`${nested ? "ml-12" : "ml-6"} text-xs font-medium text-muted-foreground`}>({disabledReason})</p>
+      )}
+      {hint && <p className={`${nested ? "ml-12" : "ml-6"} text-xs text-muted-foreground`}>{hint}</p>}
     </div>
   )
 }

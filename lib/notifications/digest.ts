@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { isMailConfigured, sendMail } from "./mailer"
 import { loadMailConfig, DEFAULT_DIGEST_HOUR } from "./mail-config"
 import type { EmailDigest, Notification } from "@/app/generated/prisma/client"
+import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 
 // Email is a digest, not a channel. The NotificationChannel interface is
 // per-notification, so wiring email into it would send one message per due
@@ -115,8 +116,11 @@ export async function sendPendingDigests(now: Date = new Date()): Promise<number
   const candidates = users.filter((u) => digestDue(u.emailDigest, u.lastDigestAt, now, config.digestHour))
   if (candidates.length === 0) return 0
 
+  // Hidden ones wait: with Health off its notifications aren't sent, and go out
+  // in a later digest if it's turned back on.
+  const visible = await visibleNotificationsWhere(await loadFeatures())
   const pending = await prisma.notification.findMany({
-    where: { emailedAt: null, userId: { in: candidates.map((u) => u.id) } },
+    where: { emailedAt: null, userId: { in: candidates.map((u) => u.id) }, ...visible },
     orderBy: { createdAt: "asc" },
   })
   if (pending.length === 0) return 0

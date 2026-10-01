@@ -20,7 +20,13 @@ const GENERIC_TOOLS: RegisteredTool[] = [findRecordsTool, getRecordTool, aggrega
 /** Shortcuts first: weaker models tend to pick from the top of the list. */
 export const TOOLS: RegisteredTool[] = [...SHORTCUT_TOOLS, ...GENERIC_TOOLS]
 
-/** The chat's tools: document tools go between the shortcuts and the generic tools when allowed. */
-export function chatTools(access: DocumentAccess): RegisteredTool[] {
-  return access.enabled ? [...SHORTCUT_TOOLS, ...documentTools(access.includeHealth), ...GENERIC_TOOLS] : TOOLS
+const HEALTH_TOOLS = new Set<RegisteredTool>([healthAlertsTool, observationLogTool])
+
+/**
+ * The chat's tools: document tools go between the shortcuts and the generic
+ * tools when allowed. With Health off its own shortcuts are left out.
+ */
+export function chatTools(access: DocumentAccess, health = true): RegisteredTool[] {
+  const shortcuts = health ? SHORTCUT_TOOLS : SHORTCUT_TOOLS.filter((t) => !HEALTH_TOOLS.has(t))
+  return [...shortcuts, ...(access.enabled ? documentTools(access.includeHealth) : []), ...GENERIC_TOOLS]
 }

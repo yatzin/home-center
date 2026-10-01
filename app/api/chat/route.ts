@@ -11,6 +11,7 @@ import { chatTools } from "@/lib/llm/tools"
 import { loadDocumentSettings } from "@/lib/documents/settings"
 import { documentAccess } from "@/lib/documents/tool-helpers"
 import type { AgentEvent } from "@/lib/llm/types"
+import { loadFeatures } from "@/lib/features-server"
 
 export const runtime = "nodejs"
 
@@ -37,7 +38,9 @@ export async function POST(request: Request) {
       : "The assistant isn't configured. An admin can set it up in Settings."
     return NextResponse.json({ error }, { status: 503 })
   }
-  const docs = documentAccess(await loadDocumentSettings(), config)
+  const { health } = await loadFeatures()
+  // With Health off, health files are out of reach whatever the assistant's own setting says.
+  const docs = documentAccess(await loadDocumentSettings(), { ...config, healthDocumentsEnabled: health && config.healthDocumentsEnabled })
 
   // Per-question limit from Settings; each model call separately fails only after
   // a stretch with no output (see IDLE_TIMEOUT_MS in lib/llm/client.ts).
@@ -72,10 +75,10 @@ export async function POST(request: Request) {
         const now = new Date()
         await runAgent({
           history: parsed.data.messages,
-          systemPrompt: buildSystemPrompt({ now, extra: config.systemPrompt, maxRounds, documents: docs.enabled }),
+          systemPrompt: buildSystemPrompt({ now, extra: config.systemPrompt, maxRounds, documents: docs.enabled, health }),
           chat,
-          tools: chatTools(docs),
-          ctx: { userId, now },
+          tools: chatTools(docs, health),
+          ctx: { userId, now, health },
           signal,
           model,
           maxRounds,

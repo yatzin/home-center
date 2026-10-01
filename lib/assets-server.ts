@@ -1,15 +1,18 @@
 import { prisma } from "@/lib/prisma"
 import type { AssetType } from "@/app/generated/prisma/client"
+import { loadFeatures } from "@/lib/features-server"
 
 // Loads every asset's display name so cross-asset pages (records, warranties,
 // maintenance, dashboard) can resolve `assetType` + `assetId` without repeating
 // a per-type ternary at each call site.
 export async function loadAssetIndex() {
+  // With Health off, people aren't offered in pickers or named anywhere.
+  const { health } = await loadFeatures()
   const [properties, vehicles, equipment, people] = await Promise.all([
     prisma.property.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.vehicle.findMany({ select: { id: true, name: true, currentMileage: true }, orderBy: { name: "asc" } }),
     prisma.equipment.findMany({ select: { id: true, name: true, propertyId: true }, orderBy: { name: "asc" } }),
-    prisma.person.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    health ? prisma.person.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }) : [],
   ])
 
   const names: Record<AssetType, Record<string, string>> = {

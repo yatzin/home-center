@@ -3,6 +3,8 @@ import { notificationService, type NotificationPayload } from "./channels"
 import { scheduleDue, dueCandidateFilter, meterUnitWord, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, isSupersededImmunization, refillDue } from "@/lib/health"
+import { ownedWhere } from "@/lib/features"
+import { loadFeatures } from "@/lib/features-server"
 
 const WARRANTY_WARN_DAYS = 60
 const MAINTENANCE_WINDOW_DAYS = 30
@@ -52,11 +54,18 @@ export async function checkAndNotify(): Promise<number> {
   const startOfToday = new Date(now)
   startOfToday.setUTCHours(0, 0, 0, 0)
 
+  // With Health off, nothing about people is raised: no health reminders, and
+  // none for a person's own reminders or warranties.
+  const features = await loadFeatures()
+  const owned = ownedWhere(features)
+  const health = <T,>(query: () => Promise<T[]>) => (features.health ? query() : Promise.resolve([] as T[]))
+
   const [schedules, mileage, warranties, medications, immunizations, policies] = await Promise.all([
-    prisma.maintenanceSchedule.findMany({ where: dueCandidateFilter(MAINTENANCE_WINDOW_DAYS, now) }),
+    prisma.maintenanceSchedule.findMany({ where: { AND: [dueCandidateFilter(MAINTENANCE_WINDOW_DAYS, now), owned] } }),
     loadVehicleMileage(),
     prisma.warranty.findMany({
       where: {
+        ...owned,
         expirationDate: {
           gte: now,
           lte: new Date(now.getTime() + WARRANTY_WARN_DAYS * 86400000),
@@ -65,18 +74,18 @@ export async function checkAndNotify(): Promise<number> {
     }),
     // The date filters only narrow the read; refillDue / immunizationDue /
     // insuranceExpiring below are the rules, shared with the UI badges.
-    prisma.medication.findMany({
+    health(() => prisma.medication.findMany({
       where: { nextRefillDate: { lte: new Date(now.getTime() + HEALTH_WINDOWS.refillDays * DAY) } },
       include: { person: { select: { name: true } } },
-    }),
-    prisma.immunization.findMany({
+    })),
+    health(() => prisma.immunization.findMany({
       where: { nextDueDate: { lte: new Date(now.getTime() + HEALTH_WINDOWS.immunizationDays * DAY) } },
       include: { person: { select: { name: true } } },
-    }),
+    })),
     // endDate is stored as UTC midnight, so use startOfToday to include policies ending today.
-    prisma.insurancePolicy.findMany({
+    health(() => prisma.insurancePolicy.findMany({
       where: { endDate: { gte: startOfToday, lte: new Date(now.getTime() + HEALTH_WINDOWS.insuranceDays * DAY) } },
-    }),
+    })),
   ])
 
   // A later dose of the same vaccine supersedes an earlier one, so fetch every

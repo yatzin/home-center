@@ -6,6 +6,7 @@ import { TrendChart } from "@/components/charts/trend-chart"
 import { CompositionBar } from "@/components/charts/composition-bar"
 import { Sparkline } from "@/components/charts/sparkline"
 import { loadCostRecords } from "@/lib/costs-server"
+import { loadFeatures } from "@/lib/features-server"
 import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { cn } from "@/lib/utils"
@@ -49,7 +50,8 @@ export default async function CostsPage({
 }) {
   const params = await searchParams
   const now = new Date()
-  const [allRows, assets] = await Promise.all([loadCostRecords(), loadAssetIndex()])
+  const [allRows, assets, features] = await Promise.all([loadCostRecords(), loadAssetIndex(), loadFeatures()])
+  const typeFilters = features.health ? ASSET_TYPE_FILTERS : ASSET_TYPE_FILTERS.filter((t) => t.value !== "PERSON")
 
   if (allRows.length === 0) {
     return (
@@ -68,7 +70,7 @@ export default async function CostsPage({
   // Every one of these arrives from the query string, so every one is whitelisted
   // against a known set before it reaches a filter.
   const typeParam = typeof params.type === "string" ? params.type : undefined
-  const assetType = ASSET_TYPE_FILTERS.some((t) => t.value === typeParam)
+  const assetType = typeFilters.some((t) => t.value === typeParam)
     ? (typeParam as AssetType)
     : undefined
   const yearRaw = typeof params.year === "string" ? params.year : undefined
@@ -108,6 +110,7 @@ export default async function CostsPage({
     <FilterRow
       params={params}
       years={years}
+      types={typeFilters}
       assetType={assetType}
       year={year}
       granularity={granularity}
@@ -409,6 +412,7 @@ function BiggestRow({
 function FilterRow({
   params,
   years,
+  types,
   assetType,
   year,
   granularity,
@@ -416,6 +420,7 @@ function FilterRow({
 }: {
   params: Record<string, string | string[] | undefined>
   years: number[]
+  types: { value: AssetType; label: string }[]
   assetType?: AssetType
   year?: number
   granularity: Granularity
@@ -428,7 +433,7 @@ function FilterRow({
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
       <FilterGroup label="Assets">
         <FilterLink label="All" href={`/costs${withParams(params, { type: undefined })}`} active={!assetType} />
-        {ASSET_TYPE_FILTERS.map((t) => (
+        {types.map((t) => (
           <FilterLink
             key={t.value}
             label={t.label}

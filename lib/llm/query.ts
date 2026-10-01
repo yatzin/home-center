@@ -1,4 +1,5 @@
-import { ENTITIES, ENTITY_KEYS, type EntityDef, type EntityKey, type FieldDef, type FieldType, type Row } from "./ontology"
+import { ENTITIES, ENTITY_KEYS, HEALTH_ENTITIES, entityKeysFor, type EntityDef, type EntityKey, type FieldDef, type FieldType, type Row } from "./ontology"
+import { HEALTH_NOTIFICATION_TYPES } from "@/lib/features"
 
 // Compiles tool arguments into Prisma query fragments through the ontology.
 // Pure: no Prisma import. Every name the model sends is checked against the
@@ -15,7 +16,17 @@ export class ToolInputError extends Error {
 export const OPS = ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "isNull", "has", "hasNone"] as const
 export type Op = (typeof OPS)[number]
 export type Filter = { field: string; op: Op; value?: unknown }
-export type ToolContext = { userId: string; now: Date }
+/** health: false while Health is off in Settings → Features; absent means on. */
+export type ToolContext = { userId: string; now: Date; health?: boolean }
+
+export const healthOn = (ctx?: Pick<ToolContext, "health">) => ctx?.health !== false
+
+const HEALTH_OFF = "isn't available: Health is turned off in Settings."
+
+/** Throws when an entity belongs to Health and Health is off. */
+export function requireReachable(key: EntityKey, ctx?: Pick<ToolContext, "health">) {
+  if (!healthOn(ctx) && HEALTH_ENTITIES.has(key)) throw new ToolInputError(`${key} ${HEALTH_OFF}`)
+}
 /**
  * has/hasNone on an asset's warranties, service records or schedules. Those
  * point back at the asset by assetType + assetId, which Prisma can't follow
@@ -41,10 +52,11 @@ const OPS_BY_TYPE: Record<FieldType, Op[]> = {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "")
 
-export function entityDef(raw: string): { key: EntityKey; def: EntityDef } {
+export function entityDef(raw: string, ctx?: Pick<ToolContext, "health">): { key: EntityKey; def: EntityDef } {
   const n = norm(String(raw))
   const key = ENTITY_KEYS.find((k) => norm(k) === n || norm(ENTITIES[k].plural) === n)
-  if (!key) throw new ToolInputError(`Unknown entity "${raw}". Valid entities: ${ENTITY_KEYS.join(", ")}.`)
+  if (!key) throw new ToolInputError(`Unknown entity "${raw}". Valid entities: ${entityKeysFor(healthOn(ctx)).join(", ")}.`)
+  requireReachable(key, ctx)
   return { key, def: ENTITIES[key] }
 }
 
@@ -215,6 +227,7 @@ export function compileWhere(
       if (rel.kind === "one" || rel.kind === "asset") {
         throw new ToolInputError(`"${head}" is a single record, not a list; filter ${head}.<field> instead.`)
       }
+      requireReachable(rel.entity, ctx)
       const sub = compileWhere(rel.entity, relatedConditions(f, rel.entity), ctx)
       if (sub.assetName) throw new ToolInputError(`asset.name can't be used inside ${f.op}.`)
       const op = f.op as RelatedFilter["op"]
@@ -231,6 +244,7 @@ export function compileWhere(
 
     const rel = def.relations[head]
     if (!rel) throw new ToolInputError(`Unknown relation "${head}" on ${entity}. Relations: ${relationNames(entity)}.`)
+    if ("entity" in rel) requireReachable(rel.entity, ctx)
 
     if (rel.kind === "asset") {
       if (tail !== "name") throw new ToolInputError(`Only asset.name can be filtered; use the assetType field for the kind of asset.`)
@@ -251,6 +265,11 @@ export function compileWhere(
 
   // Scope goes last and is ANDed, so nothing the model sends can widen it.
   if (def.scope) and.push(def.scope(ctx))
+  if (!healthOn(ctx)) {
+    // Health off: nothing a person owns, and no health notifications.
+    if (def.polymorphic) and.push({ assetType: { not: "PERSON" } })
+    if (entity === "notification") and.push({ type: { notIn: [...HEALTH_NOTIFICATION_TYPES] } })
+  }
   return { where: and.length ? { AND: and } : {}, assetName, related }
 }
 
@@ -277,7 +296,8 @@ export function selectFor(entity: EntityKey, fields?: string[]): Row {
 export function compileInclude(
   entity: EntityKey,
   include: string[] = [],
-  fields?: string[]
+  fields?: string[],
+  ctx?: Pick<ToolContext, "health">
 ): { select: Row; children: { relation: string; entity: EntityKey }[] } {
   const def = ENTITIES[entity]
   const select = selectFor(entity, fields)
@@ -287,6 +307,7 @@ export function compileInclude(
     const rel = def.relations[name]
     if (!rel) throw new ToolInputError(`Unknown relation "${name}". Relations on ${entity}: ${relationNames(entity)}.`)
     if (rel.kind === "asset") continue // always attached for polymorphic rows
+    requireReachable(rel.entity, ctx)
     if (rel.kind === "assetChildren") {
       children.push({ relation: name, entity: rel.entity })
       continue

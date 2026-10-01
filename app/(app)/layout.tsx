@@ -13,14 +13,16 @@ import { loadLlmStatus } from "@/lib/llm/config"
 import { ChatProvider } from "@/components/chat/chat-provider"
 import { ChatDock, ChatToggle } from "@/components/chat/chat-panel"
 import packageJson from "@/package.json"
+import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
   if (!session) redirect("/login")
 
+  const features = await loadFeatures()
   const [notifications, llm] = await Promise.all([
     prisma.notification.findMany({
-      where: { userId: session.user.id, dismissedAt: null },
+      where: { userId: session.user.id, dismissedAt: null, ...(await visibleNotificationsWhere(features)) },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
@@ -36,10 +38,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ChatProvider userId={session.user.id} available={llm.available} isAdmin={isAdmin} model={llm.model}>
       <div className="flex h-svh overflow-hidden">
-        <Sidebar showAssistant={showAssistant} />
+        <Sidebar showAssistant={showAssistant} showHealth={features.health} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-card/80 backdrop-blur-sm px-4">
-            <MobileSidebarTrigger showAssistant={showAssistant} />
+            <MobileSidebarTrigger showAssistant={showAssistant} showHealth={features.health} />
             <div className="flex min-w-0 flex-1 justify-center">
               <Suspense fallback={null}>
                 <GlobalSearch className="max-w-xl" />

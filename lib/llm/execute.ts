@@ -4,7 +4,7 @@ import { ASSET_TYPES, assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { ENTITIES, type EntityKey, type Row } from "./ontology"
 import {
-  CHILD_LIMIT, compileInclude, compileLimit, compileSort, compileWhere, entityDef, selectFor, ToolInputError,
+  CHILD_LIMIT, compileInclude, compileLimit, compileSort, compileWhere, entityDef, healthOn, selectFor, ToolInputError,
   type Filter, type Op, type RelatedFilter, type ToolContext,
 } from "./query"
 import { serializeRow } from "./serialize"
@@ -101,12 +101,12 @@ export type FindArgs = {
 }
 
 export async function findRecords(args: FindArgs, ctx: ToolContext) {
-  const { key, def } = entityDef(args.entity)
+  const { key, def } = entityDef(args.entity, ctx)
   const index = def.polymorphic ? await loadAssetIndex() : null
   const where = await resolveWhere(key, args.filters, ctx, index)
   if (!where) return { entity: key, total: 0, rows: [], note: NO_ASSET_MATCH }
 
-  const plan = compileInclude(key, args.include, args.fields)
+  const plan = compileInclude(key, args.include, args.fields, ctx)
   const d = delegate(key)
   const [rows, total] = await Promise.all([
     d.findMany({ where, select: plan.select, orderBy: compileSort(key, args.sort), take: compileLimit(args.limit) }),
@@ -118,9 +118,15 @@ export async function findRecords(args: FindArgs, ctx: ToolContext) {
 }
 
 export async function getRecord(args: { entity: string; id: string; include?: string[] }, ctx: ToolContext) {
-  const { key, def } = entityDef(args.entity)
-  const plan = compileInclude(key, args.include)
-  const where = { AND: [{ id: args.id }, ...(def.scope ? [def.scope(ctx)] : [])] }
+  const { key, def } = entityDef(args.entity, ctx)
+  const plan = compileInclude(key, args.include, undefined, ctx)
+  const where = {
+    AND: [
+      { id: args.id },
+      ...(def.scope ? [def.scope(ctx)] : []),
+      ...(def.polymorphic && !healthOn(ctx) ? [{ assetType: { not: "PERSON" } }] : []),
+    ],
+  }
   const row = await delegate(key).findFirst({ where, select: plan.select })
   if (!row) throw new ToolInputError(`No ${key} with id "${args.id}". Use search or find_records to get ids.`)
   if (def.polymorphic) attachAssets(await loadAssetIndex(), [row])
@@ -133,7 +139,7 @@ const AGGREGATE_ROW_CAP = 20_000
 export type AggregateArgs = { entity: string; measure: MeasureInput; groupBy?: string[]; filters?: Filter[] }
 
 export async function aggregateRecords(args: AggregateArgs, ctx: ToolContext) {
-  const { key, def } = entityDef(args.entity)
+  const { key, def } = entityDef(args.entity, ctx)
   const measure = measureSpec(key, args.measure)
   const groups = (args.groupBy ?? []).map((g) => groupSpec(key, g))
   const index = def.polymorphic ? await loadAssetIndex() : null

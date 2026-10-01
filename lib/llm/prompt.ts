@@ -34,17 +34,19 @@ const DOCUMENTS_SECTION = [
   "- If nothing matched and notIndexed is above 0, say some files couldn't be searched yet.",
 ]
 
-export function buildSystemPrompt({ now, extra, maxRounds = DEFAULT_TOOL_ROUNDS, documents = false }: { now: Date; extra?: string | null; maxRounds?: number; documents?: boolean }): string {
+export function buildSystemPrompt({ now, extra, maxRounds = DEFAULT_TOOL_ROUNDS, documents = false, health = true }: { now: Date; extra?: string | null; maxRounds?: number; documents?: boolean; health?: boolean }): string {
   return [
-    "You are HomeCenter's household assistant. HomeCenter tracks a household's properties, vehicles, equipment, people and their health records (including observations the family logs, like meltdowns or bad nights), care providers, insurance, service records and costs, warranties, and maintenance schedules.",
+    health
+      ? "You are HomeCenter's household assistant. HomeCenter tracks a household's properties, vehicles, equipment, people and their health records (including observations the family logs, like meltdowns or bad nights), care providers, insurance, service records and costs, warranties, and maintenance schedules."
+      : "You are HomeCenter's household assistant. HomeCenter tracks a household's properties, vehicles, equipment, service records and costs, warranties, and maintenance schedules. Its health section (people, providers, insurance, health records) is turned off: if asked about those, say it's turned off in Settings.",
     `Today is ${toDay(now)} (UTC).`,
     "",
     "Rules:",
     "- Answer only from data returned by your tools. Never invent records, numbers or dates.",
     "- If the data doesn't answer the question, say so plainly and mention what you checked.",
-    "- asset_history, cost_summary, warranty_status and maintenance_status take a property, vehicle, equipment item or person by name (\"Civic\", \"Gas Furnace\", \"Lake Cabin\"): pass the name as the user said it, no search needed. If a name matches several records the tool lists them; call again with the one you mean. Use search for other named things (providers, medications, warranties by product) or when a tool can't find the name. Category words (\"each vehicle\", \"all our properties\") are not names: use cost_summary or find_records with assetType/entity instead.",
+    `- asset_history, cost_summary, warranty_status and maintenance_status take a property, vehicle, equipment item${health ? " or person" : ""} by name ("Civic", "Gas Furnace", "Lake Cabin"): pass the name as the user said it, no search needed. If a name matches several records the tool lists them; call again with the one you mean. Use search for other named things (providers, medications, warranties by product) or when a tool can't find the name. Category words ("each vehicle", "all our properties") are not names: use cost_summary or find_records with assetType/entity instead.`,
     "- An empty search result does not mean nothing exists. Try another tool before saying so.",
-    "- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, warranty_status, health_alerts, observation_log. Use find_records, get_record and aggregate for anything else.",
+    `- Prefer the shortcut tools: search, cost_summary, asset_history, maintenance_status, warranty_status${health ? ", health_alerts, observation_log" : ""}. Use find_records, get_record and aggregate for anything else.`,
     `- Call independent tools together in one turn. You have at most ${maxRounds} turns of tool calls.`,
     "- Dates in tool arguments are YYYY-MM-DD. For 'last year' or 'in 2024' use explicit from/to days.",
     ...(documents ? DOCUMENTS_SECTION : []),
@@ -55,7 +57,7 @@ export function buildSystemPrompt({ now, extra, maxRounds = DEFAULT_TOOL_ROUNDS,
     "- Link records you mention by copying the exact href from the tool results, e.g. [2019 Civic](/assets/vehicles/abc123). Never build a link yourself: only properties, vehicles, equipment and people have their own pages; medications, providers, service records, warranties and the like link to the page in their href.",
     "",
     "Data model — every row also has an id (entity: description, fields, relations):",
-    describeOntology(),
+    describeOntology(health),
     ...(extra ? ["", "Additional instructions from the administrator:", extra] : []),
   ].join("\n")
 }

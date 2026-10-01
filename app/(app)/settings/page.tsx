@@ -14,6 +14,8 @@ import { loadDocumentSettings } from "@/lib/documents/settings"
 import { documentIndexStats } from "@/lib/documents/indexer-server"
 import { loadModelStatus } from "@/lib/documents/embed/server"
 import { SettingsNav } from "@/components/settings/settings-nav"
+import { FeatureSettings } from "@/components/settings/feature-settings"
+import { loadFeatures } from "@/lib/features-server"
 import { resolveSection, visibleSections, type SettingsSectionId } from "@/lib/settings-sections"
 
 export default async function SettingsPage({
@@ -33,7 +35,7 @@ export default async function SettingsPage({
   // gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. resolveSection keeps the admin-only sections from
   // non-admins, and only the open section's data is loaded.
-  const [me, users, mail, storedMail, llm, docs] = await Promise.all([
+  const [me, users, mail, storedMail, llm, docs, features] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true },
@@ -47,6 +49,7 @@ export default async function SettingsPage({
       : is("assistant")
         ? loadDocumentSettings().then((d) => [d, null, null] as const)
         : Promise.resolve(null),
+    is("features") || is("assistant") ? loadFeatures() : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -88,6 +91,8 @@ export default async function SettingsPage({
             />
           )}
 
+          {is("features") && features && <FeatureSettings initial={{ healthEnabled: features.health }} />}
+
           {is("mail") && mail && (
             <MailSettings
               // Seeded from the resolved config so the form shows what is actually
@@ -127,6 +132,7 @@ export default async function SettingsPage({
                 healthDocumentsEnabled: llm.healthDocumentsEnabled,
               }}
               indexingEnabled={docs?.[0].indexingEnabled ?? true}
+              healthEnabled={features?.health ?? true}
               hasStoredKey={llm.hasStoredKey}
               keyUnreadable={llm.keyUnreadable}
               ready={isLlmReady(llm)}

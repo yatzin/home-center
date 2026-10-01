@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { dismissNotification, markAllNotificationsRead, restoreNotification } from "@/lib/actions/notifications"
 import { resolveNotificationHrefs } from "@/lib/notification-links"
+import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Bell, Eye, EyeOff, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
@@ -26,14 +27,15 @@ export default async function NotificationsPage({
   const session = await auth()
   if (!session) redirect("/login")
   const showHidden = (await searchParams).hidden === "1"
+  const visible = await visibleNotificationsWhere(await loadFeatures())
 
   const [notifications, hiddenCount] = await Promise.all([
     prisma.notification.findMany({
-      where: { userId: session.user.id, ...(showHidden ? {} : { dismissedAt: null }) },
+      where: { userId: session.user.id, ...visible, ...(showHidden ? {} : { dismissedAt: null }) },
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
-    prisma.notification.count({ where: { userId: session.user.id, dismissedAt: { not: null } } }),
+    prisma.notification.count({ where: { userId: session.user.id, ...visible, dismissedAt: { not: null } } }),
   ])
 
   const unread = notifications.filter((n) => !n.isRead).length

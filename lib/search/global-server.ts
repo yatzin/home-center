@@ -15,7 +15,9 @@ import { embedderFor } from "@/lib/documents/embed/server"
 import { parseSearch } from "@/lib/documents/fts-query"
 import { passage } from "@/lib/documents/passage"
 import { groupHits } from "@/lib/documents/tool-helpers"
-import { loadDocumentRefs } from "@/lib/documents/scope"
+import { healthAttachmentIds, loadDocumentRefs } from "@/lib/documents/scope"
+import { loadFeatures } from "@/lib/features-server"
+import type { Features } from "@/lib/features"
 import type { Hit } from "@/lib/documents/index-db"
 import {
   bestPerKey, idsNamed, MAX_RECORD_DISTANCE, nearest, RECORD_WINDOW, searchTerms, semanticOnly, termsWhere,
@@ -156,6 +158,25 @@ function keywordWheres(terms: string[], owners: Owners): Wheres {
   }
 }
 
+const NOTHING = { id: { in: [] as string[] } }
+
+/** Health's record kinds, as the search index names them. */
+const HEALTH_KINDS = new Set<EntityKind>(["PERSON", "PROVIDER", "INSURANCE", "CONDITION", "MEDICATION", "ALLERGY", "IMMUNIZATION", "OBSERVATION"])
+
+/** With Health off: no people, providers, insurance or health records, and nothing a person owns. */
+function withFeatures(w: Wheres, features: Features): Wheres {
+  if (features.health) return w
+  const notPerson = { assetType: { not: "PERSON" as const } }
+  return {
+    ...w,
+    person: NOTHING, insurance: NOTHING, provider: NOTHING, condition: NOTHING, medication: NOTHING,
+    allergy: NOTHING, immunization: NOTHING, observation: NOTHING,
+    service: { AND: [w.service, notPerson] },
+    maintenance: { AND: [w.maintenance, notPerson] },
+    warranty: { AND: [w.warranty, notPerson] },
+  }
+}
+
 /** Exactly these records, by the entity kinds the search index stores them under. */
 function idWheres(ids: Map<EntityKind, string[]>): Wheres {
   const of = (kind: EntityKind) => ({ id: { in: ids.get(kind) ?? [] } })
@@ -181,8 +202,10 @@ function entityKeyOf(section: Section, item: Section["items"][number]): string |
 }
 
 /** Records by meaning: nearest record chunks, minus anything the keyword pass already showed, best first. */
-async function semanticRecords(vector: number[], shown: Set<string>, owners: Owners, now: Date): Promise<Section[]> {
-  const hits = await (await searchIndex()).entityVectorSearch(vector, ENTITY_POOL)
+async function semanticRecords(vector: number[], shown: Set<string>, owners: Owners, now: Date, features: Features): Promise<Section[]> {
+  const all = await (await searchIndex()).entityVectorSearch(vector, ENTITY_POOL)
+  // Dropped before ranking so hidden kinds don't take up places.
+  const hits = features.health ? all : all.filter((h) => !HEALTH_KINDS.has(h.kind as EntityKind))
   const best = bestPerKey(hits.map((h) => ({ key: `${h.kind}:${h.entityId}`, score: h.score })))
   const kept = nearest(best, shown, MAX_RECORD_DISTANCE, RECORD_WINDOW).slice(0, SEMANTIC_RECORD_LIMIT)
   if (!kept.length) return []
@@ -193,7 +216,7 @@ async function semanticRecords(vector: number[], shown: Set<string>, owners: Own
     const kind = key.slice(0, at) as EntityKind
     ids.set(kind, [...(ids.get(kind) ?? []), key.slice(at + 1)])
   }
-  const where = idWheres(ids)
+  const where = withFeatures(idWheres(ids), features)
   const [assets, records] = await Promise.all([searchAssets(where, now), searchRecords(where, owners, now)])
   const byRank = (section: Section) => (item: Section["items"][number]) => rank.get(entityKeyOf(section, item) ?? "") ?? Infinity
   const ranked = [...assets, ...records]
@@ -564,20 +587,23 @@ export async function globalSearch(query: string, opts: { semantic: boolean }): 
   if (!q) return { query: q, terms, sections: [], semantic: { state: "off" }, total: 0 }
 
   const now = new Date()
-  const owners = await loadOwners()
+  const [owners, features] = await Promise.all([loadOwners(), loadFeatures()])
   const parsed = parseSearch(q)
+  // With Health off, its files never come back either.
+  const hidden = features.health ? null : new Set(await healthAttachmentIds())
+  const visibleHits = <H extends { attachmentId: string }>(hits: H[]) => (hidden ? hits.filter((h) => !hidden.has(h.attachmentId)) : hits)
 
   const keywordDocs = async () => {
     if (!parsed) return { hits: [] as Hit[] }
     try {
-      return { hits: await (await searchIndex()).search(parsed.match, { limit: DOC_POOL }) }
+      return { hits: visibleHits(await (await searchIndex()).search(parsed.match, { limit: DOC_POOL })) }
     } catch (error) {
       console.error("[search] document keyword search failed:", error instanceof Error ? error.name : typeof error)
       return { hits: [] as Hit[] }
     }
   }
 
-  const where = terms.length ? keywordWheres(terms, owners) : null
+  const where = terms.length ? withFeatures(keywordWheres(terms, owners), features) : null
   const [assetSections, recordSections, keyword] = await Promise.all([
     where ? searchAssets(where, now) : Promise.resolve([]),
     where ? searchRecords(where, owners, now) : Promise.resolve([]),
@@ -597,10 +623,10 @@ export async function globalSearch(query: string, opts: { semantic: boolean }): 
           [...assetSections, ...recordSections].flatMap((sec) => sec.items.map((item) => entityKeyOf(sec, item)).filter((k): k is string => k !== null))
         )
         const [records, docHits] = await Promise.all([
-          semanticRecords(vector, shown, owners, now),
+          semanticRecords(vector, shown, owners, now, features),
           (await searchIndex()).vectorSearch(vector, { limit: DOC_POOL }),
         ])
-        const fresh = semanticOnly(docHits, new Set(keyword.hits.map((h) => h.attachmentId)))
+        const fresh = semanticOnly(visibleHits(docHits), new Set(keyword.hits.map((h) => h.attachmentId)))
         const docs = await toDocuments(fresh, [], "semantic", owners)
         semantic = {
           state: "ok",

@@ -1,9 +1,9 @@
-import { Bell, Bot, FileSearch, Mail, Users } from "lucide-react"
+import { Bell, Bot, FileSearch, Mail, ToggleRight, Users } from "lucide-react"
 
 // The sub-pages of Settings, chosen with ?tab= like the asset pages' tabs.
 // Everyone gets their own email preferences; the rest is server setup.
 
-export type SettingsSectionId = "notifications" | "mail" | "assistant" | "documents" | "users"
+export type SettingsSectionId = "notifications" | "features" | "mail" | "assistant" | "documents" | "users"
 
 export type SettingsSection = {
   id: SettingsSectionId
@@ -15,6 +15,7 @@ export type SettingsSection = {
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: "notifications", label: "Notifications", description: "How often you're emailed about due items", icon: Bell, adminOnly: false },
+  { id: "features", label: "Features", description: "Turn optional parts of the site on or off", icon: ToggleRight, adminOnly: true },
   { id: "mail", label: "Mail server", description: "SMTP server used to send reminders", icon: Mail, adminOnly: true },
   { id: "assistant", label: "Assistant", description: "The AI assistant's model and behavior", icon: Bot, adminOnly: true },
   { id: "documents", label: "Documents & search", description: "Reading uploads, OCR and semantic search", icon: FileSearch, adminOnly: true },
