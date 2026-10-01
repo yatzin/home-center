@@ -111,6 +111,9 @@ enum AttachmentRecordType {
   CONDITION
   INSURANCE
   OBSERVATION
+  MEDICATION
+  ALLERGY
+  IMMUNIZATION
 }
 
 enum NotificationType {
@@ -316,6 +319,8 @@ model Medication {
   prescriber   Provider?        @relation(fields: [prescriberId], references: [id], onDelete: SetNull)
   conditionId  String?
   condition    HealthCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+
+  attachments  Attachment[]
 }
 
 model Allergy {
@@ -329,6 +334,8 @@ model Allergy {
 
   personId String
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  attachments Attachment[]
 }
 
 model Immunization {
@@ -344,6 +351,8 @@ model Immunization {
 
   personId String
   person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  attachments Attachment[]
 }
 
 model InsurancePolicy {
@@ -468,6 +477,16 @@ model Attachment {
 
   observationId         String?
   observation           Observation?         @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  medicationId          String?
+  medication            Medication?          @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  allergyId             String?
+  allergy               Allergy?             @relation(fields: [allergyId], references: [id], onDelete: Cascade)
+
+  immunizationId        String?
+  immunization          Immunization?        @relation(fields: [immunizationId], references: [id], onDelete: Cascade)
+  text                  AttachmentText?
 }
 
 // ─── Mail settings ────────────────────────────────────────────────────────────
@@ -497,6 +516,9 @@ model MailSettings {
 model LlmSettings {
   id           String   @id @default("singleton")
   enabled      Boolean  @default(false)
+  /// Hides the assistant from the nav and header while it's off. Only
+  /// meaningful while enabled is false — turning the assistant on clears it.
+  hidden       Boolean  @default(false)
   /// e.g. https://api.openai.com/v1 or http://localhost:11434/v1 — no trailing slash.
   baseUrl      String?
   /// AES-256-GCM via lib/secret-box.ts. Optional: local servers need none.
@@ -515,7 +537,64 @@ model LlmSettings {
   maxToolRounds Int?
   /// JSON object merged into every request, e.g. {"chat_template_kwargs":{"enable_thinking":true}}.
   extraBody    String?
+  /// Offer search_documents / read_document to the assistant.
+  documentsEnabled       Boolean  @default(true)
+  /// Include attachments on health records (conditions, observations,
+  /// medications, allergies, immunizations) in those tools.
+  healthDocumentsEnabled Boolean  @default(false)
   updatedAt    DateTime @updatedAt
+}
+
+// ─── Document text and search ─────────────────────────────────────────────────
+
+enum DocumentTextStatus {
+  PENDING      // queued, or needs redoing
+  DONE         // text extracted
+  EMPTY        // readable file, no text found
+  UNSUPPORTED  // file type we don't extract
+  FAILED       // extractor threw or timed out; see error
+}
+
+enum DocumentTextMethod {
+  TEXT   // native text: PDF text layer, office, plain
+  OCR    // every page came from OCR
+  MIXED  // PDF with some text pages and some OCR'd pages
+}
+
+/// Extracted text of one attachment. Canonical: search-index.db is rebuilt
+/// from these rows, never the other way round.
+model AttachmentText {
+  attachmentId     String              @id
+  attachment       Attachment          @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  status           DocumentTextStatus  @default(PENDING)
+  method           DocumentTextMethod?
+  /// Pages separated by "\f". Capped at MAX_TEXT_CHARS.
+  text             String?
+  pageCount        Int?
+  charCount        Int?
+  truncated        Boolean             @default(false)
+  /// Fixed phrase, never parser output, e.g. "Password-protected PDF".
+  error            String?
+  attempts         Int                 @default(0)
+  /// EXTRACTOR_VERSION at extraction time. Bumping the constant re-queues everything.
+  extractorVersion Int                 @default(0)
+  extractedAt      DateTime?
+
+  @@index([status])
+}
+
+/// Single row (id is always "singleton"). No row = defaults.
+model DocumentSettings {
+  id              String   @id @default("singleton")
+  /// Master switch for extraction, OCR and the search index.
+  indexingEnabled Boolean  @default(true)
+  /// OCR images and scanned PDFs during indexing. CPU-heavy on small hosts.
+  ocrEnabled      Boolean  @default(true)
+  /// Embed chunks and use them in search_documents. Needs indexingEnabled.
+  semanticEnabled Boolean  @default(true)
+  /// Vetted model id (lib/documents/embed/models.ts). Default is the built-in one.
+  embeddingModel  String   @default("bge-small-en-v1.5")
+  updatedAt       DateTime @updatedAt
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

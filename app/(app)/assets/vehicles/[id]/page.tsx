@@ -26,7 +26,7 @@ export default async function VehicleDetailPage({
   const [serviceRecords, warranties, maintenanceSchedules] = await Promise.all([
     prisma.serviceRecord.findMany({ where: { assetId: id, assetType: "VEHICLE" }, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.warranty.findMany({ where: { assetId: id, assetType: "VEHICLE" }, include: { attachments: true }, orderBy: { expirationDate: "asc" } }),
-    prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "VEHICLE", isActive: true }, orderBy: { nextDueDate: "asc" } }),
+    prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "VEHICLE", isActive: true }, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
   ])
 
   return (

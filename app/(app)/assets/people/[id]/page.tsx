@@ -31,15 +31,15 @@ export default async function PersonDetailPage({
     where: { id },
     include: {
       primaryProvider: { select: { id: true, name: true } },
-      allergies: { orderBy: [{ severity: "desc" }, { substance: "asc" }] },
-      immunizations: { orderBy: { dateGiven: "desc" } },
+      allergies: { include: { attachments: true }, orderBy: [{ severity: "desc" }, { substance: "asc" }] },
+      immunizations: { include: { attachments: true }, orderBy: { dateGiven: "desc" } },
       conditions: {
         include: { attachments: true, provider: { select: { name: true } } },
         // ACTIVE < MANAGED < RESOLVED alphabetically, which is also the order that matters.
         orderBy: [{ status: "asc" }, { name: "asc" }],
       },
       medications: {
-        include: { prescriber: { select: { name: true } }, condition: { select: { name: true } } },
+        include: { attachments: true, prescriber: { select: { name: true } }, condition: { select: { name: true } } },
         orderBy: { name: "asc" },
       },
       insurancePolicies: { select: { id: true, carrier: true, planName: true, kind: true, memberId: true }, orderBy: { carrier: "asc" } },
@@ -54,7 +54,7 @@ export default async function PersonDetailPage({
   const where = { assetId: id, assetType: "PERSON" as const }
   const [visits, schedules, providers] = await Promise.all([
     prisma.serviceRecord.findMany({ where, include: { attachments: true }, orderBy: { date: "desc" } }),
-    prisma.maintenanceSchedule.findMany({ where: { ...where, isActive: true }, orderBy: { nextDueDate: "asc" } }),
+    prisma.maintenanceSchedule.findMany({ where: { ...where, isActive: true }, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
     prisma.provider.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ])
 

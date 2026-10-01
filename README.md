@@ -14,6 +14,7 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 - **Local login** — no third-party account required, your data stays on your hardware
 - **Email notifications** — optional digest or as-it-happens emails for due maintenance and expiring warranties, configurable per-user and via in-app mail server settings
 - **AI assistant** — optional chat that answers questions about your data ("what did we spend on the truck last year?", "which meds need refills?") using any OpenAI-compatible model, including local ones via Ollama or LM Studio
+- **Search inside uploaded documents** — the assistant reads manuals, receipts and policies, with OCR for photos and scans
 
 ## Screenshots
 
@@ -179,6 +180,55 @@ reasoning models.
 
 Chats stay in your browser tab and are never stored on the server.
 
+### Document search (optional)
+
+HomeCenter reads the text of uploaded files in the background — PDF, Word
+(.doc/.docx), OpenDocument, PowerPoint, Excel, RTF, text/CSV, and photos or
+scanned PDFs via OCR — and indexes it so the assistant can search it. It runs
+entirely inside the container; nothing is sent anywhere until the assistant
+uses a passage to answer a question.
+
+**Settings → Documents** turns indexing and OCR on or off and shows progress.
+**Settings → Assistant** decides whether the assistant may read documents at
+all, and separately whether it may read health documents — files on anything
+that belongs to a person, such as their visits, reminders and medications (off
+by default).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SEARCH_INDEX_PATH` | next to the database (`/data/search-index.db`) | The keyword index. Derived data: it doesn't need backing up and is rebuilt automatically if missing. |
+| `DOCUMENT_REINDEX_HOURS` | `6` | How often to pick up missed or failed files. `0` disables the timer (uploads are still indexed immediately). |
+
+Not indexed: iWork files, .zip, legacy .xls/.ppt and HEIC photos.
+
+#### Search by meaning
+
+Besides exact words, HomeCenter can find passages by meaning ("how often do I
+swap the furnace filter?" finds "replace every 90 days"). A small AI model runs
+**on your server** — no document text leaves it for this. The model loads only
+while documents are being indexed or searched, and unloads when idle.
+
+**Settings → Documents → Find documents by meaning** turns it on or off and
+picks the model:
+
+| Model | Size | Good for |
+|---|---|---|
+| BGE small (built in) | 34 MB | Fast, English |
+| Arctic Embed M | 110 MB | Best quality for its size, English (recommended upgrade) |
+| BGE base | 110 MB | Better quality, English |
+| Nomic Embed Text | 137 MB | Good quality, English |
+| E5 base | 279 MB | Many languages |
+| BGE large | 337 MB | Highest quality, slow on small hosts |
+
+Larger models download from Hugging Face when you click **Download** (the
+only time HomeCenter goes online for this) and are stored in `/data/models`.
+Switching models re-processes your documents in the background.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MODELS_DIR` | `/data/models` | Where downloaded models are kept. |
+| `EMBEDDING_IDLE_MINUTES` | `10` | Unload the model this long after the last search. `0` unloads right after each search. |
+
 ## Updating
 
 Pull the new image and recreate the container — your data folder is untouched:
@@ -188,6 +238,8 @@ docker compose pull && docker compose up -d
 ```
 
 In Portainer: **Pull and redeploy**.
+
+From this version the image is based on Debian slim instead of Alpine. Nothing changes for you: pull and recreate as usual.
 
 ## Local development
 
@@ -207,5 +259,7 @@ npm run db:migrate   # create/apply a migration
 npm run db:studio    # browse the database
 npm run build         # production build
 ```
+
+`npm run models:fetch-builtin` downloads the built-in model into `./models/builtin/` (needed once for meaning search in development).
 
 Images are built and published automatically by `.github/workflows/docker-publish.yml` on every push to `main`. To build locally: `docker build -t home-center .`

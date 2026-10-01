@@ -26,8 +26,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const hrefs = await resolveNotificationHrefs(notifications)
   const notificationItems = notifications.map((n) => ({ ...n, href: hrefs.get(n.id) ?? "/notifications" }))
   const isAdmin = session.user.role === "ADMIN"
-  // Admins see the entry points even when it's off, so they can find the setup.
-  const showAssistant = llm.available || isAdmin
+  // Admins see the entry points even when it's off, so they can find the setup —
+  // unless it's been explicitly hidden.
+  const showAssistant = !llm.hidden && (llm.available || isAdmin)
 
   return (
     <ChatProvider userId={session.user.id} available={llm.available} isAdmin={isAdmin} model={llm.model}>

@@ -23,13 +23,16 @@ export function unverifiedLinks(text: string, toolOutputs: string[]): string[] {
 /** A record page that can exist: an asset or person, optionally opening one of its tabs. */
 const RECORD_PAGE = /^\/assets\/(properties|vehicles|equipment|people)\/[A-Za-z0-9_-]+(\?[^\s]*)?$/
 
+/** An uploaded file, as the document tools return it: /api/files/<record type>/<id>/<uuid>.<ext>. */
+const FILE_LINK = /^\/api\/files\/(service|warranty|maintenance|condition|insurance|observation|medication|allergy|immunization)\/[A-Za-z0-9_-]+\/[0-9a-f-]{36}\.[a-z0-9]+$/
+
 /**
  * Links whose path can't be any page in the app — /assets/medications/…,
  * /assets/providers?…, /assets/serviceRecords/… — as opposed to a real-looking
  * record link that simply wasn't returned by a tool.
  */
 export function impossibleLinks(hrefs: string[]): string[] {
-  return hrefs.filter((h) => !FIXED_PAGES.has(h) && !RECORD_PAGE.test(h))
+  return hrefs.filter((h) => !FIXED_PAGES.has(h) && !RECORD_PAGE.test(h) && !FILE_LINK.test(h))
 }
 
 export function unlink(text: string, hrefs: string[]): string {

@@ -4,7 +4,6 @@ import { useState } from "react"
 import { NotebookPen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { EntityFormDialog } from "@/components/forms/entity-form-dialog"
-import { AttachmentList } from "@/components/attachments/attachment-list"
 import { createObservation, updateObservation } from "@/lib/actions/health"
 import { toDateInput } from "@/lib/health"
 import { SEVERITIES } from "@/lib/observations"
@@ -74,18 +73,14 @@ export function ObservationDialog({ personId, open, onClose, editing, typeOption
       onClose={onClose}
       title={editing ? "Edit observation" : "Log an observation"}
       submitLabel={editing ? "Save Changes" : "Log it"}
-      successMessage={editing ? "Observation updated." : "Observation logged. Edit it to attach photos or files."}
+      successMessage={editing ? "Observation updated." : "Observation logged."}
       fields={fieldsFor(typeOptions, conditions)}
       initial={initialFor(editing)}
       onSubmit={(values) => (editing ? updateObservation(editing.id, values) : createObservation(personId, values))}
-    >
-      {editing && (
-        <div className="space-y-1.5">
-          <p className="text-sm font-medium">Photos &amp; files</p>
-          <AttachmentList recordId={editing.id} recordType="OBSERVATION" attachments={editing.attachments} />
-        </div>
-      )}
-    </EntityFormDialog>
+      attachmentRecordType="OBSERVATION"
+      recordId={editing?.id}
+      attachments={editing?.attachments}
+    />
   )
 }
 

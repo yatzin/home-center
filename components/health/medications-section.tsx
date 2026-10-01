@@ -6,14 +6,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { EntityFormDialog } from "@/components/forms/entity-form-dialog"
 import { EntityTable, type EntityColumn } from "@/components/forms/entity-table"
+import { AttachmentList } from "@/components/attachments/attachment-list"
+import { AttachmentCount } from "@/components/attachments/attachment-count"
 import {
   createMedication, deleteMedication, markMedicationRefilled, updateMedication,
 } from "@/lib/actions/health"
 import { daysUntil, formatDay, isMedicationActive, refillDue, toDateInput } from "@/lib/health"
 import type { FieldConfig, FormValues } from "@/lib/form-types"
-import type { Medication } from "@/app/generated/prisma/client"
+import type { Attachment, Medication } from "@/app/generated/prisma/client"
 
-export type MedicationRow = Medication & { prescriber: { name: string } | null; condition: { name: string } | null }
+export type MedicationRow = Medication & { attachments: Attachment[]; prescriber: { name: string } | null; condition: { name: string } | null }
 
 function RefillCell({ m }: { m: MedicationRow }) {
   if (!m.nextRefillDate) return <span className="text-muted-foreground">—</span>
@@ -39,12 +41,14 @@ const COLUMNS: EntityColumn<MedicationRow>[] = [
   { key: "for", label: "For", className: "text-muted-foreground", cell: (m) => m.condition?.name ?? "—" },
   { key: "prescriber", label: "Prescriber", className: "text-muted-foreground", cell: (m) => m.prescriber?.name ?? "—" },
   { key: "refill", label: "Next refill", className: "whitespace-nowrap", cell: (m) => <RefillCell m={m} /> },
+  { key: "files", label: "Files", cell: (m) => <AttachmentCount attachments={m.attachments} /> },
 ]
 
 const PAST_COLUMNS: EntityColumn<MedicationRow>[] = [
   COLUMNS[0],
   COLUMNS[1],
   { key: "ended", label: "Stopped", className: "whitespace-nowrap text-muted-foreground", cell: (m) => formatDay(m.endDate) },
+  { key: "files", label: "Files", cell: (m) => <AttachmentCount attachments={m.attachments} /> },
 ]
 
 function initialFor(m: MedicationRow | null): FormValues {
@@ -133,12 +137,13 @@ export function MedicationsSection({ personId, medications, providers, condition
             <Button variant="outline" size="sm" className="h-7" onClick={() => handleRefilled(m)}>Refilled</Button>
           ) : null
         }
+        renderExpanded={(m) => <AttachmentList recordId={m.id} recordType="MEDICATION" attachments={m.attachments} />}
       />
 
       {past.length > 0 && (
         <div className="mt-6 space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground">Past medications</h3>
-          <EntityTable rows={past} columns={PAST_COLUMNS} describe={(m) => m.name} onEdit={openEdit} onDelete={handleDelete} empty="" />
+          <EntityTable rows={past} columns={PAST_COLUMNS} describe={(m) => m.name} onEdit={openEdit} onDelete={handleDelete} empty="" renderExpanded={(m) => <AttachmentList recordId={m.id} recordType="MEDICATION" attachments={m.attachments} />} />
         </div>
       )}
 
@@ -151,6 +156,9 @@ export function MedicationsSection({ personId, medications, providers, condition
         fields={fields}
         initial={initialFor(editing)}
         onSubmit={(values) => (editing ? updateMedication(editing.id, values) : createMedication(personId, values))}
+        attachmentRecordType="MEDICATION"
+        recordId={editing?.id}
+        attachments={editing?.attachments}
       />
     </>
   )

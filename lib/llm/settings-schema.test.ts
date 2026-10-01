@@ -11,12 +11,25 @@ const base: LlmSettingsInput = {
 }
 
 describe("parseLlmSettings", () => {
+  it("defaults document access on and health documents off", () => {
+    const r = parseLlmSettings(base)
+    expect(r.ok && r.value.documentsEnabled).toBe(true)
+    expect(r.ok && r.value.healthDocumentsEnabled).toBe(false)
+  })
+
+  it("keeps the document switches as sent", () => {
+    const r = parseLlmSettings({ ...base, documentsEnabled: false, healthDocumentsEnabled: true })
+    expect(r.ok && r.value.documentsEnabled).toBe(false)
+    expect(r.ok && r.value.healthDocumentsEnabled).toBe(true)
+  })
+
   it("normalises a complete config", () => {
     const r = parseLlmSettings({ ...base, temperature: "0.2", maxTokens: "1500", systemPrompt: " Be brief. " })
     expect(r).toEqual({
       ok: true,
       value: {
         enabled: true,
+        hidden: false,
         baseUrl: "https://api.openai.com/v1",
         model: "gpt-4o-mini",
         temperature: 0.2,
@@ -25,6 +38,8 @@ describe("parseLlmSettings", () => {
         timeoutSeconds: null,
         maxToolRounds: null,
         extraBody: null,
+        documentsEnabled: true,
+        healthDocumentsEnabled: false,
       },
     })
   })
@@ -34,10 +49,20 @@ describe("parseLlmSettings", () => {
     expect(r).toEqual({
       ok: true,
       value: {
-        enabled: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
-        timeoutSeconds: null, maxToolRounds: null, extraBody: null,
+        enabled: false, hidden: false, baseUrl: null, model: null, temperature: null, maxTokens: null, systemPrompt: null,
+        timeoutSeconds: null, maxToolRounds: null, extraBody: null, documentsEnabled: true, healthDocumentsEnabled: false,
       },
     })
+  })
+
+  it("clears hidden when turning the assistant on", () => {
+    const r = parseLlmSettings({ ...base, hidden: true })
+    expect(r).toMatchObject({ ok: true, value: { enabled: true, hidden: false } })
+  })
+
+  it("keeps hidden while off", () => {
+    const r = parseLlmSettings({ ...base, enabled: false, baseUrl: "", model: "", hidden: true })
+    expect(r).toMatchObject({ ok: true, value: { enabled: false, hidden: true } })
   })
 
   it("rejects non-http URLs", () => {

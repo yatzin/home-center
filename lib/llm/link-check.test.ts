@@ -21,6 +21,12 @@ describe("unverifiedLinks", () => {
 })
 
 describe("impossibleLinks", () => {
+  it("accepts links to uploaded files, but not made-up file paths", () => {
+    expect(impossibleLinks(["/api/files/warranty/clw123/3f2a1b4c-1111-2222-3333-444455556666.pdf"])).toEqual([])
+    expect(impossibleLinks(["/api/files/secrets/x/3f2a1b4c-1111-2222-3333-444455556666.pdf"])).toHaveLength(1)
+    expect(impossibleLinks(["/api/files/warranty/clw123/../../etc/passwd"])).toHaveLength(1)
+  })
+
   it("picks out paths no page in the app has", () => {
     expect(
       impossibleLinks([

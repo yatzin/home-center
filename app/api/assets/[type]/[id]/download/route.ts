@@ -24,7 +24,7 @@ export async function GET(
   if (!assetType) return NextResponse.json({ error: "Invalid asset type" }, { status: 400 })
   const isPerson = assetType === "PERSON"
 
-  const [serviceAttachments, warrantyAttachments, conditionAttachments, insuranceAttachments, observationAttachments] = await Promise.all([
+  const [serviceAttachments, warrantyAttachments, conditionAttachments, insuranceAttachments, observationAttachments, medicationAttachments, allergyAttachments, immunizationAttachments] = await Promise.all([
     prisma.attachment.findMany({
       where: { serviceRecordId: { not: null }, serviceRecord: { assetId: id, assetType } },
       include: { serviceRecord: { select: { title: true, date: true } } },
@@ -49,6 +49,24 @@ export async function GET(
       ? prisma.attachment.findMany({
           where: { observation: { personId: id } },
           include: { observation: { select: { type: true, date: true } } },
+        })
+      : Promise.resolve([]),
+    isPerson
+      ? prisma.attachment.findMany({
+          where: { medication: { personId: id } },
+          include: { medication: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
+    isPerson
+      ? prisma.attachment.findMany({
+          where: { allergy: { personId: id } },
+          include: { allergy: { select: { substance: true } } },
+        })
+      : Promise.resolve([]),
+    isPerson
+      ? prisma.attachment.findMany({
+          where: { immunization: { personId: id } },
+          include: { immunization: { select: { vaccine: true } } },
         })
       : Promise.resolve([]),
   ])
@@ -91,6 +109,15 @@ export async function GET(
   for (const a of observationAttachments) {
     const date = a.observation ? a.observation.date.toISOString().split("T")[0] : "unknown"
     add(`observations/${date}_${safe(a.observation?.type ?? "observation")}/${leaf(a.originalName)}`, "observation", a.observationId!, a.filename)
+  }
+  for (const a of medicationAttachments) {
+    add(`medications/${safe(a.medication?.name ?? "medication")}/${leaf(a.originalName)}`, "medication", a.medicationId!, a.filename)
+  }
+  for (const a of allergyAttachments) {
+    add(`allergies/${safe(a.allergy?.substance ?? "allergy")}/${leaf(a.originalName)}`, "allergy", a.allergyId!, a.filename)
+  }
+  for (const a of immunizationAttachments) {
+    add(`immunizations/${safe(a.immunization?.vaccine ?? "immunization")}/${leaf(a.originalName)}`, "immunization", a.immunizationId!, a.filename)
   }
 
   if (Object.keys(files).length === 0) {

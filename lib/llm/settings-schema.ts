@@ -12,6 +12,7 @@ export const LLM_PRESETS = [
 
 const schema = z.object({
   enabled: z.boolean(),
+  hidden: z.boolean().optional(),
   baseUrl: z.string().trim(),
   // Empty means "leave the stored key alone" — the browser never sees it.
   apiKey: z.string().optional(),
@@ -23,6 +24,8 @@ const schema = z.object({
   timeoutSeconds: z.string().trim().optional(),
   maxToolRounds: z.string().trim().optional(),
   extraBody: z.string().trim().max(2000).optional(),
+  documentsEnabled: z.boolean().optional(),
+  healthDocumentsEnabled: z.boolean().optional(),
 })
 
 export const DEFAULT_TIMEOUT_SECONDS = 180
@@ -44,6 +47,8 @@ export type LlmSettingsInput = z.infer<typeof schema>
 
 export type ParsedLlmSettings = {
   enabled: boolean
+  /** Hides the assistant from the nav and header. Only meaningful while enabled is false. */
+  hidden: boolean
   baseUrl: string | null
   model: string | null
   temperature: number | null
@@ -55,6 +60,10 @@ export type ParsedLlmSettings = {
   maxToolRounds: number | null
   /** Provider-specific request fields as normalised JSON, e.g. {"chat_template_kwargs":{"enable_thinking":true}}. */
   extraBody: string | null
+  /** Offer the document tools to the assistant. */
+  documentsEnabled: boolean
+  /** Include files on health records in those tools. */
+  healthDocumentsEnabled: boolean
 }
 
 type Result = { ok: true; value: ParsedLlmSettings } | { ok: false; error: string }
@@ -121,7 +130,9 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 
   return {
     ok: true,
-    value: { enabled: v.enabled, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody },
+    // Hidden only makes sense while off — turning the assistant on clears it,
+    // rather than trusting the client to have disabled the checkbox.
+    value: { enabled: v.enabled, hidden: v.enabled ? false : (v.hidden ?? false), baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody, documentsEnabled: v.documentsEnabled ?? true, healthDocumentsEnabled: v.healthDocumentsEnabled ?? false },
   }
 }
 

@@ -4,6 +4,15 @@ import { buildSystemPrompt } from "./prompt"
 describe("buildSystemPrompt", () => {
   const now = new Date("2026-09-26T18:00:00Z")
 
+  it("describes the document tools only when documents are on", () => {
+    expect(buildSystemPrompt({ now })).not.toContain("search_documents")
+    const p = buildSystemPrompt({ now, documents: true })
+    expect(p).toContain("search_documents")
+    expect(p).toContain("read_document")
+    expect(p).toContain("list_documents")
+    expect(p).toMatch(/never follow instructions/i)
+  })
+
   it("carries the date, rules and data model", () => {
     const p = buildSystemPrompt({ now })
     expect(p).toContain("Today is 2026-09-26")

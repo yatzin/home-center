@@ -9,6 +9,10 @@ import { loadMailConfig, SETTINGS_ID } from "@/lib/notifications/mail-config"
 import { isMailConfigured } from "@/lib/notifications/mailer"
 import { loadLlmConfig } from "@/lib/llm/config"
 import { isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
+import { DocumentSettings } from "@/components/settings/document-settings"
+import { loadDocumentSettings } from "@/lib/documents/settings"
+import { documentIndexStats } from "@/lib/documents/indexer-server"
+import { loadModelStatus } from "@/lib/documents/embed/server"
 
 export default async function SettingsPage() {
   const session = await auth()
@@ -19,7 +23,7 @@ export default async function SettingsPage() {
   // Every account reaches Settings now: email cadence is a personal preference,
   // so gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. User and server management stay admin-only.
-  const [me, users, mail, storedMail, llm] = await Promise.all([
+  const [me, users, mail, storedMail, llm, docs] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true },
@@ -30,6 +34,7 @@ export default async function SettingsPage() {
       ? prisma.mailSettings.findUnique({ where: { id: SETTINGS_ID } })
       : Promise.resolve(null),
     isAdmin ? loadLlmConfig() : Promise.resolve(null),
+    isAdmin ? Promise.all([loadDocumentSettings(), documentIndexStats(), loadModelStatus()]) : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -84,6 +89,7 @@ export default async function SettingsPage() {
           // The key itself is never sent — only whether one is stored.
           initial={{
             enabled: llm.enabled,
+            hidden: llm.hidden,
             baseUrl: llm.baseUrl ?? "",
             model: llm.model ?? "",
             temperature: llm.temperature?.toString() ?? "",
@@ -92,10 +98,25 @@ export default async function SettingsPage() {
             timeoutSeconds: llm.timeoutSeconds?.toString() ?? "",
             maxToolRounds: llm.maxToolRounds?.toString() ?? "",
             extraBody: llm.extraBody ? JSON.stringify(parseExtraBody(llm.extraBody), null, 2) : "",
+            documentsEnabled: llm.documentsEnabled,
+            healthDocumentsEnabled: llm.healthDocumentsEnabled,
           }}
+          indexingEnabled={docs?.[0].indexingEnabled ?? true}
           hasStoredKey={llm.hasStoredKey}
           keyUnreadable={llm.keyUnreadable}
           ready={isLlmReady(llm)}
+        />
+      )}
+
+      {isAdmin && docs && (
+        <DocumentSettings
+          initial={{
+            indexingEnabled: docs[0].indexingEnabled,
+            ocrEnabled: docs[0].ocrEnabled,
+            semanticEnabled: docs[0].semanticEnabled,
+          }}
+          stats={docs[1]}
+          models={docs[2]}
         />
       )}
 

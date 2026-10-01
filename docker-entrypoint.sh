@@ -3,10 +3,10 @@ set -e
 
 # /data is a bind mount on most NAS setups, so its ownership comes from the
 # host, not the image — fix it up on every start before dropping to nextjs.
-mkdir -p /data/uploads
+mkdir -p /data/uploads /data/models
 chown -R nextjs:nodejs /data
 
-su-exec nextjs npx prisma migrate deploy
-su-exec nextjs npx tsx prisma/seed.ts
+gosu nextjs npx prisma migrate deploy
+gosu nextjs npx tsx prisma/seed.ts
 
-exec su-exec nextjs node server.js
+exec gosu nextjs node server.js

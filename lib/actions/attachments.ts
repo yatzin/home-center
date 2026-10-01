@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { attachmentDir } from "@/lib/attachment-location"
 import { removeUploadDir } from "@/lib/upload-fs"
+import { searchIndex } from "@/lib/documents/indexer-server"
 
 export async function deleteAttachment(id: string) {
   const session = await auth()
@@ -18,6 +19,8 @@ export async function deleteAttachment(id: string) {
 
   const dir = attachmentDir(attachment)
   if (dir) await removeUploadDir(...dir, attachment.filename)
+  // Best effort: reconcile() removes anything left behind.
+  await searchIndex().then((index) => index.remove([id])).catch(() => {})
 
   revalidatePath("/records")
   revalidatePath("/warranties")
