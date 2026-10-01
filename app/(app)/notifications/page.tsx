@@ -2,11 +2,11 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
+import { dismissNotification, markAllNotificationsRead, restoreNotification } from "@/lib/actions/notifications"
 import { resolveNotificationHrefs } from "@/lib/notification-links"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Bell, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Bell, Eye, EyeOff, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const typeIcon: Record<string, React.ElementType> = {
@@ -18,15 +18,23 @@ const typeIcon: Record<string, React.ElementType> = {
   CUSTOM: Bell,
 }
 
-export default async function NotificationsPage() {
+export default async function NotificationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ hidden?: string }>
+}) {
   const session = await auth()
   if (!session) redirect("/login")
+  const showHidden = (await searchParams).hidden === "1"
 
-  const notifications = await prisma.notification.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  })
+  const [notifications, hiddenCount] = await Promise.all([
+    prisma.notification.findMany({
+      where: { userId: session.user.id, ...(showHidden ? {} : { dismissedAt: null }) },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.notification.count({ where: { userId: session.user.id, dismissedAt: { not: null } } }),
+  ])
 
   const unread = notifications.filter((n) => !n.isRead).length
   const hrefs = await resolveNotificationHrefs(notifications)
@@ -40,28 +48,41 @@ export default async function NotificationsPage() {
             {unread > 0 ? `${unread} unread` : "All caught up"}
           </p>
         </div>
-        {unread > 0 && (
-          <form action={markAllNotificationsRead}>
-            <Button variant="outline" size="sm" type="submit">Mark all read</Button>
-          </form>
-        )}
+        <div className="flex items-center gap-2">
+          {(hiddenCount > 0 || showHidden) && (
+            <Link
+              href={showHidden ? "/notifications" : "/notifications?hidden=1"}
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              {showHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showHidden ? "Hide dismissed" : `Show hidden (${hiddenCount})`}
+            </Link>
+          )}
+          {unread > 0 && (
+            <form action={markAllNotificationsRead}>
+              <Button variant="outline" size="sm" type="submit">Mark all read</Button>
+            </form>
+          )}
+        </div>
       </div>
 
       {notifications.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
           <Bell className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p className="font-medium">No notifications yet</p>
+          <p className="font-medium">{hiddenCount > 0 ? "Nothing new — dismissed notifications are hidden" : "No notifications yet"}</p>
         </div>
       ) : (
         <div className="space-y-2">
           {notifications.map((n) => {
             const Icon = typeIcon[n.type] ?? Bell
+            const dismissed = n.dismissedAt !== null
             return (
               <div
                 key={n.id}
                 className={cn(
                   "flex items-start gap-3 rounded-lg border p-4 transition-colors",
-                  !n.isRead && "bg-primary/5 border-primary/20"
+                  !n.isRead && "bg-primary/5 border-primary/20",
+                  dismissed && "border-dashed opacity-60"
                 )}
               >
                 <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
@@ -69,17 +90,16 @@ export default async function NotificationsPage() {
                   <div className="flex items-center gap-2">
                     <p className={cn("text-sm font-medium", !n.isRead && "text-foreground")}>{n.title}</p>
                     {!n.isRead && <Badge variant="secondary" className="h-4 px-1.5 text-xs">New</Badge>}
+                    {dismissed && <Badge variant="outline" className="h-4 px-1.5 text-xs">Dismissed</Badge>}
                   </div>
                   <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
                   <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                 </Link>
-                {!n.isRead && (
-                  <form action={markNotificationRead.bind(null, n.id)}>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" type="submit">
-                      Dismiss
-                    </Button>
-                  </form>
-                )}
+                <form action={(dismissed ? restoreNotification : dismissNotification).bind(null, n.id)}>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0" type="submit">
+                    {dismissed ? "Restore" : "Dismiss"}
+                  </Button>
+                </form>
               </div>
             )
           })}

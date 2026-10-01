@@ -8,6 +8,7 @@ import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { emailAddress } from "@/lib/email-address"
+import { checkPasswordChange, PASSWORD_ERROR_FIELD, PASSWORD_ERROR_TEXT } from "@/lib/password-change"
 
 async function requireAdmin() {
   const session = await auth()
@@ -90,6 +91,36 @@ export async function updateUserRole(id: string, role: string) {
 
   await prisma.user.update({ where: { id }, data: { role: parsed.data } })
   revalidatePath("/settings")
+  return { success: true }
+}
+
+/**
+ * The signed-in user changing their own password from Settings. Same rules as
+ * /change-password: the current password is required, and the version bump
+ * signs this account out everywhere — the caller then signs this browser out.
+ */
+export async function changeOwnPassword(input: { current: string; next: string; confirm: string }) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+  const account = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { mustResetPassword: true, passwordHash: true },
+  })
+  if (!account) redirect("/login")
+
+  const next = String(input.next ?? "")
+  const error = await checkPasswordChange(
+    { current: String(input.current ?? ""), next, confirm: String(input.confirm ?? "") },
+    account,
+    (password, hash) => bcrypt.compare(password, hash)
+  )
+  if (error) return { error: PASSWORD_ERROR_TEXT[error], field: PASSWORD_ERROR_FIELD[error] }
+
+  const passwordHash = await bcrypt.hash(next, 12)
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { passwordHash, mustResetPassword: false, sessionVersion: { increment: 1 } },
+  })
   return { success: true }
 }
 

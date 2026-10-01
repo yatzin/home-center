@@ -34,6 +34,8 @@ A self-hosted app for tracking your homes and vehicles — service history, warr
 <a href="docs/screenshots/12.EmailNotifications.png"><img src="docs/screenshots/12.EmailNotifications.png" width="32%" alt="Email notifications"></a>
 </p>
 
+<sub>Photos in the screenshots are from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, by various authors, under their individual licenses (mostly CC BY-SA).</sub>
+
 ## Requirements
 
 | Requirement | Why |

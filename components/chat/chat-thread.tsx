@@ -67,7 +67,7 @@ function Unavailable({ isAdmin, className }: { isAdmin: boolean; className?: str
       {isAdmin ? (
         <p>
           The assistant isn&apos;t set up yet.{" "}
-          <Link href="/settings" className="text-primary underline">
+          <Link href="/settings?tab=assistant" className="text-primary underline">
             Configure it in Settings
           </Link>
           .

@@ -2,7 +2,7 @@ import { auth, signOut } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { redirect } from "next/navigation"
 import bcrypt from "bcryptjs"
-import { checkPasswordChange, MIN_PASSWORD_LENGTH } from "@/lib/password-change"
+import { checkPasswordChange, MIN_PASSWORD_LENGTH, PASSWORD_ERROR_TEXT, type PasswordChangeError } from "@/lib/password-change"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -52,14 +52,7 @@ export default async function ChangePasswordPage({
   // password, so it isn't asked for again.
   const askCurrent = !session?.user?.mustResetPassword
 
-  const errorText =
-    error === "short"
-      ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
-      : error === "mismatch"
-        ? "Passwords do not match."
-        : error === "wrong-current"
-          ? "Your current password is not correct."
-          : null
+  const errorText = error && error in PASSWORD_ERROR_TEXT ? PASSWORD_ERROR_TEXT[error as PasswordChangeError] : null
 
   return (
     <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">

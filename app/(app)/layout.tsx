@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import { Coffee } from "lucide-react"
 import { auth } from "@/auth"
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
@@ -19,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const [notifications, llm] = await Promise.all([
     prisma.notification.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, dismissedAt: null },
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
@@ -55,8 +56,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               <main className="flex-1 overflow-y-auto p-6">{children}</main>
-              <footer className="shrink-0 border-t border-border/60 px-4 py-2 text-center text-xs text-muted-foreground">
-                HomeCenter &middot; v{packageJson.version}
+              {/* Name and version centred; the empty first column balances the coffee link on the right. */}
+              <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
+                <span />
+                <span>
+                  <a
+                    href="https://github.com/yatzin/home-center"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    HomeCenter
+                  </a>{" "}
+                  &middot; v{packageJson.version}
+                </span>
+                <a
+                  href="https://buymeacoffee.com/yatzin"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 justify-self-end whitespace-nowrap underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  <Coffee className="h-3 w-3" aria-hidden="true" />
+                  Buy me a coffee
+                </a>
               </footer>
             </div>
             {showAssistant && <ChatDock />}

@@ -2,6 +2,19 @@ export const MIN_PASSWORD_LENGTH = 12
 
 export type PasswordChangeError = "wrong-current" | "short" | "mismatch"
 
+export const PASSWORD_ERROR_TEXT: Record<PasswordChangeError, string> = {
+  "wrong-current": "Your current password is not correct.",
+  short: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+  mismatch: "Passwords do not match.",
+}
+
+/** Which field of the change-password form an error belongs to. */
+export const PASSWORD_ERROR_FIELD: Record<PasswordChangeError, "current" | "next" | "confirm"> = {
+  "wrong-current": "current",
+  short: "next",
+  mismatch: "confirm",
+}
+
 /**
  * Someone holding only a signed-in browser must not be able to set a new
  * password, so the current one is required — except on a forced reset, where

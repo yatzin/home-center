@@ -2,12 +2,12 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import { Bell, Wrench, ShieldCheck, Pill, Syringe, ShieldPlus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
-import { markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
+import { dismissNotification, markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
 import { cn } from "@/lib/utils"
 
 type NotificationItem = {
@@ -35,14 +35,27 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
 
-  useEffect(() => setItems(notifications), [notifications])
+  // A server refresh brings a new list; take it over the optimistic one.
+  const [source, setSource] = useState(notifications)
+  if (source !== notifications) {
+    setSource(notifications)
+    setItems(notifications)
+  }
 
   const unreadCount = items.filter((n) => !n.isRead).length
 
-  function dismiss(id: string) {
+  function markRead(id: string) {
     setItems((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
     startTransition(async () => {
       await markNotificationRead(id)
+      router.refresh()
+    })
+  }
+
+  function dismiss(id: string) {
+    setItems((prev) => prev.filter((n) => n.id !== id))
+    startTransition(async () => {
+      await dismissNotification(id)
       router.refresh()
     })
   }
@@ -57,7 +70,7 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
 
   function openItem(n: NotificationItem) {
     setOpen(false)
-    if (!n.isRead) dismiss(n.id)
+    if (!n.isRead) markRead(n.id)
   }
 
   return (

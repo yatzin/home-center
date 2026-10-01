@@ -63,7 +63,7 @@ function SemanticNote({ state, q }: { state: SemanticState; q: string }) {
           <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             Semantic search isn&apos;t ready. Turn it on and install a model under{" "}
-            <Link href="/settings" className="font-medium text-foreground underline-offset-4 hover:underline">Settings → Documents</Link>
+            <Link href="/settings?tab=documents" className="font-medium text-foreground underline-offset-4 hover:underline">Settings → Documents &amp; search</Link>
             , then let indexing finish.
           </span>
         </p>

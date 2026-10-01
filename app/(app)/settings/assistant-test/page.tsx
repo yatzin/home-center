@@ -19,7 +19,7 @@ export default async function AssistantTestPage() {
     <div className="max-w-4xl space-y-6">
       <div className="space-y-2">
         <Link
-          href="/settings"
+          href="/settings?tab=assistant"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -31,7 +31,7 @@ export default async function AssistantTestPage() {
       {!config.baseUrl ? (
         <p className="text-sm text-muted-foreground">
           No assistant server is set up yet.{" "}
-          <Link href="/settings" className="underline hover:text-foreground">
+          <Link href="/settings?tab=assistant" className="underline hover:text-foreground">
             Set one up in Settings
           </Link>{" "}
           before running tests.

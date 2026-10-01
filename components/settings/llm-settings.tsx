@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useForm } from "react-hook-form"
+import { useEffect, useState, useTransition } from "react"
+import { useForm, useWatch } from "react-hook-form"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
-import { testLlmConnection, updateLlmSettings } from "@/lib/actions/llm-settings"
+import { Check } from "lucide-react"
+import { testLlmConnection, updateLlmSettings, updateLlmSwitches, type LlmSwitches } from "@/lib/actions/llm-settings"
 import { DEFAULT_TIMEOUT_SECONDS, DEFAULT_TOOL_ROUNDS, TOOL_ROUNDS_RANGE, LLM_PRESETS } from "@/lib/llm/settings-schema"
 
 type Values = {
@@ -46,6 +47,39 @@ export function LlmSettings({
   const form = useForm<Values>({ defaultValues: { ...initial, apiKey: "" } })
   const [clearApiKey, setClearApiKey] = useState(false)
   const [testing, startTest] = useTransition()
+  const [switchPending, startSwitch] = useTransition()
+  const [switchStatus, setSwitchStatus] = useState<"idle" | "saved">("idle")
+  const [enabled, hidden, documentsEnabled, healthDocumentsEnabled] = useWatch({
+    control: form.control,
+    name: ["enabled", "hidden", "documentsEnabled", "healthDocumentsEnabled"],
+  })
+
+  useEffect(() => {
+    if (switchStatus !== "saved") return
+    const t = setTimeout(() => setSwitchStatus("idle"), 2000)
+    return () => clearTimeout(t)
+  }, [switchStatus])
+
+  /** Shows the change at once, saves it, and puts it back if the save is refused. */
+  function toggle(patch: Partial<LlmSwitches>) {
+    const keys = ["enabled", "hidden", "documentsEnabled", "healthDocumentsEnabled"] as const
+    const previous = Object.fromEntries(keys.map((k) => [k, form.getValues(k)])) as LlmSwitches
+    const apply = (v: Partial<LlmSwitches>) => {
+      for (const k of keys) if (v[k] !== undefined) form.setValue(k, v[k]!, { shouldDirty: false })
+    }
+    apply({ ...patch, ...(patch.enabled ? { hidden: false } : {}) })
+    setSwitchStatus("idle")
+    startSwitch(async () => {
+      const result = await updateLlmSwitches(patch)
+      if ("error" in result) {
+        apply(previous)
+        toast.error(result.error)
+        return
+      }
+      apply(result.values)
+      setSwitchStatus("saved")
+    })
+  }
 
   async function onSubmit(values: Values) {
     const result = await updateLlmSettings({ ...values, clearApiKey })
@@ -96,85 +130,54 @@ export function LlmSettings({
         )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="enabled" render={({ field }) => (
-              <FormItem className="flex items-center gap-2 space-y-0">
-                <FormControl>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-primary"
-                    checked={field.value}
-                    onChange={(e) => {
-                      field.onChange(e.target.checked)
-                      // Hidden only applies while off — mirror the server, which
-                      // clears it the moment the assistant is turned on.
-                      if (e.target.checked) form.setValue("hidden", false)
-                    }}
-                  />
-                </FormControl>
-                <FormLabel className="!mt-0">Turn on the assistant</FormLabel>
-              </FormItem>
-            )} />
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Switches</p>
+                <SaveStatus status={switchPending ? "saving" : switchStatus} />
+              </div>
+              <div className="space-y-3">
+                <SwitchRow
+                  label="Turn on the assistant"
+                  checked={enabled}
+                  disabled={switchPending}
+                  onChange={(v) => toggle({ enabled: v })}
+                />
+                <SwitchRow
+                  label="Hide the assistant from the nav menu and the top-right button"
+                  muted
+                  checked={hidden}
+                  disabled={switchPending || enabled}
+                  onChange={(v) => toggle({ hidden: v })}
+                />
+                <SwitchRow
+                  label="Let the assistant read uploaded documents"
+                  checked={documentsEnabled}
+                  disabled={switchPending || !indexingEnabled}
+                  onChange={(v) => toggle({ documentsEnabled: v })}
+                  hint={
+                    indexingEnabled
+                      ? "Document text is sent to the configured LLM server when it's relevant to a question."
+                      : "Turn on document indexing first (Settings → Documents & search)."
+                  }
+                />
+                <SwitchRow
+                  label="Include health record documents"
+                  muted
+                  checked={healthDocumentsEnabled}
+                  disabled={switchPending || !indexingEnabled || !documentsEnabled}
+                  onChange={(v) => toggle({ healthDocumentsEnabled: v })}
+                  hint="Files on anything that belongs to a person: their visits, reminders and warranties, plus conditions, observations, medications, allergies and immunizations. With a cloud provider, their text leaves this server."
+                />
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">These save as soon as you change them.</p>
+            </div>
 
-            <FormField control={form.control} name="hidden" render={({ field }) => (
-              <FormItem className="flex items-center gap-2 space-y-0">
-                <FormControl>
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-primary"
-                    checked={field.value}
-                    disabled={form.watch("enabled")}
-                    onChange={(e) => field.onChange(e.target.checked)}
-                  />
-                </FormControl>
-                <FormLabel className="!mt-0 font-normal text-muted-foreground">
-                  Hide the assistant from the nav menu and the top-right button
-                </FormLabel>
-              </FormItem>
-            )} />
-
-            <FormField control={form.control} name="documentsEnabled" render={({ field }) => (
-              <FormItem className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <FormControl>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={field.value}
-                      disabled={!indexingEnabled}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  </FormControl>
-                  <FormLabel className="!mt-0">Let the assistant read uploaded documents</FormLabel>
-                </div>
-                <FormDescription className="text-xs">
-                  {indexingEnabled
-                    ? "Document text is sent to the configured LLM server when it's relevant to a question."
-                    : "Turn on document indexing first (Documents, below)."}
-                </FormDescription>
-              </FormItem>
-            )} />
-
-            <FormField control={form.control} name="healthDocumentsEnabled" render={({ field }) => (
-              <FormItem className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <FormControl>
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-primary"
-                      checked={field.value}
-                      disabled={!indexingEnabled || !form.watch("documentsEnabled")}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  </FormControl>
-                  <FormLabel className="!mt-0 font-normal">Include health record documents</FormLabel>
-                </div>
-                <FormDescription className="text-xs">
-                  Files on anything that belongs to a person: their visits, reminders and warranties, plus conditions,
-                  observations, medications, allergies and immunizations. With a cloud provider, their text leaves this
-                  server.
-                </FormDescription>
-              </FormItem>
-            )} />
+            <div className="border-t pt-5">
+              <h3 className="font-heading text-base font-semibold">Advanced settings</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The server the assistant talks to and how it behaves. Changes here are saved with the Save button.
+              </p>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="baseUrl" render={({ field }) => (
@@ -300,7 +303,7 @@ export function LlmSettings({
             </div>
 
             <div className="flex items-center gap-2">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || switchPending}>
                 {form.formState.isSubmitting ? "Saving…" : "Save"}
               </Button>
               <Button type="button" variant="outline" disabled={testing} onClick={runTest}>
@@ -317,5 +320,48 @@ export function LlmSettings({
         </Form>
       </CardContent>
     </Card>
+  )
+}
+
+function SwitchRow({
+  label, checked, disabled, onChange, hint, muted,
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+  hint?: string
+  /** A secondary option under the one above it. */
+  muted?: boolean
+}) {
+  return (
+    <div className="space-y-1">
+      <label className={`flex items-center gap-2 text-sm ${muted ? "font-normal" : "font-medium"} ${disabled ? "opacity-60" : ""}`}>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-primary"
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className={muted ? "text-muted-foreground" : undefined}>{label}</span>
+      </label>
+      {hint && <p className="ml-6 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+function SaveStatus({ status }: { status: "idle" | "saving" | "saved" }) {
+  if (status === "idle") return null
+  return (
+    <span role="status" className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      {status === "saving" ? (
+        "Saving…"
+      ) : (
+        <>
+          <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Saved
+        </>
+      )}
+    </span>
   )
 }
