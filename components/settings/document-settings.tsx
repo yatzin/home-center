@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/document-settings"
 // Types only: embed/server reaches Prisma and must never be bundled for the browser.
 import type { ModelRow, ModelStatus } from "@/lib/documents/embed/server"
+import { modelRowState } from "@/lib/documents/embed/model-row"
 
 type Values = { indexingEnabled: boolean; ocrEnabled: boolean; semanticEnabled: boolean }
 
@@ -148,6 +149,7 @@ export function DocumentSettings({
           <div className="divide-y rounded-md border text-sm">
             {models.models.map((m) => {
               const isDownloading = models.download?.modelId === m.id
+              const state = modelRowState(m, isDownloading)
               const pct = isDownloading && models.download ? Math.floor((models.download.received / models.download.total) * 100) : 0
               return (
                 <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
@@ -158,11 +160,21 @@ export function DocumentSettings({
                     <div className="text-xs text-muted-foreground">{m.purpose}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {m.active ? (
-                      <Badge variant="secondary">In use</Badge>
-                    ) : isDownloading ? (
+                    {m.active && state !== "downloading" && <Badge variant="secondary">In use</Badge>}
+                    {state === "downloading" ? (
                       <span className="text-xs text-muted-foreground">Downloading… {pct}%</span>
-                    ) : m.installed ? (
+                    ) : state === "in-use-missing" ? (
+                      <>
+                        <span className="text-xs text-destructive">Files missing — searching by keywords only</span>
+                        <Button type="button" variant="outline" size="sm" disabled={pending || Boolean(models.download)} onClick={() => download(m)}>
+                        Download again
+                      </Button>
+                      </>
+                    ) : state === "builtin-missing" ? (
+                      <span className="text-xs text-destructive">
+                        Files missing{process.env.NODE_ENV === "development" ? " — run npm run models:fetch-builtin" : ""}
+                      </span>
+                    ) : state === "installed" ? (
                       <>
                         <Button type="button" variant="outline" size="sm" disabled={pending || !on} onClick={() => switchTo(m)}>
                           Use
@@ -173,11 +185,11 @@ export function DocumentSettings({
                           </Button>
                         )}
                       </>
-                    ) : (
+                    ) : state === "available" ? (
                       <Button type="button" variant="outline" size="sm" disabled={pending || Boolean(models.download)} onClick={() => download(m)}>
                         Download
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )
