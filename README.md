@@ -6,7 +6,7 @@
 
 Track homes, vehicles, equipment and family health in one place: service history, costs, warranties, reminders and every receipt, searchable in seconds.
 
-[Get started](#get-started) · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Updating](#updating)
+**[Install in 5 minutes](#get-started)** · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Updating](#updating)
 
 ![MIT licence](https://img.shields.io/badge/licence-MIT-blue) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![No cloud](https://img.shields.io/badge/cloud-none-success)
 
@@ -36,9 +36,9 @@ When was the furnace last serviced? Is the fridge still under warranty? What did
 
 Give each thing you own a page: photo, details, and every repair, warranty and reminder attached to it.
 
-- **Properties.** Houses, condos, cabins and land.
-- **Vehicles.** Service history that tracks mileage.
-- **Equipment.** Linked to the property it's in, with model and serial numbers.
+- **Properties:** houses, condos, cabins and land.
+- **Vehicles:** service history that tracks mileage.
+- **Equipment:** linked to the property it's in, with model and serial numbers.
 - **Download all files** for any asset as a zip.
 
 ![A house and its service records](docs/screenshots/3.House.png)
@@ -76,7 +76,7 @@ Keep each person's medical picture in one place, and print a clean summary for t
 - **Visits** linked to providers, with costs.
 - **Observation logs** to spot symptom patterns.
 - **Refill, vaccine and insurance** reminders.
-- Not needed? Turn the whole section off in **Settings → Features**.
+- If you don't need it, turn the whole section off in **Settings → Features**.
 
 ![A person's health record](docs/screenshots/13.Person.png)
 
@@ -91,9 +91,9 @@ Keep each person's medical picture in one place, and print a clean summary for t
 Every service record carries a cost. HomeCenter adds them up across the whole household.
 
 - **Monthly, quarterly or yearly** trends with a rolling average.
-- Top **assets, categories and vendors**.
+- Top assets, categories and vendors.
 - **Biggest expenses** and year-to-date totals.
-- Filter to **properties, vehicles, equipment or people**.
+- Filter to properties, vehicles, equipment or people.
 
 <p>
 <a href="docs/screenshots/17.Costs1.png"><img src="docs/screenshots/17.Costs1.png" width="49%" alt="Costs over time"></a>
@@ -107,7 +107,7 @@ One search box covers assets, records and the text of every file you've uploaded
 - **Reads** PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text files.
 - **OCR** for photos and scanned PDFs.
 - **Search by meaning**, using a small model that runs on your server.
-- Indexing and OCR run in the background, **on your server**.
+- Indexing and OCR run in the background, on your server.
 
 ![Global search results](docs/screenshots/20.Search.png)
 
@@ -115,10 +115,10 @@ One search box covers assets, records and the text of every file you've uploaded
 
 The assistant *(optional)* looks up your records and documents to answer plain-language questions, with links back to the source.
 
-- Works with **OpenAI, OpenRouter, Ollama, LM Studio** or any OpenAI-compatible server.
+- Works with OpenAI, OpenRouter, Ollama, LM Studio or any OpenAI-compatible server.
 - **Run it fully local** and nothing leaves your network.
-- You choose whether it may **read documents and health data**.
-- Chats stay in your browser and are **never stored on the server**.
+- You choose whether it may read documents and health data.
+- Chats stay in your browser and are never stored on the server.
 
 ![The assistant answering a spending question](docs/screenshots/21.Assistant.png)
 
@@ -141,9 +141,9 @@ Reminders arrive in the app and, if you like, by email. Reports turn an asset's 
 
 HomeCenter is one container and one data folder, and you own both.
 
-- **Self-hosted.** Runs on a Synology, Unraid or any Docker host. Updates never touch your data folder.
-- **On-device processing.** OCR and meaning search run inside the container. The only network call is an optional model download.
-- **You decide.** The AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest.
+- **Self-hosted:** runs on a Synology, Unraid or any Docker host. Updates never touch your data folder.
+- **On-device processing:** OCR and meaning search run inside the container. Their only network call is an optional model download.
+- **You decide:** the AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest.
 
 <sub>Photos in the screenshots are from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, by various authors, under their individual licenses (mostly CC BY-SA).</sub>
 

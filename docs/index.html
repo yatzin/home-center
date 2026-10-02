@@ -3,8 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HomeCenter — Your home's memory, on your own server</title>
-<meta name="description" content="HomeCenter is a self-hosted app for your home, vehicles, equipment and family health: service history, costs, warranties, reminders, documents and an optional AI assistant.">
+<title>Self-hosted home maintenance &amp; warranty tracker | HomeCenter</title>
+<meta name="description" content="Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.">
+<link rel="canonical" href="https://yatzin.github.io/home-center/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HomeCenter">
+<meta property="og:url" content="https://yatzin.github.io/home-center/">
+<meta property="og:title" content="HomeCenter: self-hosted home maintenance &amp; warranty tracker">
+<meta property="og:description" content="Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.">
+<meta property="og:image" content="https://yatzin.github.io/home-center/screenshots/1.Dashboard.png">
+<meta property="og:image:width" content="1919">
+<meta property="og:image:height" content="938">
+<meta property="og:image:alt" content="HomeCenter dashboard with properties, vehicles, reminders, expiring warranties and spending">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "HomeCenter",
+  "description": "Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.",
+  "url": "https://yatzin.github.io/home-center/",
+  "image": "https://yatzin.github.io/home-center/screenshots/1.Dashboard.png",
+  "applicationCategory": "LifestyleApplication",
+  "operatingSystem": "Linux, Docker",
+  "license": "https://github.com/yatzin/home-center/blob/main/LICENSE",
+  "sameAs": "https://github.com/yatzin/home-center",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
 <meta name="theme-color" content="#1b1b1b">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -361,7 +387,9 @@
   }
   @media (max-width: 680px) {
     .nav-links { display: none; }
-    .nav .btn { margin-left: auto; }
+    .nav .btn.primary { margin-left: auto; }
+    .nav .btn.gh { display: none; }
+    .nav .hide-sm { display: none; }
     .bento { grid-template-columns: 1fr; }
     .tile.wide { grid-column: auto; }
     .hero { padding-top: 64px; }
@@ -429,7 +457,8 @@
       <a href="#search">Search</a>
       <a href="#install">Install</a>
     </nav>
-    <a class="btn sm" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>GitHub</a>
+    <a class="btn sm primary" href="#install">Install<span class="hide-sm"> in 5 minutes</span></a>
+    <a class="btn sm gh" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>GitHub</a>
   </div>
 </header>
 
@@ -441,12 +470,12 @@
     <div class="wrap">
       <span class="pill reveal"><b>Self-hosted</b> Open source · MIT · Docker</span>
       <h1 class="reveal" style="--d:.08s">Your home's memory, <span class="grad">kept on your own server.</span></h1>
-      <p class="lead reveal" style="--d:.16s">Track homes, vehicles, equipment and family health in one calm place — service history, costs, warranties, reminders and every receipt, searchable in seconds.</p>
+      <p class="lead reveal" style="--d:.16s">Track homes, vehicles, equipment and family health in one place: service history, costs, warranties, reminders and every receipt, searchable in seconds.</p>
       <div class="cta reveal" style="--d:.24s">
         <a class="btn primary" href="#install">Install with Docker <svg class="icon"><use href="#i-arrow"/></svg></a>
         <a class="btn" href="#features">See every feature</a>
       </div>
-      <p class="hero-meta reveal" style="--d:.3s">No accounts. No cloud. No subscription.</p>
+      <p class="hero-meta reveal" style="--d:.3s">Free and open source. No cloud service, no subscription, and logins stay on your server.</p>
 
       <div class="stage reveal" style="--d:.36s">
         <div class="hero-shot" id="heroShot">
@@ -493,7 +522,7 @@
         <article class="tile reveal" style="--d:.06s">
           <h3><span class="badge"><svg class="icon"><use href="#i-heart"/></svg></span>Health <span class="opt">Optional</span></h3>
           <ul>
-            <li><svg class="icon"><use href="#i-users"/></svg><span><b>People</b> — conditions, medications, allergies, immunizations, visits</span></li>
+            <li><svg class="icon"><use href="#i-users"/></svg><span><b>People</b> with conditions, medications, allergies, immunizations and visits</span></li>
             <li><svg class="icon"><use href="#i-heart"/></svg><span><b>Observation logs</b> for symptoms and patterns</span></li>
             <li><svg class="icon"><use href="#i-steth"/></svg><span><b>Providers</b> with visit counts and spend</span></li>
             <li><svg class="icon"><use href="#i-shield-plus"/></svg><span><b>Insurance</b> policies, members and deductibles</span></li>
@@ -513,8 +542,8 @@
         <article class="tile wide reveal">
           <h3><span class="badge"><svg class="icon"><use href="#i-search"/></svg></span>Finding things</h3>
           <ul>
-            <li><svg class="icon"><use href="#i-search"/></svg><span><b>Global search</b> across assets, records and the text of every document — by keyword or by meaning</span></li>
-            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Document indexing</b> for PDF, Word, Excel, PowerPoint, OpenDocument, text, and photos or scans via OCR — all on your server</span></li>
+            <li><svg class="icon"><use href="#i-search"/></svg><span><b>Global search</b> across assets, records and the text of every document, by keyword or by meaning</span></li>
+            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Document indexing</b> for PDF, Word, Excel, PowerPoint, OpenDocument, text, and photos or scans via OCR, all on your server</span></li>
             <li><svg class="icon"><use href="#i-sparkles"/></svg><span><b>AI assistant</b> that answers questions about your data, using OpenAI, OpenRouter, or a local model in Ollama or LM Studio</span></li>
           </ul>
         </article>
@@ -530,7 +559,7 @@
         <article class="tile reveal">
           <h3><span class="badge"><svg class="icon"><use href="#i-clip"/></svg></span>Records &amp; export</h3>
           <ul>
-            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Attachments</b> — receipts, manuals and photos on any record</span></li>
+            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Attachments</b> for receipts, manuals and photos on any record</span></li>
             <li><svg class="icon"><use href="#i-printer"/></svg><span><b>Printable reports</b> and medical summaries, ready for PDF</span></li>
             <li><svg class="icon"><use href="#i-download"/></svg><span><b>One-click zip</b> of an asset's data and files</span></li>
           </ul>
@@ -539,7 +568,7 @@
         <article class="tile wide reveal" style="--d:.06s">
           <h3><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span>Accounts &amp; security</h3>
           <ul>
-            <li><svg class="icon"><use href="#i-lock"/></svg><span><b>Local login</b> — no third-party account, data stays on your hardware</span></li>
+            <li><svg class="icon"><use href="#i-lock"/></svg><span><b>Local login</b> with no third-party account; data stays on your hardware</span></li>
             <li><svg class="icon"><use href="#i-users"/></svg><span><b>Multiple users</b> with admin and standard roles</span></li>
             <li><svg class="icon"><use href="#i-shield-alert"/></svg><span><b>Sign-in throttling</b> per account and per address; secrets encrypted at rest</span></li>
             <li><svg class="icon"><use href="#i-sun"/></svg><span><b>Light and dark themes</b>, and optional sections you can switch off</span></li>
@@ -557,7 +586,7 @@
         <h2>Every house, car and appliance, with its whole history</h2>
         <p>Give each thing you own a page: photo, details, and every repair, warranty and reminder attached to it.</p>
         <ul class="checks">
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Properties</b> — houses, condos, cabins, land</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Properties</b>: houses, condos, cabins and land</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Vehicles</b> with mileage-aware service history</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Equipment</b> linked to the property it lives in</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Download all files</b> for any asset as a zip</span></li>
@@ -591,7 +620,7 @@
         <p>Set a reminder once by days or miles. HomeCenter works out the next due date and tells you in time.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Date or mileage</b> intervals, with your own lead time</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Warranty status</b> — active, expiring, expired</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Warranty status</b> at a glance: active, expiring or expired</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Overviews</b> across every asset, sortable and filterable</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Service records</b> log a completion and roll the reminder forward</span></li>
         </ul>
@@ -621,13 +650,13 @@
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-heart"/></svg>Health · optional</span>
         <h2>Your family's health records, close at hand</h2>
-        <p>Keep each person's medical picture in one place — and print a clean summary for the next appointment.</p>
+        <p>Keep each person's medical picture in one place, and print a clean summary for the next appointment.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Conditions, medications, allergies</b> and immunizations</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Visits</b> linked to providers, with costs</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Observation logs</b> to spot symptom patterns</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Refill, vaccine and insurance</b> reminders</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>Not needed? <b>Turn the whole section off</b> in Settings</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Turn the whole section off</b> in Settings if you don't need it</span></li>
         </ul>
       </div>
       <div class="gallery reveal" style="--d:.1s">
@@ -652,7 +681,7 @@
     <div class="wrap spot flip">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-chart"/></svg>Costs</span>
-        <h2>See where the money actually goes</h2>
+        <h2>See where the money goes</h2>
         <p>Every service record carries a cost. HomeCenter adds them up across your whole household.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Monthly, quarterly or yearly</b> trends with a rolling average</span></li>
@@ -679,13 +708,13 @@
     <div class="wrap spot">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-search"/></svg>Search &amp; documents</span>
-        <h2>Find anything — even inside the manual</h2>
+        <h2>Find anything, even inside the manual</h2>
         <p>One search box covers assets, records and the text of every file you've uploaded. Ask in your own words; it finds what you meant.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Reads</b> PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>OCR</b> for photos and scanned PDFs</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Search by meaning</b> with a small model that runs on your server</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>Indexing happens in the background — <b>nothing leaves the box</b></span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Indexing happens in the background, <b>on your server</b></span></li>
         </ul>
       </div>
       <div class="reveal" style="--d:.1s">
@@ -711,9 +740,9 @@
         <p>The assistant looks up your records and documents to answer plain-language questions, with links back to the source.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span>Works with <b>OpenAI, OpenRouter, Ollama, LM Studio</b> or any OpenAI-compatible server</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Run it fully local</b> for total privacy</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Run it fully local</b> and nothing leaves your network</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span>You choose whether it may <b>read documents and health data</b></span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>Chats stay in your browser — <b>never stored on the server</b></span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Chats stay in your browser and are <b>never stored on the server</b></span></li>
         </ul>
       </div>
       <div class="reveal" style="--d:.1s">
@@ -722,7 +751,7 @@
             <span class="label">Assistant</span>
             <div class="bubble me">What did we spend on the truck last year?</div>
             <div class="bubble ai" data-typing><span class="dots"><i></i><i></i><i></i></span></div>
-            <div class="bubble ai" data-answer><b>$2,184</b> across 7 service records — mostly the <b>brake pads &amp; rotors</b> ($640) and two oil changes. The next oil change is <b>4 days overdue</b>.</div>
+            <div class="bubble ai" data-answer><b>$2,184</b> across 7 service records, mostly the <b>brake pads &amp; rotors</b> ($640) and two oil changes. The next oil change is <b>4 days overdue</b>.</div>
           </div>
         </div></div>
       </div>
@@ -734,10 +763,10 @@
     <div class="wrap spot">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-bell"/></svg>Reminders &amp; reports</span>
-        <h2>A nudge when it matters, a report when you need it</h2>
+        <h2>Email reminders and printable reports</h2>
         <p>Reminders land in the app and, if you like, your inbox. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.</p>
         <ul class="checks">
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Email digests</b> — as soon as possible, daily or weekly, per person</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Email digests</b> per person: as soon as possible, daily or weekly</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Mail server set up in Settings</b>, with a test button</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Dismiss and restore</b> notifications</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Printable asset reports</b> and medical summaries</span></li>
@@ -772,8 +801,8 @@
           <p>Runs on a Synology, Unraid, a Raspberry Pi-class box or any Docker host. Updates never touch your data folder.</p>
         </div>
         <div class="tile reveal" style="--d:.08s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-cpu"/></svg></span>On-device smarts</h3>
-          <p>OCR and meaning search run inside the container. The only network call is an optional model download.</p>
+          <h3><span class="badge"><svg class="icon"><use href="#i-cpu"/></svg></span>On-device processing</h3>
+          <p>OCR and meaning search run inside the container. Their only network call is an optional model download.</p>
         </div>
         <div class="tile reveal" style="--d:.16s">
           <h3><span class="badge"><svg class="icon"><use href="#i-toggle"/></svg></span>You decide</h3>
@@ -788,10 +817,10 @@
     <div class="wrap install">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-server"/></svg>Install</span>
-        <h2>Up and running in about five minutes</h2>
+        <h2>Set up in about five minutes</h2>
         <ol class="steps">
           <li><b>Make a data folder</b> on your server, e.g. <code>/volume1/docker/homecenter</code>.</li>
-          <li><b>Save the compose file</b> and set <code>AUTH_SECRET</code> — <code>openssl rand -base64 32</code>.</li>
+          <li><b>Save the compose file</b> and set <code>AUTH_SECRET</code> with <code>openssl rand -base64 32</code>.</li>
           <li><b>Start it</b> with <code>docker compose up -d</code>, or deploy as a Portainer stack.</li>
           <li><b>Sign in</b> at <code>http://&lt;server&gt;:3000</code>. The database and admin account are created on first boot.</li>
         </ol>
@@ -820,8 +849,8 @@
   <section class="closing">
     <div class="glow a" style="top:0;opacity:.3"></div>
     <div class="wrap reveal">
-      <h2>Stop digging for the receipt. <span class="grad">Start knowing.</span></h2>
-      <p>Free and open source under the MIT licence.</p>
+      <h2>Install it in <span class="grad">about five minutes.</span></h2>
+      <p>Free and open source under the MIT licence. One container, one data folder, on your own server.</p>
       <div class="cta">
         <a class="btn primary" href="#install">Install HomeCenter <svg class="icon"><use href="#i-arrow"/></svg></a>
         <a class="btn" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>Star on GitHub</a>
