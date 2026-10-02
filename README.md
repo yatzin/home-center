@@ -4,7 +4,7 @@
 
 **Your home's memory, kept on your own server.**
 
-Track homes, vehicles, equipment and family health in one calm place: service history, costs, warranties, reminders and every receipt, searchable in seconds.
+Track homes, vehicles, equipment and family health in one place: service history, costs, warranties, reminders and every receipt, searchable in seconds.
 
 [Get started](#get-started) · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Updating](#updating)
 
@@ -86,7 +86,7 @@ Keep each person's medical picture in one place, and print a clean summary for t
 <a href="docs/screenshots/16.MedicalSummary.png"><img src="docs/screenshots/16.MedicalSummary.png" width="32%" alt="Medical summary"></a>
 </p>
 
-### See where the money actually goes
+### See where the money goes
 
 Every service record carries a cost. HomeCenter adds them up across the whole household.
 
@@ -107,7 +107,7 @@ One search box covers assets, records and the text of every file you've uploaded
 - **Reads** PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text files.
 - **OCR** for photos and scanned PDFs.
 - **Search by meaning**, using a small model that runs on your server.
-- Indexing runs in the background, and **document text never leaves your server**.
+- Indexing and OCR run in the background, **on your server**.
 
 ![Global search results](docs/screenshots/20.Search.png)
 
@@ -116,13 +116,13 @@ One search box covers assets, records and the text of every file you've uploaded
 The assistant *(optional)* looks up your records and documents to answer plain-language questions, with links back to the source.
 
 - Works with **OpenAI, OpenRouter, Ollama, LM Studio** or any OpenAI-compatible server.
-- **Run it fully local** for total privacy.
+- **Run it fully local** and nothing leaves your network.
 - You choose whether it may **read documents and health data**.
 - Chats stay in your browser and are **never stored on the server**.
 
 ![The assistant answering a spending question](docs/screenshots/21.Assistant.png)
 
-### A nudge when it matters, a report when you need it
+### Reminders and reports
 
 Reminders arrive in the app and, if you like, by email. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.
 
@@ -149,7 +149,7 @@ HomeCenter is one container and one data folder, and you own both.
 
 ## Get started
 
-Up and running in about five minutes. All you need:
+Setup takes about five minutes. You need:
 
 | Requirement | Why |
 |---|---|
@@ -201,10 +201,10 @@ Update the volume path to the folder you created in step 1.
 | Variable | Required? | What to put |
 |---|---|---|
 | `AUTH_SECRET` | **Yes** | A random secret: `openssl rand -base64 32`. Without it, logins won't work. |
-| `AUTH_URL` | No | The address you'll browse to, e.g. `http://192.168.1.50:3000`. Leave blank — it's auto-detected. |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login. Leave as-is and use `admin@localhost` / `changeme` instead (you'll be forced to change it on first login).  Once the app has your password, this field is ignored in the future. |
+| `AUTH_URL` | No | The address you'll browse to, e.g. `http://192.168.1.50:3000`. Leave blank to auto-detect it. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login, used once on first boot to create the admin account and ignored after that. If you remove `ADMIN_PASSWORD`, the password is `changeme` and you must change it on first login. Without `ADMIN_EMAIL`, the email is `admin@localhost`. |
 | `NOTIFY_INTERVAL_MINUTES` | No | How often to check for due maintenance and expiring warranties. Defaults to `360` (6 hours). Set `0` to turn reminders off. |
-| `SMTP_HOST` | No | Your mail server, e.g. `smtp.gmail.com`. **Leave blank and no email is ever sent** — the in-app bell still works. |
+| `SMTP_HOST` | No | Your mail server, e.g. `smtp.gmail.com`. **Leave blank and no email is ever sent.** The in-app bell still works. |
 
 Everything else can stay at its default. Uploads (`/data/uploads`) and downloaded models (`/data/models`) are kept in the data folder automatically.
 
@@ -257,7 +257,7 @@ than failing silently, and Settings prompts you to enter the password again.
 Each user picks their own cadence under **Settings → Notifications**: off,
 as soon as possible, daily, or weekly. New accounts default to daily.
 
-Two caveats worth knowing:
+Two caveats:
 
 - Delivery is driven by the same timer as the reminder check, so a digest goes
   out on the first pass **at or after** `DIGEST_HOUR`, not exactly at it. With
@@ -285,23 +285,23 @@ dismissed".
 Sign in as an admin and go to **Settings → Assistant**. Pick a provider (OpenAI,
 Ollama, LM Studio, OpenRouter or any OpenAI-compatible server), enter the model
 name and, if the provider needs one, an API key (stored encrypted). Use **Test
-connection** to confirm the model supports tool calling — the assistant needs it.
+connection** to confirm the model supports tool calling, which the assistant needs.
 
-Questions, and the records needed to answer them, are sent to that server —
+Questions, and the records needed to answer them, are sent to that server,
 including health records. Point it at a local model if that matters to you. When
 HomeCenter runs in Docker, `localhost` means the container: use the host's
 address (e.g. `http://host.docker.internal:11434/v1`) for a model running on the
 host.
 
-For Ollama, raise the context length — the default is too short for the tool
+For Ollama, raise the context length. The default is too short for the tool
 definitions and results, so answers get cut off or ignore the data. Set
 `OLLAMA_CONTEXT_LENGTH=16384` (or more) on the Ollama server. Models of 7B
 parameters or larger are recommended; small models often call the tools wrongly
 or not at all.
 
-Slow local models: **Time limit per question** (default 180 seconds) caps the
-whole answer, including waiting for the model to load or read the prompt —
-raise it if answers time out. Once a reply starts streaming, it also stops if
+For slow local models, **Time limit per question** (default 180 seconds) caps the
+whole answer, including waiting for the model to load or read the prompt.
+Raise it if answers time out. Once a reply starts streaming, it also stops if
 the server then sends nothing for 60 seconds. **Extra request JSON** passes
 server-specific options with every request, e.g.
 `{"chat_template_kwargs": {"enable_thinking": true}}` to turn on a model's
@@ -312,17 +312,17 @@ Chats stay in your browser tab and are never stored on the server.
 
 ### Document search (optional)
 
-HomeCenter reads the text of uploaded files in the background — PDF, Word
+HomeCenter reads the text of uploaded files in the background (PDF, Word
 (.doc/.docx), OpenDocument, PowerPoint, Excel, RTF, text/CSV, and photos or
-scanned PDFs via OCR — and indexes it so the assistant can search it. It runs
+scanned PDFs via OCR) and indexes it so the assistant can search it. It runs
 entirely inside the container; nothing is sent anywhere until the assistant
 uses a passage to answer a question.
 
 **Settings → Documents & search** turns indexing and OCR on or off and shows progress.
 **Settings → Assistant** decides whether the assistant may read documents at
-all, and separately whether it may read health documents — files on anything
-that belongs to a person, such as their visits, reminders and medications (off
-by default).
+all, and separately whether it may read health documents (files on anything
+that belongs to a person, such as their visits, reminders and medications). That one is off
+by default.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -335,7 +335,7 @@ Not indexed: iWork files, .zip, legacy .xls/.ppt and HEIC photos.
 
 Besides exact words, HomeCenter can find passages by meaning ("how often do I
 swap the furnace filter?" finds "replace every 90 days"). A small AI model runs
-**on your server** — no document text leaves it for this. The model loads only
+**on your server**, so no document text leaves it for this. The model loads only
 while documents are being indexed or searched, and unloads when idle.
 
 **Settings → Documents & search → Find documents by meaning** turns it on or off and
@@ -361,7 +361,7 @@ Switching models re-processes your documents in the background.
 
 ## Updating
 
-Pull the new image and recreate the container — your data folder is untouched:
+Pull the new image and recreate the container. Your data folder is untouched:
 
 ```bash
 docker compose pull && docker compose up -d
@@ -396,4 +396,4 @@ Images are built and published automatically by `.github/workflows/docker-publis
 
 ---
 
-<p align="center"><b>Stop digging for the receipt. Start knowing.</b><br>Free and open source under the MIT licence.</p>
+<p align="center">Free and open source under the MIT licence.</p>
