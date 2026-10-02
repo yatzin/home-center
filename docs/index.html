@@ -31,6 +31,62 @@
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does it need an internet connection?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What does the AI assistant send, and where?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Your question and the records needed to answer it go to the AI provider you configure, including health records if you allow it. Point it at Ollama or LM Studio on your own network and nothing leaves. The assistant is off until an admin sets it up, and chats are never stored on the server."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I back it up?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Back up the data folder. It holds the database, uploaded files and downloaded models. Copy it while the container is stopped, or use your NAS's snapshots. Keep your AUTH_SECRET as well, because the saved mail password and API key can't be decrypted without it."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Will it run on my NAS?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Images are built for amd64 and arm64, so it runs on Synology, Unraid and other Docker hosts, including 64-bit ARM boards such as a Raspberry Pi."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can everyone in the house have their own login?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is health data protected?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely."
+      }
+    }
+  ]
+}
+</script>
 <meta name="theme-color" content="#1b1b1b">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -112,6 +168,7 @@
   .btn.primary { background: var(--primary); border-color: transparent; color: #fff; box-shadow: 0 10px 30px -10px rgba(29,78,216,.9); }
   .btn.primary:hover { background: #2457e6; box-shadow: 0 14px 34px -10px rgba(29,78,216,1); }
   .btn.sm { padding: 8px 14px; font-size: 14px; }
+  .nav .btn.primary { gap: .28em; }
 
   /* ── Hero ────────────────────────────────────────── */
   .hero { position: relative; padding: 96px 0 40px; text-align: center; isolation: isolate; }
@@ -142,7 +199,7 @@
     font-size: 13px; color: var(--muted);
   }
   .pill b { padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: #a9c0ff; font-weight: 600; font-size: 12px; }
-  .hero h1 { margin: 22px auto 0; max-width: 860px; font-size: clamp(38px, 6.2vw, 68px); font-weight: 600; }
+  .hero h1 { margin: 22px auto 0; max-width: 940px; font-size: clamp(34px, 5.4vw, 60px); font-weight: 600; }
   .grad {
     background: linear-gradient(100deg, #fff 10%, #a9c0ff 45%, #4f7cff 70%, #fff 95%);
     background-size: 220% 100%;
@@ -324,6 +381,56 @@
   .copybtn { position: absolute; top: 4px; right: 8px; padding: 5px 10px; font: 600 12px/1 var(--font-sans); color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--border-strong); border-radius: 7px; cursor: pointer; transition: color .2s, background .2s; }
   .copybtn:hover { color: var(--fg); background: rgba(255,255,255,.1); }
 
+  /* Demos */
+  .demos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 52px; }
+  .demo-card {
+    display: grid; gap: 14px; padding: 0 0 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+    transition: border-color .35s var(--ease), transform .35s var(--ease), box-shadow .35s var(--ease);
+  }
+  .demo-card:hover { border-color: var(--border-strong); transform: translateY(-3px); box-shadow: 0 24px 50px -24px rgba(0,0,0,.9), 0 0 60px -30px rgba(29,78,216,.6); }
+  .demo-card:focus-visible { outline: 2px solid var(--primary-bright); outline-offset: 3px; }
+  .demo-thumb { position: relative; aspect-ratio: 1056 / 800; overflow: hidden; border-bottom: 1px solid var(--border); background: var(--bg-2); }
+  .demo-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease), filter .5s; filter: brightness(.82) saturate(.95); }
+  .demo-card:hover .demo-thumb img { transform: scale(1.04); filter: brightness(.95); }
+  .demo-play {
+    position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+    display: grid; place-items: center; color: #fff; background: rgba(29,78,216,.88); border: 2px solid rgba(255,255,255,.85);
+    box-shadow: 0 10px 30px -8px rgba(29,78,216,.9); transition: transform .35s var(--ease);
+  }
+  .demo-play .icon { width: 22px; height: 22px; margin-left: 3px; }
+  .demo-card:hover .demo-play { transform: scale(1.1); }
+  .demo-dur { position: absolute; right: 10px; bottom: 10px; padding: 3px 8px; border-radius: 6px; font: 600 12px/1 var(--font-sans); font-variant-numeric: tabular-nums; color: #fff; background: rgba(0,0,0,.66); }
+  .demo-card h3 { padding: 0 18px; font-size: 17px; font-weight: 600; }
+  .demo-card p { padding: 0 18px; margin-top: -8px; color: var(--muted); font-size: 14.5px; line-height: 1.5; }
+
+  dialog.player {
+    padding: 0; border: 0; background: transparent; color: var(--fg);
+    width: 100vw; height: 100vh; max-width: none; max-height: none; display: none; place-items: center; overflow: hidden;
+  }
+  dialog.player[open] { display: grid; }
+  dialog.player::backdrop { background: rgba(8,8,8,.9); backdrop-filter: blur(6px); }
+  .pl-stage { display: grid; justify-items: center; gap: 14px; width: min(1100px, calc(100vw - 160px)); }
+  .pl-stage video { width: 100%; max-height: 78vh; border-radius: 12px; background: #000; border: 1px solid var(--border-strong); box-shadow: 0 40px 120px -20px #000; }
+  .pl-cap { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; justify-content: center; text-align: center; color: var(--muted); font-size: 14px; }
+  .pl-cap b { color: var(--fg); font-family: var(--font-head); font-weight: 600; font-size: 16px; }
+  .pl-cap span:last-child { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+  /* FAQ */
+  .faq { max-width: 820px; margin: 48px auto 0; display: grid; gap: 10px; }
+  .faq details { border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.025); transition: border-color .25s; }
+  .faq details[open] { border-color: var(--border-strong); }
+  .faq summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; font: 600 16px/1.4 var(--font-head); }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; flex: none; font: 400 22px/1 var(--font-sans); color: var(--faint); transition: transform .25s var(--ease); }
+  .faq details[open] summary::after { transform: rotate(45deg); }
+  .faq summary:focus-visible { outline: 2px solid var(--primary-bright); outline-offset: 2px; border-radius: 12px; }
+  .faq details p { padding: 0 20px 18px; color: var(--muted); font-size: 15.5px; }
+  .faq code { font-family: var(--font-mono); font-size: 13px; padding: 2px 6px; border-radius: 5px; background: rgba(255,255,255,.06); color: var(--fg); }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .badges img { height: 20px; width: auto; }
+
   /* Closing CTA */
   .closing { text-align: center; padding: 110px 0 120px; }
   .closing h2 { font-size: clamp(30px, 4.4vw, 48px); font-weight: 600; max-width: 760px; margin-inline: auto; }
@@ -368,6 +475,7 @@
   .lb-next:hover { transform: translateY(-50%) translateX(2px); }
   .lb-close { top: 20px; right: 24px; width: 42px; height: 42px; }
   @media (max-width: 680px) {
+    .pl-stage { width: calc(100vw - 24px); }
     .lb-stage { max-width: calc(100vw - 24px); }
     .lb-prev, .lb-next { top: auto; bottom: 20px; transform: none; }
     .lb-prev:hover, .lb-next:hover { transform: none; }
@@ -378,6 +486,7 @@
 
   /* ── Responsive ──────────────────────────────────── */
   @media (max-width: 980px) {
+    .demos { grid-template-columns: 1fr 1fr; }
     .bento { grid-template-columns: 1fr 1fr; }
     .tile.wide { grid-column: span 2; }
     .spot, .spot.flip, .install { grid-template-columns: 1fr; gap: 36px; }
@@ -385,12 +494,17 @@
     .trio { grid-template-columns: 1fr; }
     .block { padding: 88px 0; }
   }
-  @media (max-width: 680px) {
+  @media (max-width: 1080px) {
+    .nav .btn.gh { display: none; }
+  }
+  @media (max-width: 900px) {
     .nav-links { display: none; }
     .nav .btn.primary { margin-left: auto; }
-    .nav .btn.gh { display: none; }
+  }
+  @media (max-width: 680px) {
     .nav .hide-sm { display: none; }
     .bento { grid-template-columns: 1fr; }
+    .demos { grid-template-columns: 1fr; }
     .tile.wide { grid-column: auto; }
     .hero { padding-top: 64px; }
     .stage { margin-top: 44px; }
@@ -442,6 +556,7 @@
   <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
   <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
 </svg>
@@ -450,14 +565,16 @@
   <div class="wrap">
     <a class="brand" href="#top"><span class="logo">HC</span>HomeCenter</a>
     <nav class="nav-links" aria-label="Sections">
+      <a href="#demos">Demos</a>
       <a href="#features">Features</a>
       <a href="#home">Home</a>
       <a href="#health">Health</a>
       <a href="#costs">Costs</a>
       <a href="#search">Search</a>
       <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
     </nav>
-    <a class="btn sm primary" href="#install">Install<span class="hide-sm"> in 5 minutes</span></a>
+    <a class="btn sm primary" href="#install">Install<span class="hide-sm">in 5 minutes</span></a>
     <a class="btn sm gh" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>GitHub</a>
   </div>
 </header>
@@ -469,11 +586,11 @@
     <div class="glow a"></div><div class="glow b"></div>
     <div class="wrap">
       <span class="pill reveal"><b>Self-hosted</b> Open source · MIT · Docker</span>
-      <h1 class="reveal" style="--d:.08s">Your home's memory, <span class="grad">kept on your own server.</span></h1>
-      <p class="lead reveal" style="--d:.16s">Track homes, vehicles, equipment and family health in one place: service history, costs, warranties, reminders and every receipt, searchable in seconds.</p>
+      <h1 class="reveal" style="--d:.08s">Every repair, warranty and receipt for your home, cars and family, <span class="grad">on your own server.</span></h1>
+      <p class="lead reveal" style="--d:.16s">Service history, costs and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, and it all runs in one Docker container.</p>
       <div class="cta reveal" style="--d:.24s">
         <a class="btn primary" href="#install">Install with Docker <svg class="icon"><use href="#i-arrow"/></svg></a>
-        <a class="btn" href="#features">See every feature</a>
+        <a class="btn" href="#demos"><svg class="icon"><use href="#i-play"/></svg>Watch the demos</a>
       </div>
       <p class="hero-meta reveal" style="--d:.3s">Free and open source. No cloud service, no subscription, and logins stay on your server.</p>
 
@@ -498,6 +615,49 @@
       </ul>
     </div>
   </div>
+
+  <!-- ── Demos ──────────────────────────────────────── -->
+  <section class="block" id="demos">
+    <div class="wrap">
+      <div class="head center reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-play"/></svg>See it in action</span>
+        <h2>Six short walkthroughs</h2>
+        <p>Recorded on the demo data. Every page is reached by a click, so you can follow along.</p>
+      </div>
+      <div class="demos">
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/tour.mp4" data-title="A quick tour" data-desc="A house, a truck and a person, tab by tab" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/tour.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">1:03</span></span>
+          <h3>A quick tour</h3>
+          <p>A house, a truck and a person, tab by tab</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/ask-ai-warranty.mp4" data-title="Ask the assistant" data-desc="From a question to the warranty PDF that answers it" style="--d:0.06s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/ask-ai-warranty.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:38</span></span>
+          <h3>Ask the assistant</h3>
+          <p>From a question to the warranty PDF that answers it</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/reminder-to-done.mp4" data-title="Reminder to done" data-desc="An overdue filter change, completed, next date set" style="--d:0.12s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/reminder-to-done.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:32</span></span>
+          <h3>Reminder to done</h3>
+          <p>An overdue filter change, completed, next date set</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/costs-to-receipt.mp4" data-title="Costs to receipt" data-desc="From the spending chart to the $2,340 invoice" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/costs-to-receipt.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:33</span></span>
+          <h3>Costs to receipt</h3>
+          <p>From the spending chart to the $2,340 invoice</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/search-documents.mp4" data-title="Search your paperwork" data-desc="“roof” finds the 30-year shingle warranty" style="--d:0.06s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/search-documents.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:27</span></span>
+          <h3>Search your paperwork</h3>
+          <p>“roof” finds the 30-year shingle warranty</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/health-summary.mp4" data-title="Health summary" data-desc="Medications, shots and a printable summary" style="--d:0.12s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/health-summary.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:32</span></span>
+          <h3>Health summary</h3>
+          <p>Medications, shots and a printable summary</p>
+        </button>
+      </div>
+    </div>
+  </section>
 
   <!-- ── Feature overview ─────────────────────────── -->
   <section class="block" id="features">
@@ -845,6 +1005,24 @@
     </div>
   </section>
 
+  <!-- ── FAQ ──────────────────────────────────────── -->
+  <section class="block" id="faq" style="padding-top:40px">
+    <div class="wrap">
+      <div class="head center reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>FAQ</span>
+        <h2>Questions before you install</h2>
+      </div>
+      <div class="faq">
+        <details class="reveal"><summary>Does it need an internet connection?</summary><p>No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model.</p></details>
+        <details class="reveal"><summary>What does the AI assistant send, and where?</summary><p>Your question and the records needed to answer it go to the AI provider you configure, including health records if you allow it. Point it at Ollama or LM Studio on your own network and nothing leaves. The assistant is off until an admin sets it up, and chats are never stored on the server.</p></details>
+        <details class="reveal"><summary>How do I back it up?</summary><p>Back up the data folder. It holds the database, uploaded files and downloaded models. Copy it while the container is stopped, or use your NAS's snapshots. Keep your <code>AUTH_SECRET</code> as well, because the saved mail password and API key can't be decrypted without it.</p></details>
+        <details class="reveal"><summary>Will it run on my NAS?</summary><p>Images are built for amd64 and arm64, so it runs on Synology, Unraid and other Docker hosts, including 64-bit ARM boards such as a Raspberry Pi.</p></details>
+        <details class="reveal"><summary>Can everyone in the house have their own login?</summary><p>Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders.</p></details>
+        <details class="reveal"><summary>How is health data protected?</summary><p>It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely.</p></details>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Closing ──────────────────────────────────── -->
   <section class="closing">
     <div class="glow a" style="top:0;opacity:.3"></div>
@@ -863,9 +1041,23 @@
   <div class="wrap">
     <span class="brand" style="font-size:15px"><span class="logo" style="width:26px;height:26px;font-size:10px">HC</span>HomeCenter</span>
     <span>MIT licence · Photos in screenshots from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, under their individual licences.</span>
+    <span class="badges">
+      <a href="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml"><img src="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg" alt="Docker image build status" loading="lazy"></a>
+      <a href="https://github.com/yatzin/home-center/commits/main"><img src="https://img.shields.io/github/last-commit/yatzin/home-center" alt="Last commit" loading="lazy"></a>
+    </span>
     <a href="https://github.com/yatzin/home-center">github.com/yatzin/home-center</a>
   </div>
 </footer>
+
+<dialog class="player" id="player" aria-label="Demo video">
+  <div class="pl-stage">
+    <video playsinline muted controls preload="none"></video>
+    <p class="pl-cap"><b></b><span></span><span></span></p>
+  </div>
+  <button class="lb-btn lb-prev" type="button" aria-label="Previous demo"><svg class="icon"><use href="#i-chev-left"/></svg></button>
+  <button class="lb-btn lb-next" type="button" aria-label="Next demo"><svg class="icon"><use href="#i-chev-right"/></svg></button>
+  <button class="lb-btn lb-close" type="button" aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button>
+</dialog>
 
 <dialog class="lightbox" id="lightbox" aria-label="Screenshot viewer">
   <div class="lb-stage">
@@ -1024,6 +1216,42 @@
     const dx = e.changedTouches[0].clientX - touchX
     if (Math.abs(dx) > 40) view(cur + (dx < 0 ? 1 : -1))
     touchX = null
+  })
+
+  // Demo player: one dialog, prev/next through the six videos, arrow keys and swipe.
+  const pl = document.getElementById("player")
+  const plVideo = pl.querySelector("video")
+  const [plTitle, plDesc, plCount] = pl.querySelectorAll(".pl-cap > *")
+  const demos = [...document.querySelectorAll(".demo-card")]
+  let dcur = 0
+  const play = (k) => {
+    dcur = (k + demos.length) % demos.length
+    const d = demos[dcur]
+    plVideo.src = d.dataset.video
+    plVideo.poster = d.querySelector("img").src
+    plTitle.textContent = d.dataset.title
+    plDesc.textContent = d.dataset.desc
+    plCount.textContent = `${dcur + 1} / ${demos.length}`
+    plVideo.play().catch(() => {})
+  }
+  demos.forEach((d, k) => d.addEventListener("click", () => { play(k); pl.showModal(); pl.querySelector(".lb-next").focus() }))
+  plVideo.addEventListener("ended", () => { if (pl.open) play(dcur + 1) })
+  pl.querySelector(".lb-prev").addEventListener("click", () => play(dcur - 1))
+  pl.querySelector(".lb-next").addEventListener("click", () => play(dcur + 1))
+  pl.querySelector(".lb-close").addEventListener("click", () => pl.close())
+  pl.addEventListener("click", (e) => { if (e.target === pl) pl.close() })
+  pl.addEventListener("close", () => { plVideo.pause(); plVideo.removeAttribute("src"); plVideo.load() })
+  pl.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") { e.preventDefault(); play(dcur - 1) }
+    else if (e.key === "ArrowRight") { e.preventDefault(); play(dcur + 1) }
+  })
+  let ptouchX = null
+  pl.addEventListener("touchstart", (e) => { ptouchX = e.touches[0].clientX }, { passive: true })
+  pl.addEventListener("touchend", (e) => {
+    if (ptouchX === null) return
+    const dx = e.changedTouches[0].clientX - ptouchX
+    if (Math.abs(dx) > 40) play(dcur + (dx < 0 ? 1 : -1))
+    ptouchX = null
   })
 })()
 </script>

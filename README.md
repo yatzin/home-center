@@ -2,13 +2,14 @@
 
 # HomeCenter
 
-**Your home's memory, kept on your own server.**
+**Every repair, warranty and receipt for your home, cars and family, on your own server.**
 
-Track homes, vehicles, equipment and family health in one place: service history, costs, warranties, reminders and every receipt, searchable in seconds.
+Service history, costs and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, and it all runs in one Docker container.
 
-**[Install in 5 minutes](#get-started)** · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Updating](#updating)
+**[Install in 5 minutes](#get-started)** · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Demos](#see-it-in-action) · [FAQ](#faq) · [Updating](#updating)
 
-![MIT licence](https://img.shields.io/badge/licence-MIT-blue) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![No cloud](https://img.shields.io/badge/cloud-none-success)
+![MIT licence](https://img.shields.io/badge/licence-MIT-blue) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555) ![No cloud](https://img.shields.io/badge/cloud-none-success)
+[![Docker image build](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml) [![Last commit](https://img.shields.io/github/last-commit/yatzin/home-center)](https://github.com/yatzin/home-center/commits/main)
 
 </div>
 
@@ -17,6 +18,23 @@ Track homes, vehicles, equipment and family health in one place: service history
 <p align="center">
 ✓ Runs on your NAS or server &nbsp;·&nbsp; ✓ No third-party sign-in &nbsp;·&nbsp; ✓ OCR and search run on-device &nbsp;·&nbsp; ✓ Works with local AI models
 </p>
+
+## See it in action
+
+Short walkthroughs recorded on the demo data. Click one to play it.
+
+<table>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/tour.gif"><img src="docs/screenshots/demos/posters/tour-play.jpg" alt="A quick tour demo"></a><br><b>A quick tour</b> <sub>1:03</sub><br><sub>A house, a truck and a person, tab by tab</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/ask-ai-warranty.gif"><img src="docs/screenshots/demos/posters/ask-ai-warranty-play.jpg" alt="Ask the assistant demo"></a><br><b>Ask the assistant</b> <sub>0:38</sub><br><sub>From a question to the warranty PDF that answers it</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/reminder-to-done.gif"><img src="docs/screenshots/demos/posters/reminder-to-done-play.jpg" alt="Reminder to done demo"></a><br><b>Reminder to done</b> <sub>0:32</sub><br><sub>An overdue filter change, completed, next date set</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/costs-to-receipt.gif"><img src="docs/screenshots/demos/posters/costs-to-receipt-play.jpg" alt="Costs to receipt demo"></a><br><b>Costs to receipt</b> <sub>0:33</sub><br><sub>From the spending chart to the $2,340 invoice</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/search-documents.gif"><img src="docs/screenshots/demos/posters/search-documents-play.jpg" alt="Search your paperwork demo"></a><br><b>Search your paperwork</b> <sub>0:27</sub><br><sub>“roof” finds the 30-year shingle warranty</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/health-summary.gif"><img src="docs/screenshots/demos/posters/health-summary-play.jpg" alt="Health summary demo"></a><br><b>Health summary</b> <sub>0:32</sub><br><sub>Medications, shots and a printable summary</sub></td>
+</tr>
+</table>
 
 ## Features
 
@@ -358,6 +376,32 @@ Switching models re-processes your documents in the background.
 |---|---|---|
 | `MODELS_DIR` | `/data/models` | Where downloaded models are kept. |
 | `EMBEDDING_IDLE_MINUTES` | `10` | Unload the model this long after the last search. `0` unloads right after each search. |
+
+## FAQ
+
+### Does it need an internet connection?
+
+No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model.
+
+### What does the AI assistant send, and where?
+
+Your question and the records needed to answer it go to the AI provider you configure, including health records if you allow it. Point it at Ollama or LM Studio on your own network and nothing leaves. The assistant is off until an admin sets it up, and chats are never stored on the server.
+
+### How do I back it up?
+
+Back up the data folder. It holds the database, uploaded files and downloaded models. Copy it while the container is stopped, or use your NAS's snapshots. Keep your `AUTH_SECRET` as well, because the saved mail password and API key can't be decrypted without it.
+
+### Will it run on my NAS?
+
+Images are built for amd64 and arm64, so it runs on Synology, Unraid and other Docker hosts, including 64-bit ARM boards such as a Raspberry Pi.
+
+### Can everyone in the house have their own login?
+
+Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders.
+
+### How is health data protected?
+
+It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely.
 
 ## Updating
 
