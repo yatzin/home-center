@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Building2, ChevronRight, type LucideIcon } from "lucide-react"
+import { Building2, Car, ChevronRight, HeartPulse, Refrigerator, type LucideIcon } from "lucide-react"
 import { assetImageSrc } from "@/components/asset-image"
 import { InitialsTile } from "@/components/dashboard/summary-card"
 import { assetHref } from "@/lib/assets"
@@ -244,4 +244,49 @@ export const PROPERTIES_SPEC: AssetCardSpec = {
 
 export function PropertiesCard(props: CardViewProps) {
   return <AssetStatCard {...props} spec={PROPERTIES_SPEC} />
+}
+
+export const VEHICLES_SPEC: AssetCardSpec = {
+  assetType: "VEHICLE",
+  label: "Vehicles",
+  icon: Car,
+  listHref: "/assets/vehicles",
+  emptyMessage: "No vehicles yet",
+  addLabel: "Add a vehicle",
+  missingMessage: "This vehicle no longer exists.",
+  openLabel: "Open vehicle",
+}
+
+export function VehiclesCard(props: CardViewProps) {
+  return <AssetStatCard {...props} spec={VEHICLES_SPEC} />
+}
+
+export const PEOPLE_SPEC: AssetCardSpec = {
+  assetType: "PERSON",
+  label: "People",
+  icon: HeartPulse,
+  listHref: "/assets/people",
+  emptyMessage: "No people yet",
+  addLabel: "Add a person",
+  missingMessage: "This person no longer exists.",
+  openLabel: "Open profile",
+}
+
+export function PeopleCard(props: CardViewProps) {
+  return <AssetStatCard {...props} spec={PEOPLE_SPEC} />
+}
+
+export const EQUIPMENT_SPEC: AssetCardSpec = {
+  assetType: "EQUIPMENT",
+  label: "Equipment",
+  icon: Refrigerator,
+  listHref: "/assets/equipment",
+  emptyMessage: "No equipment yet",
+  addLabel: "Add equipment",
+  missingMessage: "This equipment no longer exists.",
+  openLabel: "Open equipment",
+}
+
+export function EquipmentCard(props: CardViewProps) {
+  return <AssetStatCard {...props} spec={EQUIPMENT_SPEC} />
 }

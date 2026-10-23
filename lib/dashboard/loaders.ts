@@ -4,9 +4,15 @@
 // the caller and shown as that one card's error state.
 import { cache } from "react"
 import { prisma } from "@/lib/prisma"
-import type { Features } from "@/lib/features"
+import { ownedWhere, type Features } from "@/lib/features"
 import type { Formatter } from "@/lib/regional"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
+import { loadAssetIndex } from "@/lib/assets-server"
+import { assetHref } from "@/lib/assets"
+import { dueCandidateFilter } from "@/lib/maintenance-due"
+import { loadVehicleMileage } from "@/lib/maintenance-due-server"
+import type { AssetType } from "@/app/generated/prisma/client"
+import { dueLabel, dueMaintenance, roomsByProperty, type PropertyRooms } from "./shaping"
 
 export type LoaderContext = { now: Date; features: Features; fmt: Formatter }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
@@ -15,10 +21,12 @@ export type CardResult =
   | { id: string; type: string; config: Record<string, unknown>; status: "ok"; data: unknown }
   | { id: string; type: string; config: Record<string, unknown>; status: "error" }
 
-// Several asset cards (and several instances of one) share these per request.
+// Several cards (and several instances of one) share these per request.
 const activityIndex = cache(loadActivityIndex)
+const assetIndex = cache(loadAssetIndex)
 
 const DEFAULT_LIMIT = 7
+const LIST_LENGTH = 8
 
 function configLimit(config: Record<string, unknown>): number {
   const n = config.limit
@@ -31,7 +39,7 @@ function configItemId(config: Record<string, unknown>): string | null {
 
 // ---- Asset cards ----------------------------------------------------------------
 
-/** One asset on an asset card (Properties now; Vehicles, Equipment... later). */
+/** One asset on an asset card (Properties, Vehicles, Equipment, People). */
 export type AssetCardItem = {
   id: string
   name: string
@@ -51,7 +59,34 @@ export type AssetCardData =
   | { missing: true }
   | { missing: false; total: number; single: boolean; items: AssetCardItem[] }
 
-// ---- Properties ---------------------------------------------------------------
+type AssetRow = { id: string; name: string; imageFilename: string | null; updatedAt: Date }
+
+/**
+ * Builds the loader for one asset type. `fetch` returns every row (or just the
+ * one for config.itemId); `describe` gives the lines under each name.
+ */
+function assetLoader<R extends AssetRow>(
+  assetType: AssetType,
+  fetch: (itemId: string | null) => Promise<R[]>,
+  describe: (row: R, fmt: Formatter) => { detail: string; facts: string },
+): CardLoader {
+  return async (config, { fmt }): Promise<AssetCardData> => {
+    const itemId = configItemId(config)
+    const [rows, activity] = await Promise.all([fetch(itemId), activityIndex()])
+    if (itemId && rows.length === 0) return { missing: true }
+
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const items = mostRecentlyActive(rows, assetType, activity, configLimit(config)).map(({ assetId }) => {
+      const r = byId.get(assetId)!
+      return { id: r.id, name: r.name, imageFilename: r.imageFilename, ...describe(r, fmt) }
+    })
+    return { missing: false, total: rows.length, single: itemId !== null, items }
+  }
+}
+
+const idFilter = (itemId: string | null) => (itemId ? { id: itemId } : undefined)
+
+const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, " ")
 
 const PROPERTY_TYPE_LABELS: Record<string, string> = {
   HOUSE: "House",
@@ -61,30 +96,210 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   OTHER: "Other",
 }
 
-const loadProperties: CardLoader = async (config, { fmt }): Promise<AssetCardData> => {
-  const itemId = configItemId(config)
-  const [rows, activity] = await Promise.all([
+const loadProperties = assetLoader(
+  "PROPERTY",
+  (itemId) =>
     prisma.property.findMany({
-      where: itemId ? { id: itemId } : undefined,
+      where: idFilter(itemId),
       select: { id: true, name: true, address: true, type: true, yearBuilt: true, sqFt: true, imageFilename: true, updatedAt: true },
     }),
-    activityIndex(),
-  ])
-  if (itemId && rows.length === 0) return { missing: true }
-
-  const byId = new Map(rows.map((r) => [r.id, r]))
-  const items = mostRecentlyActive(rows, "PROPERTY", activity, configLimit(config)).map(({ assetId }) => {
-    const r = byId.get(assetId)!
-    const facts = [
-      PROPERTY_TYPE_LABELS[r.type] ?? "Other",
-      r.yearBuilt ? `Built ${r.yearBuilt}` : null,
-      r.sqFt ? fmt.area(r.sqFt) : null,
-    ]
+  (r, fmt) => ({
+    detail: r.address,
+    facts: [PROPERTY_TYPE_LABELS[r.type] ?? "Other", r.yearBuilt ? `Built ${r.yearBuilt}` : null, r.sqFt ? fmt.area(r.sqFt) : null]
       .filter(Boolean)
-      .join(" · ")
-    return { id: r.id, name: r.name, detail: r.address, facts, imageFilename: r.imageFilename }
+      .join(" · "),
+  }),
+)
+
+const loadVehicles = assetLoader(
+  "VEHICLE",
+  (itemId) =>
+    prisma.vehicle.findMany({
+      where: idFilter(itemId),
+      select: { id: true, name: true, year: true, make: true, model: true, currentMileage: true, meterUnit: true, imageFilename: true, updatedAt: true },
+    }),
+  (r, fmt) => ({
+    detail: [r.year, r.make, r.model].filter(Boolean).join(" "),
+    facts: r.currentMileage != null ? `${r.currentMileage.toLocaleString()} ${fmt.meterShort(r.meterUnit)}` : "",
+  }),
+)
+
+const loadEquipment = assetLoader(
+  "EQUIPMENT",
+  (itemId) =>
+    prisma.equipment.findMany({
+      where: idFilter(itemId),
+      select: { id: true, name: true, category: true, manufacturer: true, modelNumber: true, location: true, imageFilename: true, updatedAt: true },
+    }),
+  (r) => ({
+    detail: [r.manufacturer, r.modelNumber].filter(Boolean).join(" "),
+    facts: [humanize(r.category), r.location].filter(Boolean).join(" · "),
+  }),
+)
+
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  SELF: "Me",
+  SPOUSE: "Spouse",
+  CHILD: "Child",
+  PARENT: "Parent",
+  PET: "Pet",
+  OTHER: "Other",
+}
+
+// People exist only with Health on; the dashboard skips the card otherwise.
+const loadPeople = assetLoader(
+  "PERSON",
+  (itemId) =>
+    prisma.person.findMany({
+      where: idFilter(itemId),
+      select: { id: true, name: true, relationship: true, imageFilename: true, updatedAt: true },
+    }),
+  (r) => ({ detail: RELATIONSHIP_LABELS[r.relationship] ?? "", facts: "" }),
+)
+
+// ---- Rooms --------------------------------------------------------------------
+
+/**
+ * Rooms across properties (config.itemId: one property's rooms). `missing`
+ * when that property was deleted. At most config.limit rooms are listed,
+ * out of `total`.
+ */
+export type RoomsCardData =
+  | { missing: true }
+  | { missing: false; total: number; single: boolean; propertyCount: number; properties: PropertyRooms[] }
+
+const loadRooms: CardLoader = async (config, { features }): Promise<RoomsCardData> => {
+  const none: RoomsCardData = { missing: false, total: 0, single: false, propertyCount: 0, properties: [] }
+  if (!features.rooms) return none
+  const itemId = configItemId(config)
+  const rows = await prisma.room.findMany({
+    where: itemId ? { propertyId: itemId } : undefined,
+    select: { id: true, name: true, propertyId: true, property: { select: { name: true } } },
   })
-  return { missing: false, total: rows.length, single: itemId !== null, items }
+  if (itemId && rows.length === 0 && (await prisma.property.count({ where: { id: itemId } })) === 0) return { missing: true }
+
+  const groups = roomsByProperty(
+    rows.map((r) => ({ id: r.id, name: r.name, propertyId: r.propertyId, propertyName: r.property.name })),
+  )
+  let budget = configLimit(config)
+  const properties = groups
+    .map((g) => {
+      const rooms = g.rooms.slice(0, Math.max(budget, 0))
+      budget -= rooms.length
+      return { ...g, rooms }
+    })
+    .filter((g) => g.rooms.length > 0)
+  return { missing: false, total: rows.length, single: itemId !== null, propertyCount: groups.length, properties }
+}
+
+// ---- Records, warranties, due maintenance ---------------------------------------
+
+export type CardLine = {
+  id: string
+  title: string
+  /** The asset it belongs to, when known. */
+  assetName: string | null
+  href: string
+  /** Right-hand text, already formatted ("Mar 4", "12d left", "3d late"). */
+  meta: string
+}
+
+export type RecordsCardData = { total: number; recent: CardLine[] }
+
+const loadRecords: CardLoader = async (_config, { features, fmt }): Promise<RecordsCardData> => {
+  const owned = ownedWhere(features)
+  const [total, rows, index] = await Promise.all([
+    prisma.serviceRecord.count({ where: owned }),
+    prisma.serviceRecord.findMany({
+      where: owned,
+      orderBy: [{ date: "desc" }, { id: "asc" }],
+      take: LIST_LENGTH,
+      select: { id: true, title: true, date: true, assetType: true, assetId: true },
+    }),
+    assetIndex(),
+  ])
+  return {
+    total,
+    recent: rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      assetName: index.assetName(r.assetType, r.assetId) ?? null,
+      href: `${assetHref(r.assetType, r.assetId)}?tab=service&open=${r.id}`,
+      meta: fmt.date(r.date),
+    })),
+  }
+}
+
+/** [one, many] */
+const WARRANTY_TYPE_LABELS: Record<AssetType, [string, string]> = {
+  PROPERTY: ["Property", "Properties"],
+  VEHICLE: ["Vehicle", "Vehicles"],
+  EQUIPMENT: ["Equipment", "Equipment"],
+  PERSON: ["Person", "People"],
+}
+
+export type WarrantiesCardData = {
+  total: number
+  /** Active warranties per asset type, largest first. */
+  breakdown: { label: string; count: number }[]
+  /** Soonest to expire first. */
+  soonest: CardLine[]
+}
+
+const loadWarranties: CardLoader = async (_config, { now, features }): Promise<WarrantiesCardData> => {
+  const where = { ...ownedWhere(features), expirationDate: { gt: now } }
+  const [total, groups, rows, index] = await Promise.all([
+    prisma.warranty.count({ where }),
+    prisma.warranty.groupBy({ by: ["assetType"], where, _count: { _all: true } }),
+    prisma.warranty.findMany({
+      where,
+      orderBy: [{ expirationDate: "asc" }, { id: "asc" }],
+      take: LIST_LENGTH,
+      select: { id: true, productName: true, expirationDate: true, assetType: true, assetId: true },
+    }),
+    assetIndex(),
+  ])
+  return {
+    total,
+    breakdown: groups
+      .map((g) => ({ label: WARRANTY_TYPE_LABELS[g.assetType][g._count._all === 1 ? 0 : 1], count: g._count._all }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    soonest: rows.map((w) => {
+      const daysLeft = Math.ceil((w.expirationDate!.getTime() - now.getTime()) / 86400000)
+      return {
+        id: w.id,
+        title: w.productName,
+        assetName: index.assetName(w.assetType, w.assetId) ?? null,
+        href: assetHref(w.assetType, w.assetId),
+        meta: `${daysLeft}d left`,
+      }
+    }),
+  }
+}
+
+export type DueCardData = { count: number; items: (CardLine & { overdue: boolean })[] }
+
+const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt }): Promise<DueCardData> => {
+  const [candidates, mileage, index] = await Promise.all([
+    prisma.maintenanceSchedule.findMany({
+      where: { AND: [dueCandidateFilter(30, now), ownedWhere(features)] },
+      orderBy: { nextDueDate: "asc" },
+    }),
+    loadVehicleMileage(),
+    assetIndex(),
+  ])
+  const due = dueMaintenance(candidates, mileage, now)
+  return {
+    count: due.length,
+    items: due.slice(0, LIST_LENGTH).map(({ s, due: d }) => ({
+      id: s.id,
+      title: s.title,
+      assetName: index.assetName(s.assetType, s.assetId) ?? null,
+      href: assetHref(s.assetType, s.assetId),
+      meta: dueLabel(d, fmt),
+      overdue: d.overdue,
+    })),
+  }
 }
 
 // ---- Registry -----------------------------------------------------------------
@@ -92,4 +307,11 @@ const loadProperties: CardLoader = async (config, { fmt }): Promise<AssetCardDat
 /** Card types with a loader. A placed card without one is not rendered yet. */
 export const LOADERS: Record<string, CardLoader> = {
   properties: loadProperties,
+  vehicles: loadVehicles,
+  people: loadPeople,
+  equipment: loadEquipment,
+  rooms: loadRooms,
+  records: loadRecords,
+  "active-warranties": loadWarranties,
+  "due-maintenance": loadDueMaintenance,
 }
