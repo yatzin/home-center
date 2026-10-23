@@ -32,6 +32,7 @@ export function CardFrame({
   failed,
   editing,
   interactive,
+  busy,
   className,
   children,
 }: {
@@ -44,6 +45,8 @@ export function CardFrame({
    * view is not remounted when this flips.
    */
   interactive?: boolean
+  /** Its data is on the way (aria-busy). */
+  busy?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -59,7 +62,7 @@ export function CardFrame({
     </Suspense>
   )
   return (
-    <Card role="group" aria-label={title} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
+    <Card role="group" aria-label={title} aria-busy={busy || undefined} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
       {editing ? (
         <div inert={!interactive} className="h-full min-h-0 select-none">
           {body}

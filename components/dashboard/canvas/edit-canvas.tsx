@@ -69,7 +69,7 @@ import { CardGear } from "./card-gear"
 import { GAP, LARGE_MIN_WIDTH, ROW_HEIGHT } from "./grid-metrics"
 import { ResizeHandle } from "./resize-handle"
 import { useCardTier } from "./use-card-tier"
-import { CardView, cardTitle, ViewGrid, type CanvasCardData } from "./view-grid"
+import { CardView, cardTitle, isBusy, ViewGrid, type CanvasCardData } from "./view-grid"
 
 /** Mouse and pen only: touch goes through TouchSensor's long press, so a swipe still scrolls the page. */
 class MouseSensor extends PointerSensor {
@@ -588,6 +588,7 @@ function EditableCard({
         <CardFrame
           title={title}
           failed={card.status === "error"}
+          busy={isBusy(card)}
           editing
           interactive={missing}
           className={cn(

@@ -71,7 +71,7 @@ function CardSetup({ type }: { type: string }) {
   const def = cardType(type)
   const Icon = def ? CARD_ICONS[def.icon] : LayoutGrid
   return (
-    <div role="status" className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden px-5 pt-4 pb-3">
+    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden px-5 pt-4 pb-3">
       <div className="flex shrink-0 items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span className="truncate">{cardTitle(type)}</span>
@@ -116,10 +116,9 @@ export function CardView({
   )
   if (!card.updating) return view
   return (
-    <div className="relative h-full min-h-0" aria-busy>
+    <div className="relative h-full min-h-0">
       <div className="h-full min-h-0 opacity-50 motion-safe:transition-opacity motion-safe:duration-300">{view}</div>
       <span
-        role="status"
         className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-popover/95 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border motion-safe:animate-in motion-safe:fade-in-0"
       >
         <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden />
@@ -127,6 +126,11 @@ export function CardView({
       </span>
     </div>
   )
+}
+
+/** No data yet, or data for older settings: the card is aria-busy until it arrives. */
+export function isBusy(card: CanvasCardData): boolean {
+  return card.status === "loading" || card.updating === true
 }
 
 export function cardTitle(type: string): string {
@@ -163,7 +167,7 @@ function CanvasCard({
       }
     >
       <CardConfigureProvider value={onConfigure ?? null}>
-        <CardFrame title={cardTitle(card.type)} failed={card.status === "error"}>
+        <CardFrame title={cardTitle(card.type)} failed={card.status === "error"} busy={isBusy(card)}>
           {largeTier === phoneTier ? (
             <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
           ) : (

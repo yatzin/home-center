@@ -126,6 +126,7 @@ export function ConfigFieldControl({
                         checked={input.value === o.value}
                         onChange={() => input.onChange(o.value)}
                         onBlur={input.onBlur}
+                        aria-describedby={fieldState.error ? `${labelId}-error` : undefined}
                         className="sr-only"
                       />
                       {o.label}
@@ -134,7 +135,11 @@ export function ConfigFieldControl({
                 </div>
               </fieldset>
               {help}
-              {message}
+              {fieldState.error && (
+                <p id={`${labelId}-error`} role="alert" className="text-xs font-medium text-destructive">
+                  {fieldState.error.message}
+                </p>
+              )}
             </FormItem>
           )
         }

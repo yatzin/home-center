@@ -22,12 +22,21 @@
 // data map (lib/dashboard/card-data.ts), without touching its layout. Fresh
 // props from a later refresh are merged the same way.
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { RefreshCw, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { loadDashboardCards, resetDashboardLayout } from "@/lib/actions/dashboard-layout"
-import { cardsNeedingData, mergeLoaded, withData, type CanvasCardData } from "@/lib/dashboard/card-data"
+import {
+  cardsNeedingData,
+  configsOf,
+  entriesOf,
+  markLoadFailed,
+  mergeLoaded,
+  withData,
+  type CanvasCardData,
+  type LoadedEntry,
+} from "@/lib/dashboard/card-data"
 import { cardType } from "@/lib/dashboard/card-types"
 import type { ConfigFormContext, ConfigItemOptions } from "@/lib/dashboard/config-form"
 import { editReducer, initialEditState, newCardId, snapshotCard } from "@/lib/dashboard/edit-state"
@@ -78,7 +87,7 @@ function reveal(el: HTMLElement) {
 }
 
 /** The shown cards of a layout, in its order, with the data the page has for each. */
-function cardsOf(layout: DashboardLayout, features: Features, data: ReadonlyMap<string, CardResult>): CanvasCardData[] {
+function cardsOf(layout: DashboardLayout, features: Features, data: ReadonlyMap<string, LoadedEntry>): CanvasCardData[] {
   return withData(
     layout.cards.filter((c) => isShownType(c.type, features)),
     data,
@@ -109,15 +118,25 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
   const [state, dispatch] = useReducer(editReducer, null, () => initialEditState(layout, revision, features))
   const { saving, error, flush } = useAutosave(state, dispatch)
 
-  // Every card's data seen so far, so a removed card comes back instantly on
-  // Undo, and a refresh that drops a card does not blank it mid-edit.
-  // Fresh props (a refresh) also bring data for added and reconfigured cards.
-  const [loaded, setLoaded] = useState(() => new Map(cards.map((c) => [c.id, c])))
+  // Every card's data seen so far, with the revision it came from, so a
+  // removed card comes back instantly on Undo and a refresh that drops a card
+  // does not blank it mid-edit. Fresh props are merged in too, but never over
+  // newer data or data for a card's current config (a late refresh carries
+  // older props).
+  const [loaded, setLoaded] = useState(() => entriesOf(cards, revision))
   const [seenCards, setSeenCards] = useState(cards)
   if (seenCards !== cards) {
     setSeenCards(cards)
-    setLoaded((prev) => mergeLoaded(prev, cards))
+    const current = configsOf(state.layout.cards)
+    setLoaded((prev) => mergeLoaded(prev, cards, revision, current))
   }
+  // For async callbacks: a load that resolves later merges against the newest state.
+  const stateRef = useRef(state)
+  const loadedRef = useRef(loaded)
+  useLayoutEffect(() => {
+    stateRef.current = state
+    loadedRef.current = loaded
+  }, [state, loaded])
 
   // Entering edit mode starts from the newest layout we know of.
   const [wasEditing, setWasEditing] = useState(editing)
@@ -141,20 +160,54 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
   const [, startRefresh] = useTransition()
   const editCards = cardsOf(state.layout, features, loaded)
 
-  // A save landed while some cards have no current data: load theirs, once per
-  // saved revision, and merge it in. Not router.refresh(): a refresh fired
-  // right after a save was seen to stall now and then (its page never
-  // committed), leaving the card "Updating" until the next save. A failure
-  // leaves it "Updating" until the next save or Done.
+  // Loads data for some cards (from the saved layout) and merges it in. Not
+  // router.refresh(): a refresh fired right after a save was seen to stall now
+  // and then (its page never committed). On failure, or when the server left a
+  // requested card out, those cards show their error state and the editor
+  // shows Retry; they are also asked for again after the next save.
+  const [loadError, setLoadError] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const loadData = useCallback(async (ids: readonly string[]): Promise<boolean> => {
+    if (ids.length === 0) return true
+    const fail = (missing: ReadonlySet<string>) => {
+      const s = stateRef.current
+      const failed = s.layout.cards.filter((c) => missing.has(c.id))
+      if (failed.length > 0) setLoaded((prev) => markLoadFailed(prev, failed, s.revision))
+      setLoadError(true)
+    }
+    try {
+      const { revision: read, cards: fresh } = await loadDashboardCards([...ids])
+      setLoaded((prev) => mergeLoaded(prev, fresh, read, configsOf(stateRef.current.layout.cards)))
+      const returned = new Set(fresh.map((c) => c.id))
+      const left = new Set(ids.filter((id) => !returned.has(id)))
+      if (left.size > 0) {
+        console.error("[dashboard] no data came back for", [...left])
+        fail(left)
+        return false
+      }
+      setLoadError(false)
+      return true
+    } catch (e) {
+      console.error("[dashboard] couldn't load card data", e)
+      fail(new Set(ids))
+      return false
+    }
+  }, [])
+
+  // A save landed while some cards have no current data: load theirs, once per saved revision.
   const neededKey = cardsNeedingData(editCards).join("\n")
   const loadedFor = useRef(state.revision)
   useEffect(() => {
     if (!neededKey || state.dirty || state.conflict || state.revision <= loadedFor.current) return
     loadedFor.current = state.revision
-    loadDashboardCards(neededKey.split("\n"))
-      .then((fresh) => setLoaded((prev) => mergeLoaded(prev, fresh)))
-      .catch(() => {})
-  }, [neededKey, state.dirty, state.conflict, state.revision])
+    void loadData(neededKey.split("\n"))
+  }, [neededKey, state.dirty, state.conflict, state.revision, loadData])
+
+  const retryLoad = async () => {
+    setRetrying(true)
+    await loadData(cardsNeedingData(cardsOf(stateRef.current.layout, features, loadedRef.current)))
+    setRetrying(false)
+  }
 
   const [finishing, setFinishing] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -293,11 +346,20 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
     if (finishing) return
     setFinishing(true)
     const ok = await flush()
-    setFinishing(false)
     // Not saved (error or conflict): stay in edit mode; the bar or banner says why.
-    if (!ok) return
+    if (!ok) {
+      setFinishing(false)
+      return
+    }
+    // Data for every card's current config before leaving, so the dashboard
+    // never shows "Setting up…" outside edit mode. If that fails, stay (the
+    // banner offers Retry).
+    const loadedAll = await loadData(cardsNeedingData(cardsOf(stateRef.current.layout, features, loadedRef.current)))
+    setFinishing(false)
+    if (!loadedAll) return
     dismissUndoToasts()
     setEditing(false)
+    // A background top-up only: the merge ignores anything older than what we have.
     startRefresh(() => router.refresh())
   }
 
@@ -347,6 +409,21 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
 
   return (
     <div ref={rootRef}>
+      {loadError && !state.conflict && (
+        <div
+          role="alert"
+          className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm"
+        >
+          <TriangleAlert className="size-4 shrink-0 text-destructive" aria-hidden />
+          <p className="min-w-0 flex-1">
+            Some cards couldn&apos;t load. Your changes are saved; try loading them again.
+          </p>
+          <Button size="sm" variant="outline" onClick={retryLoad} disabled={retrying} className="pointer-coarse:h-11">
+            <RefreshCw className={retrying ? "motion-safe:animate-spin" : undefined} aria-hidden />
+            Retry
+          </Button>
+        </div>
+      )}
       {state.conflict && (
         <div
           role="alert"

@@ -481,6 +481,18 @@ export function groupCardTypes(types: readonly CardTypeDef[]): CardGroup[] {
   return groups.filter((g) => g.types.length > 0)
 }
 
+/**
+ * An error message for the first card whose config its type's configSchema
+ * rejects, or null. Cards of unknown types are left to validateLayout.
+ */
+export function invalidCardConfig(layout: DashboardLayout): string | null {
+  for (const c of layout.cards) {
+    const def = cardType(c.type)
+    if (def && !def.configSchema.safeParse(c.config).success) return `The ${def.label} card's settings are not valid.`
+  }
+  return null
+}
+
 /** Size limits per card type, for validateLayout/repairLayout. */
 export function limitsMap(): ReadonlyMap<string, CardLimits> {
   return new Map(CARD_TYPES.map((d) => [d.id, { min: d.min, max: d.max, default: d.large }]))

@@ -8,7 +8,7 @@ import { getFormat } from "@/lib/regional-server"
 import { DASHBOARD_LAYOUT_ID, loadDashboardLayout } from "@/lib/dashboard/layout-server"
 import { loadCard } from "@/lib/dashboard/load-cards-server"
 import { LOADERS, type CardResult, type LoaderContext } from "@/lib/dashboard/loaders"
-import { cardType, defaultLayout, limitsMap } from "@/lib/dashboard/card-types"
+import { cardType, defaultLayout, invalidCardConfig, limitsMap } from "@/lib/dashboard/card-types"
 import { parseLayout, validateLayout, type DashboardLayout } from "@/lib/dashboard/layout"
 
 const MAX_BYTES = 256 * 1024
@@ -26,7 +26,7 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
   if (!Number.isInteger(baseRevision) || baseRevision < 0) return { error: "Invalid layout." }
   const layout = parseLayout(input.layout)
   if (!layout) return { error: "Invalid layout." }
-  const message = validateLayout(layout, limitsMap())
+  const message = validateLayout(layout, limitsMap()) ?? invalidCardConfig(layout)
   if (message) return { error: message }
   const data = JSON.stringify(layout)
   if (data.length > MAX_BYTES) return { error: "The layout is too large." }
@@ -50,25 +50,27 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
 }
 
 /**
- * Data for some cards of the saved layout, for the editor: cards added or
+ * Data for some cards of the saved layout, with the layout revision it was
+ * read from (the editor never lets older data replace newer). For the editor: cards added or
  * reconfigured since the page loaded have none until their save lands. Loads
  * by id from the stored layout (with its saved config, never one sent by the
  * client); ids not in it, or of a type that is not shown, are skipped. The
  * editor merges the results into the data it has, so nothing else on the
  * page re-renders (a full page refresh here was seen to stall now and then).
  */
-export async function loadDashboardCards(ids: string[]): Promise<CardResult[]> {
+export async function loadDashboardCards(ids: string[]): Promise<{ revision: number; cards: CardResult[] }> {
   await requireAdmin()
-  if (!Array.isArray(ids)) return []
-  const wanted = new Set(ids.filter((id): id is string => typeof id === "string").slice(0, 100))
+  if (!Array.isArray(ids)) return { revision: 0, cards: [] }
+  const wanted = new Set(ids.slice(0, 100).filter((id): id is string => typeof id === "string"))
   const features = await loadFeatures()
-  const [{ layout }, fmt] = await Promise.all([loadDashboardLayout(features), getFormat()])
+  if (!features.customizedDashboards) return { revision: 0, cards: [] }
+  const [{ layout, revision }, fmt] = await Promise.all([loadDashboardLayout(features), getFormat()])
   const ctx: LoaderContext = { now: new Date(), features, fmt }
   const cards = layout.cards.filter((c) => {
     const def = cardType(c.type)
     return wanted.has(c.id) && def !== undefined && (!def.requires || features[def.requires]) && Object.hasOwn(LOADERS, c.type)
   })
-  return Promise.all(cards.map((c) => loadCard(c, ctx)))
+  return { revision, cards: await Promise.all(cards.map((c) => loadCard(c, ctx))) }
 }
 
 /** Back to the default layout (both layouts). Returns it so the editor can show it without a reload. */

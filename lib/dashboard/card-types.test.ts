@@ -7,6 +7,7 @@ import {
   CARD_GROUPS,
   cardType,
   configFieldsFor,
+  invalidCardConfig,
   defaultLayout,
   groupCardTypes,
   limitsMap,
@@ -410,5 +411,29 @@ describe("groupCardTypes", () => {
     const groups = groupCardTypes([stray, CARD_TYPES[0]])
     expect(groups.map((g) => g.label)).toEqual([CARD_GROUPS[0].label, "Other"])
     expect(groups[1].types[0].id).toBe("stray")
+  })
+})
+
+describe("invalidCardConfig", () => {
+  const base = defaultLayout(ALL_ON)
+
+  it("accepts the default layout and valid configs", () => {
+    expect(invalidCardConfig(base)).toBeNull()
+    const ok = { ...base, cards: base.cards.map((c) => (c.type === "reminders" ? { ...c, config: { windowDays: 14, assetType: "VEHICLE" } } : c)) }
+    expect(invalidCardConfig(ok)).toBeNull()
+  })
+
+  it("names the card whose config its type's schema rejects", () => {
+    const bad = { ...base, cards: base.cards.map((c) => (c.type === "reminders" ? { ...c, config: { windowDays: 0 } } : c)) }
+    expect(invalidCardConfig(bad)).toMatch(/Reminders/)
+    const badRange = { ...base, cards: base.cards.map((c) => (c.type === "spending-trend" ? { ...c, config: { range: "5y" } } : c)) }
+    expect(invalidCardConfig(badRange)).toMatch(/Spending Trend/)
+    const badItem = { ...base, cards: base.cards.map((c) => (c.type === "properties" ? { ...c, config: { itemId: 42 } } : c)) }
+    expect(invalidCardConfig(badItem)).not.toBeNull()
+  })
+
+  it("leaves unknown types to validateLayout", () => {
+    const unknown = { ...base, cards: [...base.cards, { id: "x", type: "nope", config: { anything: true } }] }
+    expect(invalidCardConfig(unknown)).toBeNull()
   })
 })
