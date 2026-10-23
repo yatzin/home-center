@@ -103,6 +103,28 @@ describe("resolvePhoneLayout", () => {
     expect(isValidPhone(layout, phone)).toBeNull()
   })
 
+  it("keeps a card of an unknown type, full width below the known ones, without overlaps", () => {
+    const layout = layoutOf(
+      [
+        ["a", "properties"],
+        ["x", "no-such-card"],
+      ],
+      [
+        { id: "x", x: 0, y: 0, w: 4, h: 2 },
+        { id: "a", x: 4, y: 0, w: 3, h: 4 },
+      ],
+      null,
+    )
+    const phone = resolvePhoneLayout(layout, ALL_ON)
+    expect(ids(phone)).toEqual(["a", "x"])
+    const a = phone.find((p) => p.id === "a")!
+    const x = phone.find((p) => p.id === "x")!
+    expect(a).toEqual({ id: "a", x: 0, y: 0, w: 2, h: 4 })
+    expect(x.x).toBe(0)
+    expect(x.w).toBe(PHONE_COLS)
+    expect(x.y).toBeGreaterThanOrEqual(a.y + a.h)
+  })
+
   it("returns an empty list for an empty layout", () => {
     expect(resolvePhoneLayout(layoutOf([], [], null), ALL_ON)).toEqual([])
     expect(resolvePhoneLayout(layoutOf([], [], []), ALL_ON)).toEqual([])

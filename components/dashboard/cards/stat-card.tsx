@@ -114,23 +114,22 @@ function Mosaic({ spec, data }: { spec: AssetCardSpec; data: Extract<AssetCardDa
   return (
     <div className={cn("grid min-h-0 flex-1 gap-0.5 overflow-hidden", grid)}>
       {shown.map((item, i) => (
-        <Link
-          key={item.id}
-          href={assetHref(spec.assetType, item.id)}
-          className={cn("group relative block min-h-0 overflow-hidden", shown.length === 3 && i === 0 && "row-span-2")}
-        >
-          <Tile
-            spec={spec}
-            item={item}
-            className="h-full w-full transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100"
-            text="text-2xl"
-          />
+        // The badge sits beside the link, not inside it, so the link's name is just the item's.
+        <div key={item.id} className={cn("relative min-h-0 overflow-hidden", shown.length === 3 && i === 0 && "row-span-2")}>
+          <Link href={assetHref(spec.assetType, item.id)} aria-label={item.name} className="group block h-full overflow-hidden">
+            <Tile
+              spec={spec}
+              item={item}
+              className="h-full w-full transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+              text="text-2xl"
+            />
+          </Link>
           {i === shown.length - 1 && remaining > 0 && (
-            <span className="absolute right-1.5 bottom-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+            <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
               +{remaining} more
             </span>
           )}
-        </Link>
+        </div>
       ))}
     </div>
   )
@@ -175,7 +174,7 @@ function ItemDetail({ spec, item }: { spec: AssetCardSpec; item: AssetCardItem }
   const href = assetHref(spec.assetType, item.id)
   return (
     <div className="flex h-full min-h-0">
-      <Link href={href} className="group relative block w-2/5 shrink-0 overflow-hidden">
+      <Link href={href} aria-label={item.name} className="group relative block w-2/5 shrink-0 overflow-hidden">
         <Tile spec={spec} item={item} className="h-full w-full transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100" text="text-3xl" />
       </Link>
       <div className="flex min-w-0 flex-1 flex-col gap-1 p-5">
@@ -201,7 +200,9 @@ export function AssetStatCard({ spec, data, tier }: CardViewProps & { spec: Asse
     return tier === TIER_COUNT ? (
       <InlineNotice message={spec.missingMessage} note={MISSING_NOTE} />
     ) : (
-      <CardMessage icon={spec.icon} message={spec.missingMessage} note={MISSING_NOTE} />
+      <CardShell title={spec.label}>
+        <CardMessage icon={spec.icon} message={spec.missingMessage} note={MISSING_NOTE} />
+      </CardShell>
     )
   }
 

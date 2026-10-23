@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { unstable_catchError as catchError } from "next/error"
 import { CloudOff } from "lucide-react"
 import { Card } from "@/components/ui/card"
@@ -37,7 +38,17 @@ export function CardFrame({
 }) {
   return (
     <Card role="group" aria-label={title} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
-      {failed ? <CardError title={title} /> : <CardErrorBoundary title={title}>{children}</CardErrorBoundary>}
+      {failed ? (
+        <CardError title={title} />
+      ) : (
+        // A view that throws while server rendering makes React fall back to
+        // the nearest Suspense boundary and retry on the client, where the
+        // error boundary catches it. This boundary keeps that to this card
+        // instead of the whole route.
+        <Suspense>
+          <CardErrorBoundary title={title}>{children}</CardErrorBoundary>
+        </Suspense>
+      )}
     </Card>
   )
 }
