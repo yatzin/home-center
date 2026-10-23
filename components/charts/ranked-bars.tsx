@@ -34,12 +34,15 @@ export function RankedBars({
   valueLabel = "Total",
   caption,
   size = "default",
+  tableSrOnly = false,
 }: {
   entries: RankedRow[]
   emptyMessage?: string
   valueLabel?: string
   caption?: string
   size?: "default" | "compact"
+  /// Table view for screen readers only (see ChartTable's `srOnly`).
+  tableSrOnly?: boolean
 }) {
   const fmt = useFormat()
   const { containerRef, cardRef, tip, offset, anchorProps } = useChartTooltip()
@@ -169,6 +172,7 @@ export function RankedBars({
       </div>
 
       <ChartTable
+        srOnly={tableSrOnly}
         caption={caption}
         columns={[
           { key: "label", label: "Name" },

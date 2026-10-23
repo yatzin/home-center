@@ -12,13 +12,67 @@ export function ChartTable({
   rows,
   caption,
   summary = "Show as table",
+  srOnly = false,
 }: {
   columns: TableColumn[]
   rows: Record<string, React.ReactNode>[]
   caption?: string
   summary?: string
+  /// For a chart in a fixed-height box (a dashboard card), where an expanding
+  /// disclosure would be clipped: the table is there for assistive technology
+  /// only, and the box's own link leads to the full page for everyone else.
+  srOnly?: boolean
 }) {
   if (rows.length === 0) return null
+
+  const table = (
+    <table className="w-full text-sm">
+      {caption ? <caption className="sr-only">{caption}</caption> : null}
+      <thead className="text-muted-foreground">
+        <tr>
+          {columns.map((column) => (
+            <th
+              key={column.key}
+              scope="col"
+              className={
+                column.align === "right"
+                  ? "px-3 py-2 text-right text-xs font-medium"
+                  : "px-3 py-2 text-left text-xs font-medium"
+              }
+            >
+              {column.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {rows.map((row, i) => (
+          <tr key={i}>
+            {columns.map((column, j) => {
+              const className =
+                column.align === "right"
+                  ? "px-3 py-1.5 text-right tabular-nums"
+                  : "px-3 py-1.5 text-left"
+              // The first cell is the row's header, which is what lets a
+              // screen reader announce "March 2026, Repair, $412" instead of
+              // reading three unattached numbers.
+              return j === 0 ? (
+                <th key={column.key} scope="row" className={`${className} font-normal`}>
+                  {row[column.key]}
+                </th>
+              ) : (
+                <td key={column.key} className={`${className} text-muted-foreground`}>
+                  {row[column.key]}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+
+  if (srOnly) return <div className="sr-only">{table}</div>
 
   return (
     <details className="mt-3 group">
@@ -26,52 +80,7 @@ export function ChartTable({
         <span aria-hidden="true" className="transition-transform group-open:rotate-90">›</span>
         {summary}
       </summary>
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full text-sm">
-          {caption ? <caption className="sr-only">{caption}</caption> : null}
-          <thead className="text-muted-foreground">
-            <tr>
-              {columns.map((column) => (
-                <th
-                  key={column.key}
-                  scope="col"
-                  className={
-                    column.align === "right"
-                      ? "px-3 py-2 text-right text-xs font-medium"
-                      : "px-3 py-2 text-left text-xs font-medium"
-                  }
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {rows.map((row, i) => (
-              <tr key={i}>
-                {columns.map((column, j) => {
-                  const className =
-                    column.align === "right"
-                      ? "px-3 py-1.5 text-right tabular-nums"
-                      : "px-3 py-1.5 text-left"
-                  // The first cell is the row's header, which is what lets a
-                  // screen reader announce "March 2026, Repair, $412" instead of
-                  // reading three unattached numbers.
-                  return j === 0 ? (
-                    <th key={column.key} scope="row" className={`${className} font-normal`}>
-                      {row[column.key]}
-                    </th>
-                  ) : (
-                    <td key={column.key} className={`${className} text-muted-foreground`}>
-                      {row[column.key]}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className="mt-2 overflow-x-auto">{table}</div>
     </details>
   )
 }

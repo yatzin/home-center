@@ -16,6 +16,17 @@ import { listInboxItems } from "@/lib/inbox-server"
 import { inboxReadiness, type InboxReadiness } from "@/lib/inbox-form"
 import { intakeSummary } from "@/lib/intake-ui"
 import { headlineOf } from "@/components/dashboard/intake-card"
+import { loadCostRecords } from "@/lib/costs-server"
+import { categoryColor, categoryLabel, cents, type BucketPoint, type CategoryKey } from "@/lib/costs"
+import {
+  categoryCounts,
+  monthlyAverage,
+  spendingByCategory,
+  spendingSummary,
+  spendRangeOf,
+  spendTrend,
+  type SpendRange,
+} from "./spending"
 import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
 import {
   dueLabel,
@@ -39,6 +50,8 @@ export type CardResult =
 // Several cards (and several instances of one) share these per request.
 const activityIndex = cache(loadActivityIndex)
 const assetIndex = cache(loadAssetIndex)
+// Every Spending card (any number of either type) reads the same rows once.
+const costRecords = cache(() => loadCostRecords())
 
 const DEFAULT_LIMIT = 7
 const LIST_LENGTH = 8
@@ -475,6 +488,108 @@ const loadIntake: CardLoader = async (_config, { now, fmt }): Promise<IntakeCard
   }
 }
 
+// ---- Spending -------------------------------------------------------------------
+
+/** "in 2026" / "in the last 12 months": what the headline total covers. */
+function periodText(range: SpendRange, now: Date): string {
+  return range === "ytd" ? `in ${now.getFullYear()}` : "in the last 12 months"
+}
+
+export type SpendingTrendData = {
+  /** Any costed record at all; false shows the empty state. */
+  hasCosts: boolean
+  range: SpendRange
+  /** Already formatted. */
+  totalText: string
+  periodText: string
+  /** Relative change against the same window a year earlier; null when nothing was spent then. */
+  delta: number | null
+  /** The sentence under the headline, already formatted. */
+  comparison: string
+  /** Twelve months ending now (always, whatever the range) and the same months a year earlier. */
+  points: BucketPoint[]
+  prior: number[]
+  priorLabel: string
+  /** Mean monthly spend over the twelve months (only months since the first record). */
+  average: number
+}
+
+const loadSpendingTrend: CardLoader = async (config, { now, fmt }): Promise<SpendingTrendData> => {
+  const range = spendRangeOf(config)
+  const rows = await costRecords()
+  const { total, priorTotal, delta } = spendingSummary(rows, range, now)
+  const { points, prior } = spendTrend(rows, now)
+  const lastYear = now.getFullYear() - 1
+  return {
+    hasCosts: rows.length > 0,
+    range,
+    totalText: fmt.money(total),
+    periodText: periodText(range, now),
+    delta,
+    comparison:
+      delta === null
+        ? range === "ytd"
+          ? `Nothing recorded by this point in ${lastYear}.`
+          : "Nothing recorded in the 12 months before."
+        : range === "ytd"
+          ? `vs the same point last year (${fmt.money(priorTotal)}).`
+          : `vs the 12 months before (${fmt.money(priorTotal)}).`,
+    points,
+    prior,
+    priorLabel: String(lastYear),
+    average: monthlyAverage(points, rows, now),
+  }
+}
+
+export type SpendingCategory = {
+  key: string
+  label: string
+  /** A CSS colour (a --cost-* variable): fixed per category, never by rank. */
+  color: string
+  total: number
+  count: number
+  /** Total as a fraction of the largest category's (bar length). */
+  share: number
+}
+
+export type SpendingBreakdownData = {
+  hasCosts: boolean
+  range: SpendRange
+  periodText: string
+  /** Sum of the categories (positive spending only), and formatted. */
+  total: number
+  totalText: string
+  /** Largest first. */
+  categories: SpendingCategory[]
+}
+
+const loadSpendingBreakdown: CardLoader = async (config, { now, fmt }): Promise<SpendingBreakdownData> => {
+  const range = spendRangeOf(config)
+  const rows = await costRecords()
+  const totals = spendingByCategory(rows, range, now)
+  const counts = categoryCounts(rows, range, now)
+  const max = totals[0]?.total ?? 0
+  const total = cents(totals.reduce((s, c) => s + c.total, 0))
+  return {
+    hasCosts: rows.length > 0,
+    range,
+    periodText: periodText(range, now),
+    total,
+    totalText: fmt.money(total),
+    categories: totals.map(({ category, total: t }) => {
+      const key = category as CategoryKey
+      return {
+        key,
+        label: categoryLabel(key),
+        color: categoryColor(key),
+        total: t,
+        count: counts.get(key) ?? 0,
+        share: max > 0 ? t / max : 0,
+      }
+    }),
+  }
+}
+
 // ---- Registry -----------------------------------------------------------------
 
 /** Card types with a loader. A placed card without one is not rendered yet. */
@@ -490,4 +605,6 @@ export const LOADERS: Record<string, CardLoader> = {
   reminders: loadReminders,
   "expiring-warranties": loadExpiringWarranties,
   intake: loadIntake,
+  "spending-trend": loadSpendingTrend,
+  "spending-breakdown": loadSpendingBreakdown,
 }

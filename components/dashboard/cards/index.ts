@@ -7,6 +7,8 @@ import { ExpiringWarrantiesCard } from "./expiring-warranties-card"
 import { IntakeView } from "./intake-view"
 import { RemindersCard } from "./reminders-card"
 import { RoomsCard } from "./rooms-card"
+import { SpendingBreakdownCard } from "./spending-breakdown"
+import { SpendingTrendCard } from "./spending-trend"
 import { EquipmentCard, PeopleCard, PropertiesCard, VehiclesCard } from "./stat-card"
 import type { CardViewProps } from "./types"
 
@@ -24,4 +26,6 @@ export const CARD_VIEWS: Record<string, ComponentType<CardViewProps>> = {
   reminders: RemindersCard,
   "expiring-warranties": ExpiringWarrantiesCard,
   intake: IntakeView,
+  "spending-trend": SpendingTrendCard,
+  "spending-breakdown": SpendingBreakdownCard,
 }

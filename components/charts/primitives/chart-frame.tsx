@@ -21,7 +21,11 @@ export function ChartFrame({
   children,
   xAxis,
 }: {
-  plotHeight: number
+  /// Fixed plot height in px. Omitted, the frame fills its parent's height
+  /// (which must be a definite height, e.g. a flex item with min-h-0) and the
+  /// plot takes whatever the x-axis leaves: a dashboard card sizes its chart to
+  /// its own box this way.
+  plotHeight?: number
   ticks: number[]
   domainMax: number
   formatTick: (value: number) => string
@@ -36,8 +40,11 @@ export function ChartFrame({
   return (
     // pt-2 gives the topmost tick label, which is centred on the top gridline,
     // room to sit without overflowing the card above it.
-    <div className="pt-2">
-      <div className="flex" style={{ height: plotHeight }}>
+    <div className={plotHeight === undefined ? "flex h-full min-h-0 flex-col pt-2" : "pt-2"}>
+      <div
+        className={plotHeight === undefined ? "flex min-h-0 flex-1" : "flex"}
+        style={plotHeight === undefined ? undefined : { height: plotHeight }}
+      >
         <div className="shrink-0" style={{ width: yAxisWidth }}>
           <YTickLabels ticks={ticks} domainMax={domainMax} format={formatTick} />
         </div>
@@ -47,7 +54,7 @@ export function ChartFrame({
         </div>
       </div>
       {xAxis ? (
-        <div className="flex">
+        <div className="flex shrink-0">
           <div className="shrink-0" style={{ width: yAxisWidth }} />
           <div className="min-w-0 flex-1">{xAxis}</div>
         </div>
