@@ -285,6 +285,69 @@ describe("moveInOrder", () => {
   })
 })
 
+describe("hostile coordinates", () => {
+  // A corrupt stored layout or a bad drag target must not hang the server.
+  const huge = [1e9, 1e300, Infinity, -Infinity, NaN]
+
+  for (const y of huge) {
+    it(`compact settles a card at y=${y} instantly`, () => {
+      const started = Date.now()
+      const out = compact([p("a", 0, 0, 12, 2), p("b", 0, y, 6, 1e300), p("c", 6, y, 6, 2)], 12)
+      expect(Date.now() - started).toBeLessThan(500)
+      assertValid(out, 12)
+      assertCompact(out)
+      expect(byId(out).b.y).toBe(2)
+      expect(byId(out).c.y).toBe(2)
+    })
+
+    it(`moveCard to y=${y} finishes instantly and stays valid`, () => {
+      const started = Date.now()
+      const input = [p("a", 0, 0, 12, 2), p("b", 0, 2, 6, 3), p("c", 6, 2, 6, 1)]
+      const out = moveCard(input, "a", { x: y, y }, 12)
+      expect(Date.now() - started).toBeLessThan(500)
+      assertValid(out, 12)
+      assertCompact(out)
+      expect(out.map((c) => c.id)).toEqual(["a", "b", "c"])
+    })
+  }
+
+  it("moveCard far below the layout lands the card at the bottom", () => {
+    const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 3)], "a", { x: 0, y: 1e300 }, 12)
+    expect(byId(out).b.y).toBe(0)
+    expect(byId(out).a.y).toBe(3)
+  })
+
+  it("moveCard with a NaN target keeps the card where it was", () => {
+    const input = [p("a", 0, 0, 6, 2), p("b", 6, 0, 6, 2)]
+    expect(moveCard(input, "b", { x: NaN, y: NaN }, 12)).toEqual(input)
+  })
+})
+
+describe("edge inputs", () => {
+  const limits: Limits = { min: { w: 1, h: 1 }, max: { w: 12, h: 6 } }
+  const input = [p("a", 0, 0, 6, 2), p("b", 6, 0, 6, 2)]
+
+  it("resizeCard with an unknown id is a no-op", () => {
+    expect(resizeCard(input, "zzz", { w: 3, h: 3 }, limits, 12)).toEqual(input)
+  })
+
+  it("removeCard with an unknown id is a no-op", () => {
+    expect(removeCard(input, "zzz", 12)).toEqual(input)
+  })
+
+  it("lets min win when malformed limits have max below min", () => {
+    const bad: Limits = { min: { w: 4, h: 3 }, max: { w: 2, h: 1 } }
+    const out = resizeCard([p("a", 0, 0, 6, 2)], "a", { w: 1, h: 1 }, bad, 12)
+    expect(byId(out).a).toEqual(p("a", 0, 0, 4, 3))
+  })
+
+  it("appends a card wider than the grid below existing cards", () => {
+    const out = appendCard(input, "c", { w: 30, h: 2 }, 12)
+    assertValid(out, 12)
+    expect(byId(out).c).toEqual(p("c", 0, 2, 12, 2))
+  })
+})
+
 // Tiny deterministic PRNG so the randomized run is reproducible.
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0

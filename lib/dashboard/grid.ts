@@ -26,17 +26,23 @@ function byPosition(a: Placement, b: Placement): number {
   return a.y - b.y || a.x - b.x || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 }
 
+// Upper bound for a stored y or h. Far beyond any real dashboard, but it keeps
+// arithmetic exact and loops short when a corrupt layout carries 1e300.
+const MAX_ROW = 10_000
+
 /** Integer coordinates, at least 1x1, no wider than the grid, inside it. */
 function normalize(p: Placement, cols: number): Placement {
   const w = clamp(int(p.w, 1), 1, cols)
   return {
     id: p.id,
     x: clamp(int(p.x, 0), 0, cols - w),
-    y: Math.max(0, int(p.y, 0)),
+    y: clamp(int(p.y, 0), 0, MAX_ROW),
     w,
-    h: Math.max(1, int(p.h, 1)),
+    h: clamp(int(p.h, 1), 1, MAX_ROW),
   }
 }
+
+const bottomOf = (ps: readonly Placement[]): number => ps.reduce((max, p) => Math.max(max, p.y + p.h), 0)
 
 /** Normalized copies with duplicate ids dropped (first occurrence wins). */
 function prepare(ps: readonly Placement[], cols: number): Placement[] {
@@ -87,9 +93,13 @@ export function compact(ps: readonly Placement[], cols: number): Placement[] {
   const clean = resolveOverlaps(ps, cols)
   const placed: Placement[] = []
   for (const p of [...clean].sort(byPosition)) {
-    const q = { ...p }
-    while (q.y > 0 && !placed.some((o) => collides({ ...q, y: q.y - 1 }, o))) q.y--
-    placed.push(q)
+    // Land on the lowest bottom edge above this card among the settled cards
+    // that share a column with it (or the top row). Settled cards never sit
+    // lower than this card, so this equals lifting it row by row, in O(n).
+    const floor = placed
+      .filter((o) => o.x < p.x + p.w && p.x < o.x + o.w && o.y + o.h <= p.y)
+      .reduce((max, o) => Math.max(max, o.y + o.h), 0)
+    placed.push({ ...p, y: floor })
   }
   return inOrder(clean, placed)
 }
@@ -104,11 +114,15 @@ export function moveCard(ps: readonly Placement[], id: string, to: { x: number; 
   const clean = prepare(ps, cols)
   const card = clean.find((p) => p.id === id)
   if (!card) return clean
-  const moved = normalize({ ...card, x: to.x, y: to.y }, cols)
   const others = compact(
     clean.filter((p) => p.id !== id),
     cols,
   )
+  // A NaN target keeps that axis; past the bottom of the others is the bottom
+  // (gravity would land it there anyway) so a 1e300 target stays cheap.
+  const x = Number.isNaN(to.x) ? card.x : clamp(to.x, 0, cols - card.w)
+  const y = Number.isNaN(to.y) ? card.y : clamp(to.y, 0, bottomOf(others))
+  const moved = normalize({ ...card, x, y }, cols)
   return inOrder(clean, compact(settle([moved], others), cols))
 }
 
@@ -136,8 +150,7 @@ export function resizeCard(ps: readonly Placement[], id: string, size: Size, lim
 export function appendCard(ps: readonly Placement[], id: string, size: Size, cols: number): Placement[] {
   const clean = prepare(ps, cols)
   if (clean.some((p) => p.id === id)) return clean
-  const bottom = clean.reduce((max, p) => Math.max(max, p.y + p.h), 0)
-  return compact([...clean, { id, x: 0, y: bottom, w: size.w, h: size.h }], cols)
+  return compact([...clean, { id, x: 0, y: bottomOf(clean), w: size.w, h: size.h }], cols)
 }
 
 /** Removes a card and closes the gap it leaves. */
