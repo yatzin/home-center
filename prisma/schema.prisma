@@ -784,6 +784,15 @@ model FeatureSettings {
   updatedAt           DateTime @updatedAt
 }
 
+/// The admin-edited card layout of the dashboard (one row). `data` is the JSON
+/// layout; `revision` is bumped on every save so concurrent edits are detected.
+model DashboardLayout {
+  id        String   @id @default("singleton")
+  data      String
+  revision  Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
 /// How money, distances, areas and dates are written for this household.
 /// Label only: switching a unit relabels stored numbers, it never converts them.
 model RegionalSettings {
