@@ -206,14 +206,24 @@ export function deriveRowMajor(
 /**
  * Swaps a card with its neighbour in reading order (the phone "move up/down"
  * button) and re-flows the cards. Moving the first card up or the last card
- * down is a no-op.
+ * down is a no-op. Cards for which `skip` returns true (hidden ones) are
+ * stepped over, so the card swaps with its nearest visible neighbour; with no
+ * visible neighbour in that direction it is a no-op.
  */
-export function moveInOrder(ps: readonly Placement[], id: string, delta: -1 | 1, cols: number): Placement[] {
+export function moveInOrder(
+  ps: readonly Placement[],
+  id: string,
+  delta: -1 | 1,
+  cols: number,
+  skip?: (id: string) => boolean,
+): Placement[] {
   const clean = prepare(ps, cols)
   const order = [...clean].sort(byPosition)
   const i = order.findIndex((p) => p.id === id)
-  const j = i + delta
-  if (i < 0 || j < 0 || j >= order.length) return clean
+  if (i < 0) return clean
+  let j = i + delta
+  while (skip && j >= 0 && j < order.length && skip(order[j].id)) j += delta
+  if (j < 0 || j >= order.length) return clean
   ;[order[i], order[j]] = [order[j], order[i]]
   return inOrder(clean, flow(order, cols))
 }

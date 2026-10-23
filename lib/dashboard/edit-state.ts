@@ -37,14 +37,19 @@ export type EditState = {
   /** A save was rejected because the dashboard changed elsewhere; autosave stops until `replace`. */
   conflict: boolean
   /**
-   * Site features, used only to derive the phone layout the same way the page
-   * renders it (cards of disabled features go last). Defaults to all on.
+   * Site features: the phone layout is derived the same way the page renders
+   * it (cards of disabled features go last), and phone "move up/down" steps
+   * over cards that are hidden because their feature is off.
    */
-  features?: Features
+  features: Features
 }
 
 /** What `restore` needs to put a removed card back where it was. */
-export type CardSnapshot = { card: CardInstance; large: Placement; phone: Placement }
+export type CardSnapshot = {
+  card: CardInstance
+  large: Placement
+  phone: Placement
+}
 
 export type EditAction =
   | { type: "move"; id: string; to: { x: number; y: number } }
@@ -61,10 +66,28 @@ export type EditAction =
   | { type: "conflict" }
   | { type: "replace"; layout: DashboardLayout; revision: number }
 
-const ALL_FEATURES: Features = { health: true, rooms: true, equipmentTab: true, customizedDashboards: true }
+export function initialEditState(layout: DashboardLayout, revision: number, features: Features): EditState {
+  return {
+    layout,
+    revision,
+    mode: "large",
+    dirty: false,
+    conflict: false,
+    features,
+  }
+}
 
-export function initialEditState(layout: DashboardLayout, revision: number, features?: Features): EditState {
-  return { layout, revision, mode: "large", dirty: false, conflict: false, ...(features ? { features } : {}) }
+/** True for cards not shown on the dashboard: unknown type, or its feature is off. */
+function hiddenPredicate(state: EditState): (id: string) => boolean {
+  const hidden = new Set(
+    state.layout.cards
+      .filter((c) => {
+        const def = cardType(c.type)
+        return !def || (def.requires !== undefined && !state.features[def.requires])
+      })
+      .map((c) => c.id),
+  )
+  return (id) => hidden.has(id)
 }
 
 /** A fresh card id `${type}-${suffix}` not in `existing`. `rand` is injectable for tests. */
@@ -85,7 +108,7 @@ export function newCardId(type: string, existing: Iterable<string>, rand: () => 
 
 /** The phone placements as shown: stored, or derived from the large layout. */
 function phoneOf(state: EditState): Placement[] {
-  return state.layout.phone ?? resolvePhoneLayout(state.layout, state.features ?? ALL_FEATURES)
+  return state.layout.phone ?? resolvePhoneLayout(state.layout, state.features)
 }
 
 function samePlacements(a: readonly Placement[], b: readonly Placement[]): boolean {
@@ -105,7 +128,11 @@ function phoneSize(type: string): Size | null {
 }
 
 /** Applies a placement edit to the current mode's layout; same state when nothing changed. */
-function editPlacements(state: EditState, id: string, op: (ps: readonly Placement[], cols: number) => Placement[]): EditState {
+function editPlacements(
+  state: EditState,
+  id: string,
+  op: (ps: readonly Placement[], cols: number) => Placement[],
+): EditState {
   if (!state.layout.cards.some((c) => c.id === id)) return state
   if (state.mode === "large") {
     const large = op(state.layout.large, LARGE_COLS)
@@ -124,7 +151,11 @@ export function snapshotCard(state: EditState, id: string): CardSnapshot | null 
   const large = state.layout.large.find((p) => p.id === id)
   const phone = phoneOf(state).find((p) => p.id === id)
   if (!card || !large || !phone) return null
-  return { card: { ...card, config: { ...card.config } }, large: { ...large }, phone: { ...phone } }
+  return {
+    card: { ...card, config: { ...card.config } },
+    large: { ...large },
+    phone: { ...phone },
+  }
 }
 
 /** Appends the card, then moves it to `at`: it wins that spot and the others make room. */
@@ -145,13 +176,19 @@ export function editReducer(state: EditState, action: EditAction): EditState {
       return editPlacements(state, action.id, (ps, cols) => resizeCard(ps, action.id, action.size, limits, cols))
     }
 
-    case "moveOrder":
-      return editPlacements(state, action.id, (ps, cols) => moveInOrder(ps, action.id, action.delta, cols))
+    case "moveOrder": {
+      const skip = hiddenPredicate(state)
+      return editPlacements(state, action.id, (ps, cols) => moveInOrder(ps, action.id, action.delta, cols, skip))
+    }
 
     case "add": {
       const def = cardType(action.cardType)
       if (!def || !action.id || layout.cards.some((c) => c.id === action.id)) return state
-      const card: CardInstance = { id: action.id, type: def.id, config: { ...def.defaultConfig } }
+      const card: CardInstance = {
+        id: action.id,
+        type: def.id,
+        config: { ...def.defaultConfig },
+      }
       return {
         ...state,
         layout: {
@@ -167,7 +204,8 @@ export function editReducer(state: EditState, action: EditAction): EditState {
     case "remove": {
       if (!layout.cards.some((c) => c.id === action.id)) return state
       // In large mode a derived phone layout stays derived; in phone mode the edit stores it.
-      const phone = layout.phone === null && state.mode === "large" ? null : removeCard(phoneOf(state), action.id, PHONE_COLS)
+      const phone =
+        layout.phone === null && state.mode === "large" ? null : removeCard(phoneOf(state), action.id, PHONE_COLS)
       return {
         ...state,
         layout: {
@@ -217,14 +255,24 @@ export function editReducer(state: EditState, action: EditAction): EditState {
 
     case "saved": {
       const stale = action.layout !== undefined && action.layout !== layout
-      return { ...state, revision: action.revision, dirty: stale ? state.dirty : false }
+      return {
+        ...state,
+        revision: Math.max(state.revision, action.revision),
+        dirty: stale ? state.dirty : false,
+      }
     }
 
     case "conflict":
       return { ...state, conflict: true }
 
     case "replace":
-      return { ...state, layout: action.layout, revision: action.revision, dirty: false, conflict: false }
+      return {
+        ...state,
+        layout: action.layout,
+        revision: action.revision,
+        dirty: false,
+        conflict: false,
+      }
 
     default:
       return state
@@ -249,11 +297,22 @@ export function initialTracker(state: EditState): SaveTracker {
   return { revision: state.revision, savedLayout: null, failedLayout: null }
 }
 
-/** The save to run now, or null when there is nothing (new) to save. */
-export function nextSave(state: EditState, t: SaveTracker): { layout: DashboardLayout; baseRevision: number } | null {
+/**
+ * The save to run now, or null when there is nothing (new) to save. A layout
+ * whose save failed is retried only with `retryFailed` (an explicit flush, e.g.
+ * Done); a layout that hit a conflict is never re-sent (`conflict` is set).
+ */
+export function nextSave(
+  state: EditState,
+  t: SaveTracker,
+  retryFailed = false,
+): { layout: DashboardLayout; baseRevision: number } | null {
   if (!state.dirty || state.conflict) return null
-  if (state.layout === t.savedLayout || state.layout === t.failedLayout) return null
-  return { layout: state.layout, baseRevision: Math.max(t.revision, state.revision) }
+  if (state.layout === t.savedLayout || (!retryFailed && state.layout === t.failedLayout)) return null
+  return {
+    layout: state.layout,
+    baseRevision: Math.max(t.revision, state.revision),
+  }
 }
 
 /** Folds a save's result into the tracker; `action` is what to dispatch, `error` what to show. */
@@ -264,11 +323,26 @@ export function applySaveResult(
 ): { tracker: SaveTracker; action: EditAction | null; error: string | null } {
   if ("success" in result) {
     return {
-      tracker: { revision: result.revision, savedLayout: layout, failedLayout: null },
+      tracker: {
+        revision: result.revision,
+        savedLayout: layout,
+        failedLayout: null,
+      },
       action: { type: "saved", revision: result.revision, layout },
       error: null,
     }
   }
-  if (result.conflict) return { tracker: t, action: { type: "conflict" }, error: result.error }
-  return { tracker: { ...t, failedLayout: layout }, action: null, error: result.error }
+  // Marked failed so the loop does not re-send it before React sees `conflict`.
+  // Both `error` and `conflict` are set: the UI should show only the conflict banner.
+  if (result.conflict)
+    return {
+      tracker: { ...t, failedLayout: layout },
+      action: { type: "conflict" },
+      error: result.error,
+    }
+  return {
+    tracker: { ...t, failedLayout: layout },
+    action: null,
+    error: result.error,
+  }
 }

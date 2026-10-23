@@ -41,7 +41,8 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
       throw e
     }
   }
-  revalidatePath("/")
+  // No revalidatePath here: it would re-run every card's queries on each
+  // autosave. The editor calls router.refresh() when editing is done.
   return { success: true, revision: baseRevision + 1 }
 }
 

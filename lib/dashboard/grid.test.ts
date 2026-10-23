@@ -283,6 +283,21 @@ describe("moveInOrder", () => {
     expect(byId(out).c.y).toBe(2)
     expect(byId(out).b.y).toBe(5)
   })
+
+  it("steps over skipped (hidden) cards to the nearest visible neighbour", () => {
+    const hidden = (id: string) => id === "b"
+    const out = moveInOrder(phone, "c", -1, PHONE_COLS, hidden)
+    assertValid(out, PHONE_COLS)
+    // Order becomes c, b, a.
+    expect(byId(out).c.y).toBe(0)
+    expect(byId(out).b.y).toBe(3)
+    expect(byId(out).a.y).toBe(4)
+  })
+
+  it("is a no-op when only skipped cards lie in that direction", () => {
+    const out = moveInOrder(phone, "b", -1, PHONE_COLS, (id) => id === "a")
+    expect(out).toEqual(phone)
+  })
 })
 
 describe("hostile coordinates", () => {
