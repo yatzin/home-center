@@ -19,6 +19,7 @@ import { loadFeatures } from "@/lib/features-server"
 import { listInboxItems } from "@/lib/inbox-server"
 import { IntakeCard } from "@/components/dashboard/intake-card"
 import { FreshStartCard } from "@/components/dashboard/fresh-start-card"
+import { CustomizedDashboard } from "@/components/dashboard/customized-dashboard"
 import { getFormat } from "@/lib/regional-server"
 import type { Formatter } from "@/lib/regional"
 
@@ -32,8 +33,49 @@ const THUMBNAILS_LARGE = 7
 const THUMBNAILS_COMPACT = 18
 
 export default async function DashboardPage() {
-  const fmt = await getFormat()
   const session = await auth()
+  const features = await loadFeatures()
+  const firstName = session?.user?.name ? session.user.name.split(" ")[0] : null
+  const isAdmin = session?.user.role === "ADMIN"
+
+  if (!features.customizedDashboards) return <LegacyDashboard firstName={firstName} isAdmin={isAdmin} />
+
+  const empty = await householdIsEmpty()
+  return (
+    <div className="space-y-6">
+      <Greeting firstName={firstName} />
+      {empty && isAdmin && <FreshStartCard />}
+      <CustomizedDashboard isAdmin={isAdmin} />
+    </div>
+  )
+}
+
+function Greeting({ firstName }: { firstName: string | null }) {
+  return (
+    <div>
+      <h1 className="font-heading text-xl font-semibold tracking-tight">
+        Welcome back{firstName ? `, ${firstName}` : ""}
+      </h1>
+    </div>
+  )
+}
+
+// The same counts the legacy dashboard uses for its fresh-start check:
+// unfiltered, so data hidden by a feature toggle still counts.
+async function householdIsEmpty() {
+  const counts = await Promise.all([
+    prisma.property.count(),
+    prisma.vehicle.count(),
+    prisma.equipment.count(),
+    prisma.person.count(),
+    prisma.serviceRecord.count(),
+  ])
+  return counts.every((n) => n === 0)
+}
+
+// The fixed dashboard, unchanged, for when Customized Dashboards is off.
+async function LegacyDashboard({ firstName, isAdmin }: { firstName: string | null; isAdmin: boolean }) {
+  const fmt = await getFormat()
 
   const now = new Date()
   const in60 = new Date(now.getTime() + 60 * 86400000)
@@ -117,13 +159,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-xl font-semibold tracking-tight">
-          Welcome back{session?.user?.name ? `, ${session.user.name.split(" ")[0]}` : ""}
-        </h1>
-      </div>
+      <Greeting firstName={firstName} />
 
-      {empty && session?.user.role === "ADMIN" && <FreshStartCard />}
+      {empty && isAdmin && <FreshStartCard />}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-[1.3fr_1.3fr_1.6fr_1fr]">
         <SummaryCard icon={<Building2 />} label="Properties" value={propertyCount} href="/assets/properties" thumbnails={propertyThumbnails} hero />
