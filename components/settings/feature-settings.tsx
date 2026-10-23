@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { updateFeatureSettings } from "@/lib/actions/feature-settings"
 
-type Values = { healthEnabled: boolean; roomsEnabled: boolean; equipmentTabEnabled: boolean }
+type Values = { healthEnabled: boolean; roomsEnabled: boolean; equipmentTabEnabled: boolean; customizedDashboardsEnabled: boolean }
 
-const FEATURE_NAMES = { healthEnabled: "Health", roomsEnabled: "Rooms", equipmentTabEnabled: "Equipment tab" } as const
+const FEATURE_NAMES = { healthEnabled: "Health", roomsEnabled: "Rooms", equipmentTabEnabled: "Equipment tab", customizedDashboardsEnabled: "Customized dashboards" } as const
 
 export function FeatureSettings({ initial }: { initial: Values }) {
   const [values, setValues] = useState(initial)
@@ -26,7 +26,7 @@ export function FeatureSettings({ initial }: { initial: Values }) {
         return
       }
       // One switch changes per save: say which, and which way.
-      const changed = (["healthEnabled", "roomsEnabled", "equipmentTabEnabled"] as const).find((k) => next[k] !== previous[k])
+      const changed = (["healthEnabled", "roomsEnabled", "equipmentTabEnabled", "customizedDashboardsEnabled"] as const).find((k) => next[k] !== previous[k])
       if (changed) toast.success(`${FEATURE_NAMES[changed]} turned ${next[changed] ? "on" : "off"}.`)
     })
   }
@@ -34,6 +34,7 @@ export function FeatureSettings({ initial }: { initial: Values }) {
   const on = values.healthEnabled
   const roomsOn = values.roomsEnabled
   const equipmentTabOn = values.equipmentTabEnabled
+  const customizedDashboardsOn = values.customizedDashboardsEnabled
 
   return (
     <div className="space-y-6">
@@ -113,6 +114,31 @@ export function FeatureSettings({ initial }: { initial: Values }) {
         <p className="ml-6 text-xs text-muted-foreground">
           Turned off, the Equipment tab disappears from properties and from the room window. Equipment itself is
           untouched and still reachable from the Equipment page.
+        </p>
+      </CardContent>
+    </Card>
+
+    <Card className="py-5">
+      <CardHeader className="px-5">
+        <CardTitle className="flex items-center gap-2">
+          Customized dashboards
+          {customizedDashboardsOn ? <Badge variant="secondary">On</Badge> : <Badge variant="outline">Off</Badge>}
+        </CardTitle>
+        <CardDescription>A dashboard made of cards that admins can add, remove and rearrange.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-5 space-y-2">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={customizedDashboardsOn}
+            disabled={pending}
+            onChange={(e) => save({ ...values, customizedDashboardsEnabled: e.target.checked })}
+          />
+          Use customized dashboards
+        </label>
+        <p className="ml-6 text-xs text-muted-foreground">
+          Turned off, everyone sees the standard dashboard. Nothing is deleted — turn it back on and your layout returns.
         </p>
       </CardContent>
     </Card>
