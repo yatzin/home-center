@@ -46,14 +46,18 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
   return { success: true, revision: baseRevision + 1 }
 }
 
-export async function resetDashboardLayout(): Promise<{ success: true; revision: number } | { error: string }> {
+/** Back to the default layout (both layouts). Returns it so the editor can show it without a reload. */
+export async function resetDashboardLayout(): Promise<
+  { success: true; revision: number; layout: DashboardLayout } | { error: string }
+> {
   await requireAdmin()
-  const data = JSON.stringify(defaultLayout(await loadFeatures()))
+  const layout = defaultLayout(await loadFeatures())
+  const data = JSON.stringify(layout)
   const row = await prisma.dashboardLayout.upsert({
     where: { id: DASHBOARD_LAYOUT_ID },
     create: { id: DASHBOARD_LAYOUT_ID, data, revision: 1 },
     update: { data, revision: { increment: 1 } },
   })
   revalidatePath("/")
-  return { success: true, revision: row.revision }
+  return { success: true, revision: row.revision, layout }
 }

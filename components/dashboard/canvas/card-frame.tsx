@@ -23,31 +23,42 @@ const CardErrorBoundary = catchError((props: { title: string }) => <CardError ti
 /**
  * Card chrome shared by every dashboard card: shadcn Card filling its grid
  * cell, an error boundary around the view, and the error state for a card
- * whose loader failed (`failed`).
+ * whose loader failed (`failed`). With `editing`, the content is inert (links
+ * and buttons inside it cannot be clicked or focused): in edit mode the card
+ * is something to arrange, and its edit controls sit on top.
  */
 export function CardFrame({
   title,
   failed,
+  editing,
   className,
   children,
 }: {
   title: string
   failed?: boolean
+  editing?: boolean
   className?: string
   children: React.ReactNode
 }) {
+  const body = failed ? (
+    <CardError title={title} />
+  ) : (
+    // A view that throws while server rendering makes React fall back to
+    // the nearest Suspense boundary and retry on the client, where the
+    // error boundary catches it. This boundary keeps that to this card
+    // instead of the whole route.
+    <Suspense>
+      <CardErrorBoundary title={title}>{children}</CardErrorBoundary>
+    </Suspense>
+  )
   return (
     <Card role="group" aria-label={title} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
-      {failed ? (
-        <CardError title={title} />
+      {editing ? (
+        <div inert className="h-full min-h-0 select-none">
+          {body}
+        </div>
       ) : (
-        // A view that throws while server rendering makes React fall back to
-        // the nearest Suspense boundary and retry on the client, where the
-        // error boundary catches it. This boundary keeps that to this card
-        // instead of the whole route.
-        <Suspense>
-          <CardErrorBoundary title={title}>{children}</CardErrorBoundary>
-        </Suspense>
+        body
       )}
     </Card>
   )

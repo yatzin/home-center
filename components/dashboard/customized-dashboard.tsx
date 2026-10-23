@@ -3,7 +3,6 @@ import { getFormat } from "@/lib/regional-server"
 import { cardType } from "@/lib/dashboard/card-types"
 import { loadDashboardLayout } from "@/lib/dashboard/layout-server"
 import { LOADERS, type CardResult, type LoaderContext } from "@/lib/dashboard/loaders"
-import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
 import type { CardInstance } from "@/lib/dashboard/layout"
 import { DashboardCanvas } from "./canvas/dashboard-canvas"
 
@@ -36,11 +35,6 @@ export async function CustomizedDashboard({ isAdmin }: { isAdmin: boolean }) {
   const cards = await Promise.all(placed.map((c) => loadCard(c, ctx)))
 
   return (
-    <DashboardCanvas
-      cards={cards}
-      layout={{ ...layout, phone: resolvePhoneLayout(layout, features) }}
-      revision={revision}
-      isAdmin={isAdmin}
-    />
+    <DashboardCanvas cards={cards} layout={layout} revision={revision} features={features} isAdmin={isAdmin} />
   )
 }

@@ -20,6 +20,7 @@ import { listInboxItems } from "@/lib/inbox-server"
 import { IntakeCard } from "@/components/dashboard/intake-card"
 import { FreshStartCard } from "@/components/dashboard/fresh-start-card"
 import { CustomizedDashboard } from "@/components/dashboard/customized-dashboard"
+import { DashboardEditProvider, EditDashboardButton } from "@/components/dashboard/canvas/edit-context"
 import { getFormat } from "@/lib/regional-server"
 import type { Formatter } from "@/lib/regional"
 
@@ -42,11 +43,16 @@ export default async function DashboardPage() {
 
   const empty = await householdIsEmpty()
   return (
-    <div className="space-y-6">
-      <Greeting firstName={firstName} />
-      {empty && isAdmin && <FreshStartCard />}
-      <CustomizedDashboard isAdmin={isAdmin} />
-    </div>
+    <DashboardEditProvider>
+      <div className="space-y-6">
+        <div className="flex items-start justify-between gap-3">
+          <Greeting firstName={firstName} />
+          {isAdmin && <EditDashboardButton />}
+        </div>
+        {empty && isAdmin && <FreshStartCard />}
+        <CustomizedDashboard isAdmin={isAdmin} />
+      </div>
+    </DashboardEditProvider>
   )
 }
 

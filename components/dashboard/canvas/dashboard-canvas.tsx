@@ -1,139 +1,228 @@
 "use client"
 
-import { useState } from "react"
-import { LayoutGrid } from "lucide-react"
-import { cardType } from "@/lib/dashboard/card-types"
-import { compact, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
+// The customizable dashboard on the client. Everyone gets the view; admins
+// also get edit mode (entered from the "Edit dashboard" button in the page
+// header, see edit-context.tsx).
+//
+// Edit state lives in one reducer (lib/dashboard/edit-state.ts), created once
+// from the first props and never reset by later ones: the page's props change
+// after any router refresh, and must not clobber an edit in progress. The
+// reducer only takes props over explicitly: on entering edit mode when the
+// props are newer, on "Reload" after a conflict, and after Reset to default.
+//
+// Outside edit mode the page shows the props, unless the reducer holds a newer
+// revision (just saved; the refresh after Done has not landed yet), so leaving
+// edit mode never flashes the old layout.
+
+import { useCallback, useReducer, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { RefreshCw, TriangleAlert } from "lucide-react"
+import { toast } from "sonner"
+import { resetDashboardLayout } from "@/lib/actions/dashboard-layout"
+import { editReducer, initialEditState, snapshotCard } from "@/lib/dashboard/edit-state"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
 import type { CardResult } from "@/lib/dashboard/loaders"
-import { cn } from "@/lib/utils"
-import { CARD_VIEWS } from "@/components/dashboard/cards"
-import { CardFrame } from "./card-frame"
-import { GAP, ROW_HEIGHT } from "./grid-metrics"
-import { useCardTier, type LayoutMode } from "./use-card-tier"
+import type { Features } from "@/lib/features"
+import { Button } from "@/components/ui/button"
+import { EditBar, type SaveStatus } from "./edit-bar"
+import { EditCanvas } from "./edit-canvas"
+import { useDashboardEditMode } from "./edit-context"
+import { useAutosave } from "./use-autosave"
+import { cardTitle, isShownType, ViewGrid, type CanvasCardData } from "./view-grid"
 
-// Both layouts are in the markup at once: each card carries its phone and its
-// large placement as CSS variables, and a container query on the canvas's own
-// width (LARGE_MIN_WIDTH, 40rem) picks one. Measuring the canvas rather than
-// the viewport keeps a tablet with the sidebar open on the phone layout. The
-// server and the first client render are identical, so there is no hydration
-// mismatch and no layout flash.
-//
-// Tiers follow the same rule: when a card's phone and large tiers differ, both
-// views are rendered and CSS shows the right one (images load lazily, so the
-// hidden copy costs no downloads). When they agree, the view renders once.
-//
-// The `/dash` container name keeps these queries pointed at the canvas even if
-// a card view declares its own @container.
-
-const GRID_STYLE = {
-  "--dash-row": `${ROW_HEIGHT}px`,
-  "--dash-gap": `${GAP}px`,
-  "--dash-cols-phone": PHONE_COLS,
-  "--dash-cols-large": LARGE_COLS,
-} as React.CSSProperties
-
-const span = (start: number, length: number) => `${start + 1} / span ${length}`
-
-/** Eases a card's content in when its tier changes (not on first paint). Reduced motion: no animation. */
-function TierFade({ tier, children }: { tier: number; children: React.ReactNode }) {
-  const [shown, setShown] = useState(tier)
-  const [changed, setChanged] = useState(false)
-  if (shown !== tier) {
-    setShown(tier)
-    setChanged(true)
-  }
-  return (
-    <div key={tier} className={cn("h-full min-h-0", changed && "chart-fade")}>
-      {children}
-    </div>
-  )
-}
-
-function CanvasCard({ card, large, phone }: { card: CardResult; large: Placement; phone: Placement }) {
-  const View = CARD_VIEWS[card.type]
-  const largeSize: Size = { w: large.w, h: large.h }
-  const phoneSize: Size = { w: phone.w, h: phone.h }
-  const largeTier = useCardTier(card.type, largeSize, "large")
-  const phoneTier = useCardTier(card.type, phoneSize, "phone")
-  const title = cardType(card.type)?.label ?? "Card"
-  const data = card.status === "ok" ? card.data : null
-
-  const view = (tier: number, size: Size, mode: LayoutMode) => (
-    <TierFade tier={tier}>
-      <View data={data} config={card.config} tier={tier} size={size} mode={mode} editing={false} />
-    </TierFade>
-  )
-
-  return (
-    <div
-      className="min-h-0 min-w-0 [grid-column:var(--dash-pc)] [grid-row:var(--dash-pr)] @min-[40rem]/dash:[grid-column:var(--dash-lc)] @min-[40rem]/dash:[grid-row:var(--dash-lr)]"
-      style={
-        {
-          "--dash-pc": span(phone.x, phone.w),
-          "--dash-pr": span(phone.y, phone.h),
-          "--dash-lc": span(large.x, large.w),
-          "--dash-lr": span(large.y, large.h),
-        } as React.CSSProperties
-      }
-    >
-      <CardFrame title={title} failed={card.status === "error"}>
-        {largeTier === phoneTier ? (
-          view(largeTier, largeSize, "large")
-        ) : (
-          <>
-            <div className="h-full min-h-0 @min-[40rem]/dash:hidden">{view(phoneTier, phoneSize, "phone")}</div>
-            <div className="hidden h-full min-h-0 @min-[40rem]/dash:block">{view(largeTier, largeSize, "large")}</div>
-          </>
-        )}
-      </CardFrame>
-    </div>
-  )
-}
-
-export function DashboardCanvas({
-  cards,
-  layout,
-}: {
+type CanvasProps = {
   cards: CardResult[]
-  /** `phone` resolved by the server (resolvePhoneLayout). */
-  layout: DashboardLayout & { phone: Placement[] }
-  /** Used by edit mode (saves are based on it). */
+  /** The stored layout (phone may be null: derived). */
+  layout: DashboardLayout
+  /** Saves are based on it. */
   revision: number
+  /** The features the server rendered with (which cards show, how phone is derived). */
+  features: Features
   /** Admins get edit mode. */
   isAdmin: boolean
-}) {
-  const largeById = new Map(layout.large.map((p) => [p.id, p]))
-  const phoneById = new Map(layout.phone.map((p) => [p.id, p]))
-  const shown = cards.filter((c) => CARD_VIEWS[c.type] && largeById.has(c.id) && phoneById.has(c.id))
+}
 
-  if (shown.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12 text-center">
-        <LayoutGrid className="h-6 w-6 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
-        <p className="text-sm text-muted-foreground">
-          {layout.cards.length === 0 ? "Your dashboard has no cards yet." : "There's nothing to show on the dashboard right now."}
-        </p>
-      </div>
-    )
+export function DashboardCanvas({ cards, layout, revision, features, isAdmin }: CanvasProps) {
+  if (!isAdmin) return <ViewGrid cards={cards} layout={layout} features={features} />
+  return <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} />
+}
+
+/** The shown cards of a layout, in its order, with the data the page has for each. */
+function cardsOf(layout: DashboardLayout, features: Features, data: ReadonlyMap<string, CardResult>): CanvasCardData[] {
+  return layout.cards
+    .filter((c) => isShownType(c.type, features))
+    .map((c) => {
+      const loaded = data.get(c.id)
+      // The layout's config is the newest; the data is whatever was last loaded.
+      return loaded && loaded.type === c.type
+        ? { ...loaded, config: c.config }
+        : { id: c.id, type: c.type, config: c.config, status: "loading" as const }
+    })
+}
+
+function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps, "isAdmin">) {
+  const router = useRouter()
+  const { editing, setEditing } = useDashboardEditMode()
+  const [state, dispatch] = useReducer(editReducer, null, () => initialEditState(layout, revision, features))
+  const { saving, error, flush } = useAutosave(state, dispatch)
+
+  // Every card's data seen so far, so a removed card comes back instantly on
+  // Undo, and a refresh that drops a card does not blank it mid-edit.
+  const [loaded, setLoaded] = useState(() => new Map(cards.map((c) => [c.id, c])))
+  const [seenCards, setSeenCards] = useState(cards)
+  if (seenCards !== cards) {
+    setSeenCards(cards)
+    setLoaded((prev) => new Map([...prev, ...cards.map((c) => [c.id, c] as const)]))
   }
 
-  // Display only: cards that are not shown (feature off, unknown type, no view
-  // yet) would leave holes, so the shown ones float up. The stored layout is
-  // untouched.
-  const ids = new Set(shown.map((c) => c.id))
-  const large = new Map(compact(layout.large.filter((p) => ids.has(p.id)), LARGE_COLS).map((p) => [p.id, p]))
-  const phone = new Map(compact(layout.phone.filter((p) => ids.has(p.id)), PHONE_COLS).map((p) => [p.id, p]))
+  // Entering edit mode starts from the newest layout we know of.
+  const [wasEditing, setWasEditing] = useState(editing)
+  const [sessionStart, setSessionStart] = useState(state.revision)
+  if (wasEditing !== editing) {
+    setWasEditing(editing)
+    if (editing) {
+      if (revision > state.revision && !state.dirty) dispatch({ type: "replace", layout, revision })
+      setSessionStart(Math.max(revision, state.revision))
+    }
+  }
+
+  // Conflict "Reload": refresh the page's props, then take them over.
+  const [reloadPending, startReload] = useTransition()
+  const [reloadWanted, setReloadWanted] = useState(false)
+  if (reloadWanted && !reloadPending) {
+    setReloadWanted(false)
+    dispatch({ type: "replace", layout, revision })
+  }
+
+  const [, startRefresh] = useTransition()
+  const [finishing, setFinishing] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
+  const [announcement, setAnnouncement] = useState("")
+  const announce = useCallback((message: string) => {
+    // A trailing toggle makes a repeated message announce again.
+    setAnnouncement((prev) => (prev === message ? `${message} ` : message))
+  }, [])
+
+  const undoToasts = useRef(new Set<string | number>())
+  const dismissUndoToasts = () => {
+    for (const id of undoToasts.current) toast.dismiss(id)
+    undoToasts.current.clear()
+  }
+
+  const remove = (id: string) => {
+    const snapshot = snapshotCard(state, id)
+    if (!snapshot) return
+    const title = cardTitle(snapshot.card.type)
+    // Keep keyboard focus in the canvas: move it to the next card's grip.
+    const removedEl = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`)
+    const hadFocus = removedEl?.contains(document.activeElement) ?? false
+    dispatch({ type: "remove", id })
+    if (hadFocus) {
+      requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-card-id] [data-grip]")?.focus())
+    }
+    const toastId: string | number = toast(`${title} removed`, {
+      duration: 8000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          undoToasts.current.delete(toastId)
+          dispatch({ type: "restore", snapshot })
+          announce(`${title} is back.`)
+        },
+      },
+      onDismiss: () => undoToasts.current.delete(toastId),
+      onAutoClose: () => undoToasts.current.delete(toastId),
+    })
+    undoToasts.current.add(toastId)
+    announce(`${title} removed. Undo is in the notification.`)
+  }
+
+  const done = async () => {
+    if (finishing) return
+    setFinishing(true)
+    const ok = await flush()
+    setFinishing(false)
+    // Not saved (error or conflict): stay in edit mode; the bar or banner says why.
+    if (!ok) return
+    dismissUndoToasts()
+    setEditing(false)
+    startRefresh(() => router.refresh())
+  }
+
+  const reload = () => {
+    dismissUndoToasts()
+    setReloadWanted(true)
+    startReload(() => router.refresh())
+  }
+
+  const reset = async () => {
+    setResetting(true)
+    try {
+      // Settle a pending autosave first, so it cannot land after the reset.
+      await flush({ retryFailed: false })
+      const result = await resetDashboardLayout()
+      if ("error" in result) {
+        toast.error(result.error)
+        return
+      }
+      dismissUndoToasts()
+      dispatch({ type: "replace", layout: result.layout, revision: result.revision })
+      announce("Dashboard reset to default.")
+      toast.success("Dashboard reset to default")
+    } catch {
+      toast.error("Couldn't reset the dashboard. Check your connection and try again.")
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  if (!editing) {
+    // Just saved and the refresh is still on its way: show what was saved.
+    const shown = state.revision > revision ? state.layout : layout
+    const showCards = shown === layout ? cards : cardsOf(shown, features, loaded)
+    return <ViewGrid cards={showCards} layout={shown} features={features} />
+  }
+
+  const status: SaveStatus = state.conflict
+    ? { kind: "conflict" }
+    : error
+      ? { kind: "error", message: error }
+      : saving || state.dirty
+        ? { kind: "pending" }
+        : state.revision > sessionStart
+          ? { kind: "saved" }
+          : { kind: "idle" }
 
   return (
-    <div className="@container/dash">
-      <div
-        className="grid auto-rows-(--dash-row) grid-cols-[repeat(var(--dash-cols-phone),minmax(0,1fr))] gap-(--dash-gap) @min-[40rem]/dash:grid-cols-[repeat(var(--dash-cols-large),minmax(0,1fr))]"
-        style={GRID_STYLE}
-      >
-        {shown.map((card) => (
-          <CanvasCard key={card.id} card={card} large={large.get(card.id)!} phone={phone.get(card.id)!} />
-        ))}
+    <div>
+      {state.conflict && (
+        <div
+          role="alert"
+          className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm"
+        >
+          <TriangleAlert className="size-4 shrink-0 text-destructive" aria-hidden />
+          <p className="min-w-0 flex-1">
+            Someone else changed the dashboard while you were editing. Reload to see their version; your changes since then
+            weren&apos;t saved.
+          </p>
+          <Button size="sm" variant="outline" onClick={reload} disabled={reloadPending}>
+            <RefreshCw className={reloadPending ? "motion-safe:animate-spin" : undefined} aria-hidden />
+            Reload
+          </Button>
+        </div>
+      )}
+      <EditCanvas
+        state={state}
+        dispatch={dispatch}
+        cards={cardsOf(state.layout, features, loaded)}
+        readOnly={state.conflict}
+        announce={announce}
+        onRemove={remove}
+      />
+      <EditBar status={status} finishing={finishing} resetting={resetting} onDone={done} onReset={reset} />
+      <div aria-live="polite" role="status" className="sr-only">
+        {announcement}
       </div>
     </div>
   )
