@@ -129,3 +129,12 @@ describe("metric units", () => {
     expect(f.areaWords).toBe("square metres")
   })
 })
+
+describe("monthYear", () => {
+  it("follows the date preset", () => {
+    expect(fmt().monthYear(DAY, { utc: true })).toBe("January 2026")
+    expect(fmt({ dateFormat: "DMY_SHORT" }).monthYear(DAY, { utc: true })).toBe("January 2026")
+    expect(fmt({ dateFormat: "MDY_NUM" }).monthYear(DAY, { utc: true })).toBe("01/2026")
+    expect(fmt({ dateFormat: "ISO" }).monthYear(DAY, { utc: true })).toBe("2026-01")
+  })
+})

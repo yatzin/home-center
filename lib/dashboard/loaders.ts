@@ -12,7 +12,22 @@ import { assetHref } from "@/lib/assets"
 import { dueCandidateFilter } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { AssetType } from "@/app/generated/prisma/client"
-import { dueLabel, dueMaintenance, roomGroups, type PropertyRooms } from "./shaping"
+import { listInboxItems } from "@/lib/inbox-server"
+import { inboxReadiness, type InboxReadiness } from "@/lib/inbox-form"
+import { intakeSummary } from "@/lib/intake-ui"
+import { headlineOf } from "@/components/dashboard/intake-card"
+import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
+import {
+  dueLabel,
+  dueMaintenance,
+  expiringWarranties,
+  monthKeyOf,
+  roomGroups,
+  urgencyOf,
+  urgentMaintenance,
+  type PropertyRooms,
+  type Urgency,
+} from "./shaping"
 
 export type LoaderContext = { now: Date; features: Features; fmt: Formatter }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
@@ -317,6 +332,149 @@ const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt }): 
   }
 }
 
+// ---- Reminders, expiring warranties, intake -------------------------------------
+
+const ASSET_TYPES: readonly AssetType[] = ["PROPERTY", "VEHICLE", "EQUIPMENT", "PERSON"]
+
+/** The window, assetType and limit shared by the two "upcoming" cards. */
+function upcomingConfig(config: Record<string, unknown>, defaults: { windowDays: number; limit: number }) {
+  const w = config.windowDays
+  const l = config.limit
+  return {
+    windowDays: typeof w === "number" && Number.isInteger(w) && w >= 1 ? Math.min(w, 365) : defaults.windowDays,
+    limit: typeof l === "number" && Number.isInteger(l) && l >= 1 ? Math.min(l, 50) : defaults.limit,
+    assetType: ASSET_TYPES.find((t) => t === config.assetType) ?? null,
+  }
+}
+
+/** Person-owned rows never leave the server with Health off, whatever the config asks for. */
+const hiddenByHealth = (assetType: AssetType | null, features: Features) => assetType === "PERSON" && !features.health
+
+export type ReminderItem = {
+  schedule: MaintenanceSchedule
+  assetName: string | null
+  href: string
+  urgency: Urgency
+  overdue: boolean
+  dueLabel: string
+  currentMileage: number | null
+  meterUnit: MeterUnit
+}
+
+/** Most urgent first. `total` counts everything due in the window, not just `items`. */
+export type RemindersCardData = {
+  windowDays: number
+  total: number
+  /** The card is filtered to people and Health is off. */
+  hidden: boolean
+  items: ReminderItem[]
+}
+
+const loadReminders: CardLoader = async (config, { now, features, fmt }): Promise<RemindersCardData> => {
+  const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 30, limit: 6 })
+  if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
+  const [candidates, mileage, index] = await Promise.all([
+    prisma.maintenanceSchedule.findMany({
+      where: { AND: [dueCandidateFilter(windowDays, now), { ...ownedWhere(features), ...(assetType ? { assetType } : {}) }] },
+      orderBy: { nextDueDate: "asc" },
+    }),
+    loadVehicleMileage(),
+    assetIndex(),
+  ])
+  const { total, items } = urgentMaintenance(candidates, mileage, now, limit, windowDays)
+  return {
+    windowDays,
+    total,
+    hidden: false,
+    items: items.map(({ s, due }) => {
+      const reading = s.assetType === "VEHICLE" ? mileage.get(s.assetId) : undefined
+      return {
+        schedule: s,
+        assetName: index.assetName(s.assetType, s.assetId) ?? null,
+        href: assetHref(s.assetType, s.assetId),
+        urgency: urgencyOf(due),
+        overdue: due.overdue,
+        dueLabel: dueLabel(due, fmt),
+        currentMileage: reading?.value ?? null,
+        meterUnit: reading?.unit ?? "MILES",
+      }
+    }),
+  }
+}
+
+export type ExpiringItem = {
+  id: string
+  productName: string
+  assetName: string | null
+  href: string
+  daysLeft: number
+  /** The expiry date, formatted. */
+  expires: string
+  monthKey: string
+  monthLabel: string
+}
+
+/** Soonest first. `total` counts everything expiring in the window, not just `items`. */
+export type ExpiringWarrantiesCardData = {
+  windowDays: number
+  total: number
+  hidden: boolean
+  items: ExpiringItem[]
+}
+
+const loadExpiringWarranties: CardLoader = async (config, { now, features, fmt }): Promise<ExpiringWarrantiesCardData> => {
+  const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 60, limit: 6 })
+  if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
+  const [rows, index] = await Promise.all([
+    prisma.warranty.findMany({
+      where: {
+        ...ownedWhere(features),
+        ...(assetType ? { assetType } : {}),
+        expirationDate: { gte: now, lte: new Date(now.getTime() + windowDays * 86400000) },
+      },
+      orderBy: [{ expirationDate: "asc" }, { id: "asc" }],
+      select: { id: true, productName: true, expirationDate: true, assetType: true, assetId: true },
+    }),
+    assetIndex(),
+  ])
+  const { total, items } = expiringWarranties(rows, now, windowDays, limit)
+  return {
+    windowDays,
+    total,
+    hidden: false,
+    items: items.map((w) => ({
+      id: w.id,
+      productName: w.productName,
+      assetName: index.assetName(w.assetType, w.assetId) ?? null,
+      href: assetHref(w.assetType, w.assetId),
+      daysLeft: w.daysLeft,
+      expires: fmt.date(w.expirationDate),
+      monthKey: monthKeyOf(w.expirationDate),
+      monthLabel: fmt.monthYear(w.expirationDate),
+    })),
+  }
+}
+
+export type IntakeCardData = {
+  /** Items waiting for review. */
+  count: number
+  /** Newest first. */
+  items: { id: string; headline: string; readiness: InboxReadiness }[]
+}
+
+const loadIntake: CardLoader = async (_config, { now, fmt }): Promise<IntakeCardData> => {
+  const { items, householdNames } = await listInboxItems(now)
+  const { count, newest } = intakeSummary(items, LIST_LENGTH)
+  return {
+    count,
+    items: newest.map((item) => ({
+      id: item.id,
+      headline: headlineOf(item, householdNames, fmt),
+      readiness: inboxReadiness(item, householdNames),
+    })),
+  }
+}
+
 // ---- Registry -----------------------------------------------------------------
 
 /** Card types with a loader. A placed card without one is not rendered yet. */
@@ -329,4 +487,7 @@ export const LOADERS: Record<string, CardLoader> = {
   records: loadRecords,
   "active-warranties": loadWarranties,
   "due-maintenance": loadDueMaintenance,
+  reminders: loadReminders,
+  "expiring-warranties": loadExpiringWarranties,
+  intake: loadIntake,
 }

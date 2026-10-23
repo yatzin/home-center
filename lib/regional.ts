@@ -81,6 +81,17 @@ export function createFormatter(r: Regional) {
     }
   }
 
+  /** Month and year, for grouping headings: "June 2026", "06/2026", "2026-06". */
+  const monthYear = (d: When, opts: { utc?: boolean } = {}) => {
+    const { y, m } = ymd(toDate(d), !!opts.utc)
+    switch (r.dateFormat) {
+      case "MDY_NUM":
+      case "DMY_NUM": return `${pad(m + 1)}/${y}`
+      case "ISO": return `${y}-${pad(m + 1)}`
+      default: return `${LONG[m]} ${y}`
+    }
+  }
+
   const hm = (h: number, min: number) =>
     r.hour12 ? `${h % 12 || 12}:${pad(min)} ${h < 12 ? "AM" : "PM"}` : `${pad(h)}:${pad(min)}`
 
@@ -111,6 +122,7 @@ export function createFormatter(r: Regional) {
     date,
     dateNumeric,
     dayMonth,
+    monthYear,
     time,
     /** A stored "HH:MM" wall-clock time. */
     clock: (hhmm: string | null | undefined) => {

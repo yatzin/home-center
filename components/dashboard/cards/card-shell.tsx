@@ -11,6 +11,7 @@ export function CardShellHeader({ title, href, linkLabel = "View all →" }: { t
       {href && (
         <Link
           href={href}
+          aria-label={`${linkLabel.replace(/\s*→\s*$/, "")} ${title}`}
           className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"
         >
           {linkLabel}
@@ -73,5 +74,15 @@ export function CardMessage({
         </Link>
       )}
     </div>
+  )
+}
+
+/** A small heading over a group of rows ("Overdue 2", "June 2026 3"). */
+export function GroupHeading({ label, count }: { label: string; count: number }) {
+  return (
+    <h3 className="flex items-baseline gap-1.5 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+      <span className="tabular-nums text-muted-foreground/70">{count}</span>
+    </h3>
   )
 }
