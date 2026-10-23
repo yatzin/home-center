@@ -18,7 +18,7 @@ const EDGE_NAME: Record<ResizeEdge, string> = { right: "width", bottom: "height"
 const EDGE_CLASS: Record<ResizeEdge, string> = {
   // Each hit area straddles the card's edge, reaching half the 16px gap.
   right: "top-4 bottom-6 -right-2 w-4 cursor-ew-resize pointer-coarse:-right-3 pointer-coarse:w-6",
-  bottom: "left-4 right-6 -bottom-2 h-4 cursor-ns-resize pointer-coarse:-bottom-3 pointer-coarse:h-6",
+  bottom: "left-10 right-6 -bottom-2 h-4 cursor-ns-resize pointer-coarse:left-12 pointer-coarse:-bottom-3 pointer-coarse:h-6",
   corner: "-right-2 -bottom-2 size-6 cursor-nwse-resize pointer-coarse:size-8",
 }
 

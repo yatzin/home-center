@@ -31,10 +31,24 @@ import {
   type PointerActivationConstraint,
   type PointerSensorOptions,
 } from "@dnd-kit/core"
-import { GripHorizontal, MonitorSmartphone, X } from "lucide-react"
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ChevronsDownUp,
+  ChevronsLeftRight,
+  ChevronsRightLeft,
+  ChevronsUpDown,
+  GripHorizontal,
+  MonitorSmartphone,
+  X,
+  type LucideIcon,
+} from "lucide-react"
 import { compact, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import { editReducer, type EditAction, type EditState } from "@/lib/dashboard/edit-state"
 import {
+  drawnToStored,
   gridPitch,
   moveKeyStep,
   snapMove,
@@ -44,7 +58,9 @@ import {
   type Point,
   type ResizeEdge,
 } from "@/lib/dashboard/grid-pointer"
+import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
+import { CardAdjustMenu, type AdjustGroup } from "./card-adjust-menu"
 import { CardFrame } from "./card-frame"
 import { GAP, LARGE_MIN_WIDTH, ROW_HEIGHT } from "./grid-metrics"
 import { ResizeHandle } from "./resize-handle"
@@ -71,7 +87,8 @@ const TOUCH_CONSTRAINT: PointerActivationConstraint = { delay: 200, tolerance: 8
 const EXTRA_ROWS = 2
 
 type Gesture =
-  | { kind: "move"; id: string; origin: Placement; to: Point }
+  /** `origin`/`drawnTo` are drawn cells; `stored`/`to` the stored layout's (they differ when hidden cards were compacted out). */
+  | { kind: "move"; id: string; origin: Placement; stored: Placement; drawnTo: Point; to: Point }
   | { kind: "resize"; id: string; edge: ResizeEdge; origin: Placement; size: Size }
 
 function gestureAction(g: Gesture | null): EditAction | null {
@@ -110,6 +127,7 @@ export function EditCanvas({
   state,
   dispatch,
   cards,
+  features,
   readOnly,
   announce,
   onRemove,
@@ -118,6 +136,8 @@ export function EditCanvas({
   dispatch: Dispatch<EditAction>
   /** Shown cards, in layout order, with whatever data the page has for them. */
   cards: readonly CanvasCardData[]
+  /** The page's current features (which cards show, how phone is derived). */
+  features: Features
   /** No arranging (after a conflict, until Reload): changes could not be saved. */
   readOnly: boolean
   announce: (message: string) => void
@@ -165,7 +185,7 @@ export function EditCanvas({
           onRemove={onRemove}
         />
       ) : (
-        <ViewGrid cards={cards} layout={state.layout} features={state.features} />
+        <ViewGrid cards={cards} layout={state.layout} features={features} />
       )}
     </div>
   )
@@ -212,6 +232,7 @@ function LargeEditor({
   const preview = useMemo(() => (previewState === state ? base : displayed(previewState, ids)), [previewState, state, base, ids])
 
   const title = (id: string) => cardTitle(cards.find((c) => c.id === id)?.type ?? "")
+  const storedOf = (id: string) => state.layout.large.find((p) => p.id === id)
 
   /** Applies an action now and announces where the card ended up. */
   const commit = (action: EditAction, id: string, describe: (p: Placement) => string, unchanged: string) => {
@@ -256,25 +277,29 @@ function LargeEditor({
   const onDragStart = ({ active }: DragStartEvent) => {
     const id = String(active.id)
     const origin = base.get(id)
-    if (!origin) return
+    const stored = storedOf(id)
+    if (!origin || !stored) return
     canvasBoxRef.current = canvasRef.current?.getBoundingClientRect() ?? null
-    setGesture({ kind: "move", id, origin, to: { x: origin.x, y: origin.y } })
+    const at = { x: origin.x, y: origin.y }
+    setGesture({ kind: "move", id, origin, stored, drawnTo: at, to: { x: stored.x, y: stored.y } })
   }
   const onDragMove = ({ delta }: DragMoveEvent) => {
     const g = gestureRef.current
     if (g?.kind !== "move") return
-    const to = snapMove(g.origin, delta, pitchRef.current, LARGE_COLS)
-    if (to.x !== g.to.x || to.y !== g.to.y) setGesture({ ...g, to })
+    const drawnTo = snapMove(g.origin, delta, pitchRef.current, LARGE_COLS)
+    if (drawnTo.x !== g.drawnTo.x || drawnTo.y !== g.drawnTo.y)
+      setGesture({ ...g, drawnTo, to: drawnToStored(drawnTo, g.origin, g.stored) })
   }
   const onDragEnd = ({ delta }: DragEndEvent) => {
     const g = gestureRef.current
     setGesture(null)
     if (g?.kind !== "move") return
-    const to = snapMove(g.origin, delta, pitchRef.current, LARGE_COLS)
-    if (to.x === g.origin.x && to.y === g.origin.y) {
+    const drawnTo = snapMove(g.origin, delta, pitchRef.current, LARGE_COLS)
+    if (drawnTo.x === g.origin.x && drawnTo.y === g.origin.y) {
       announce(`${title(g.id)} dropped where it was.`)
       return
     }
+    const to = drawnToStored(drawnTo, g.origin, g.stored)
     commit({ type: "move", id: g.id, to }, g.id, (p) => `${title(g.id)} moved to ${where(p)}.`, `${title(g.id)} stayed where it was.`)
   }
   const onDragCancel = () => {
@@ -295,14 +320,24 @@ function LargeEditor({
 
   // ---- Keyboard move on the grip (arrow keys, no pick-up needed) ----
 
+  /** The move one step makes (picked on the drawn grid, applied to the stored one), or null when it can't move. */
+  const planMove = (id: string, step: Point): EditAction | null => {
+    const drawn = base.get(id)
+    const stored = storedOf(id)
+    const drawnTo = drawn && stepMove([...base.values()], id, step, LARGE_COLS)
+    if (!drawn || !stored || !drawnTo) return null
+    const action: EditAction = { type: "move", id, to: drawnToStored(drawnTo, drawn, stored) }
+    return editReducer(state, action) === state ? null : action
+  }
   const keyMove = (id: string, step: Point) => {
-    const to = stepMove(state.layout.large, id, step, LARGE_COLS)
     const edge = step.x < 0 ? "left" : step.x > 0 ? "right" : step.y < 0 ? "up" : "down"
-    if (!to) {
-      announce(`${title(id)} can't move further ${edge}.`)
+    const unchanged = `${title(id)} can't move further ${edge}.`
+    const action = planMove(id, step)
+    if (!action) {
+      announce(unchanged)
       return
     }
-    commit({ type: "move", id, to }, id, (p) => `${title(id)} moved to ${where(p)}.`, `${title(id)} can't move further ${edge}.`)
+    commit(action, id, (p) => `${title(id)} moved to ${where(p)}.`, unchanged)
   }
 
   // ---- Resize ----
@@ -326,17 +361,61 @@ function LargeEditor({
   }
   const resizeCancel = () => setGesture(null)
 
+  /** The resize one step makes, or null at a limit or the grid edge. */
+  const planResize = (id: string, step: Size): EditAction | null => {
+    const p = storedOf(id)
+    if (!p) return null
+    const action: EditAction = { type: "resize", id, size: { w: p.w + step.w, h: p.h + step.h } }
+    return editReducer(state, action) === state ? null : action
+  }
   const keyResize = (id: string, step: Size) => {
-    const p = state.layout.large.find((q) => q.id === id)
-    if (!p) return
     const limit =
       step.w > 0 ? "can't get any wider" : step.w < 0 ? "can't get any narrower" : step.h > 0 ? "can't get any taller" : "can't get any shorter"
-    commit(
-      { type: "resize", id, size: { w: p.w + step.w, h: p.h + step.h } },
-      id,
-      (q) => `${title(id)} resized to ${q.w} by ${q.h}.`,
-      `${title(id)} ${limit}.`,
-    )
+    const unchanged = `${title(id)} ${limit}.`
+    const action = planResize(id, step)
+    if (!action) {
+      announce(unchanged)
+      return
+    }
+    commit(action, id, (q) => `${title(id)} resized to ${q.w} by ${q.h}.`, unchanged)
+  }
+
+  /** "Move & resize" choices for a card: the keyboard's paths, offered as buttons. */
+  const adjustGroups = (id: string): AdjustGroup[] => {
+    const move = (key: string, label: string, icon: LucideIcon, step: Point) => ({
+      key,
+      label,
+      icon,
+      disabled: planMove(id, step) === null,
+      onSelect: () => keyMove(id, step),
+    })
+    const size = (key: string, label: string, icon: LucideIcon, step: Size) => ({
+      key,
+      label,
+      icon,
+      disabled: planResize(id, step) === null,
+      onSelect: () => keyResize(id, step),
+    })
+    return [
+      {
+        label: "Move",
+        items: [
+          move("left", "Move left", ArrowLeft, { x: -1, y: 0 }),
+          move("right", "Move right", ArrowRight, { x: 1, y: 0 }),
+          move("up", "Move up", ArrowUp, { x: 0, y: -1 }),
+          move("down", "Move down", ArrowDown, { x: 0, y: 1 }),
+        ],
+      },
+      {
+        label: "Size",
+        items: [
+          size("wider", "Wider", ChevronsLeftRight, { w: 1, h: 0 }),
+          size("narrower", "Narrower", ChevronsRightLeft, { w: -1, h: 0 }),
+          size("taller", "Taller", ChevronsUpDown, { w: 0, h: 1 }),
+          size("shorter", "Shorter", ChevronsDownUp, { w: 0, h: -1 }),
+        ],
+      },
+    ]
   }
 
   // Escape cancels a pointer resize (the handle may not have focus).
@@ -403,6 +482,7 @@ function LargeEditor({
               onResizeEnd={resizeEnd}
               onResizeCancel={resizeCancel}
               onKeyResize={(step) => keyResize(card.id, step)}
+              adjustGroups={() => adjustGroups(card.id)}
             />
           )
         })}
@@ -443,6 +523,7 @@ function EditableCard({
   onResizeEnd,
   onResizeCancel,
   onKeyResize,
+  adjustGroups,
 }: {
   card: CanvasCardData
   placement: Placement
@@ -458,6 +539,7 @@ function EditableCard({
   onResizeEnd: () => void
   onResizeCancel: () => void
   onKeyResize: (step: Size) => void
+  adjustGroups: () => AdjustGroup[]
 }) {
   const title = cardTitle(card.type)
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: card.id })
@@ -539,6 +621,11 @@ function EditableCard({
 
       {!isDragging && (
         <>
+          <CardAdjustMenu
+            cardTitle={title}
+            getGroups={adjustGroups}
+            className="absolute -bottom-3.5 left-1.5 z-20 pointer-coarse:-bottom-5.5 pointer-coarse:left-0"
+          />
           <button
             type="button"
             aria-label={`Remove ${title}`}

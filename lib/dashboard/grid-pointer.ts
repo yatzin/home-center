@@ -85,3 +85,15 @@ export function stepMove(ps: readonly Placement[], id: string, dir: Point, cols:
   }
   return null
 }
+
+/**
+ * The page draws a compacted copy of the layout without hidden cards (feature
+ * off), so a card's drawn cell can differ from its stored one. A target picked
+ * in drawn cells is applied as the same offset from the stored origin.
+ */
+export function drawnToStored(target: Point, drawnOrigin: Point, storedOrigin: Point): Point {
+  return {
+    x: Math.max(0, storedOrigin.x + target.x - drawnOrigin.x),
+    y: Math.max(0, storedOrigin.y + target.y - drawnOrigin.y),
+  }
+}

@@ -51,7 +51,8 @@ function Status({ status }: { status: SaveStatus }) {
         </span>
       )
     case "conflict":
-      return <span className={cn(base, "text-muted-foreground")}>Not saved</span>
+      // The conflict banner is the one signal; the bar stays quiet.
+      return null
     default:
       return <span className={cn(base, "text-muted-foreground")}>Changes save automatically</span>
   }
@@ -108,7 +109,7 @@ export function EditBar({
           <Plus aria-hidden />
           <span className="hidden sm:inline">Add card</span>
         </Button>
-        <Button size="sm" onClick={onDone} disabled={finishing} className="min-w-16">
+        <Button size="sm" onClick={onDone} disabled={finishing} className="min-w-16" data-edit-done>
           {finishing ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}
           Done
         </Button>

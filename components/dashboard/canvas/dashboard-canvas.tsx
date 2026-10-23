@@ -14,7 +14,7 @@
 // revision (just saved; the refresh after Done has not landed yet), so leaving
 // edit mode never flashes the old layout.
 
-import { useCallback, useReducer, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useReducer, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { RefreshCw, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
@@ -45,6 +45,21 @@ type CanvasProps = {
 export function DashboardCanvas({ cards, layout, revision, features, isAdmin }: CanvasProps) {
   if (!isAdmin) return <ViewGrid cards={cards} layout={layout} features={features} />
   return <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} />
+}
+
+/**
+ * Scrolls the nearest scrolling ancestor just enough to show `el`. Not
+ * scrollIntoView: that also scrolls the app shell's overflow-hidden boxes.
+ */
+function reveal(el: HTMLElement) {
+  let scroller = el.parentElement
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement
+  if (!scroller) return
+  const box = scroller.getBoundingClientRect()
+  const r = el.getBoundingClientRect()
+  const margin = 96
+  if (r.top < box.top + margin) scroller.scrollBy({ top: r.top - box.top - margin })
+  else if (r.bottom > box.bottom - margin) scroller.scrollBy({ top: r.bottom - box.bottom + margin })
 }
 
 /** The shown cards of a layout, in its order, with the data the page has for each. */
@@ -109,18 +124,50 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
     for (const id of undoToasts.current) toast.dismiss(id)
     undoToasts.current.clear()
   }
+  // Leaving the page mid-edit: an Undo for a card of a gone editor would do nothing useful.
+  useEffect(() => {
+    const pending = undoToasts.current
+    return () => {
+      for (const id of pending) toast.dismiss(id)
+      pending.clear()
+    }
+  }, [])
+
+  // Focus: into the editor when it opens (the first card's grip, or Done);
+  // the header button takes it back on leaving (edit-context.tsx).
+  const rootRef = useRef<HTMLDivElement>(null)
+  const focusCardOrDone = useCallback((id?: string) => {
+    requestAnimationFrame(() => {
+      const root = rootRef.current
+      if (!root) return
+      const grip = id
+        ? root.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(id)}"] [data-grip]`)
+        : root.querySelector<HTMLElement>("[data-card-id] [data-grip]")
+      const target = grip ?? root.querySelector<HTMLElement>("[data-edit-done]")
+      if (!target) return
+      target.focus({ preventScroll: true })
+      // Leaving a toast (Undo) makes sonner hand focus back to where it was
+      // before the toast; a second focus, now from outside the toast, sticks.
+      if (document.activeElement !== target) target.focus({ preventScroll: true })
+      if (id) reveal(target)
+    })
+  }, [])
+  useEffect(() => {
+    if (editing) focusCardOrDone()
+  }, [editing, focusCardOrDone])
 
   const remove = (id: string) => {
     const snapshot = snapshotCard(state, id)
     if (!snapshot) return
     const title = cardTitle(snapshot.card.type)
-    // Keep keyboard focus in the canvas: move it to the next card's grip.
-    const removedEl = document.querySelector(`[data-card-id="${CSS.escape(id)}"]`)
-    const hadFocus = removedEl?.contains(document.activeElement) ?? false
+    // Focus goes to the next card in tab order (the previous one if this was
+    // the last; Done if none is left), never to the top of the page.
+    const els = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])]
+    const i = els.findIndex((el) => el.dataset.cardId === id)
+    const neighbour = (els[i + 1] ?? els[i - 1])?.dataset.cardId
     dispatch({ type: "remove", id })
-    if (hadFocus) {
-      requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-card-id] [data-grip]")?.focus())
-    }
+    if (neighbour) focusCardOrDone(neighbour)
+    else requestAnimationFrame(() => rootRef.current?.querySelector<HTMLElement>("[data-edit-done]")?.focus())
     const toastId: string | number = toast(`${title} removed`, {
       duration: 8000,
       action: {
@@ -129,6 +176,7 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
           undoToasts.current.delete(toastId)
           dispatch({ type: "restore", snapshot })
           announce(`${title} is back.`)
+          focusCardOrDone(snapshot.card.id)
         },
       },
       onDismiss: () => undoToasts.current.delete(toastId),
@@ -195,7 +243,7 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
           : { kind: "idle" }
 
   return (
-    <div>
+    <div ref={rootRef}>
       {state.conflict && (
         <div
           role="alert"
@@ -216,6 +264,7 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
         state={state}
         dispatch={dispatch}
         cards={cardsOf(state.layout, features, loaded)}
+        features={features}
         readOnly={state.conflict}
         announce={announce}
         onRemove={remove}

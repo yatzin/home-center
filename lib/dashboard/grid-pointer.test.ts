@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { moveCard, type Placement } from "./grid"
-import { gridPitch, moveKeyStep, resizeKeyStep, snapMove, snapResize, stepMove } from "./grid-pointer"
+import { drawnToStored, gridPitch, moveKeyStep, resizeKeyStep, snapMove, snapResize, stepMove } from "./grid-pointer"
 
 const p = (id: string, x: number, y: number, w: number, h: number): Placement => ({ id, x, y, w, h })
 
@@ -120,5 +120,20 @@ describe("stepMove", () => {
     expect(stepMove([p("w", 0, 0, 12, 1)], "w", { x: 1, y: 0 }, 12)).toBeNull()
     expect(stepMove([p("solo", 0, 0, 3, 1)], "solo", { x: 0, y: 1 }, 12)).toBeNull()
     expect(stepMove(layout, "missing", { x: 1, y: 0 }, 12)).toBeNull()
+  })
+})
+
+describe("drawnToStored", () => {
+  it("applies the drawn move to the stored origin, so hidden cards above never shift the landing", () => {
+    // Drawn at row 2 (a hidden card above was compacted out), stored at row 6.
+    expect(drawnToStored({ x: 4, y: 3 }, { x: 1, y: 2 }, { x: 1, y: 6 })).toEqual({ x: 4, y: 7 })
+  })
+
+  it("is the identity when drawn and stored agree", () => {
+    expect(drawnToStored({ x: 5, y: 0 }, { x: 2, y: 3 }, { x: 2, y: 3 })).toEqual({ x: 5, y: 0 })
+  })
+
+  it("never proposes a negative row or column", () => {
+    expect(drawnToStored({ x: 0, y: 0 }, { x: 3, y: 5 }, { x: 1, y: 2 })).toEqual({ x: 0, y: 0 })
   })
 })
