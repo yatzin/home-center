@@ -54,11 +54,14 @@ export function CardMessage({
   message,
   note,
   action,
+  footer,
 }: {
   icon: React.ElementType
   message: string
   note?: string
   action?: { href: string; label: string }
+  /** Under the message (e.g. ChooseAnother). */
+  footer?: React.ReactNode
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-1.5 px-4 py-3 text-center">
@@ -73,6 +76,7 @@ export function CardMessage({
           {action.label}
         </Link>
       )}
+      {footer}
     </div>
   )
 }

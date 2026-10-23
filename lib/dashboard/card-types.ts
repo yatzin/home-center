@@ -14,12 +14,65 @@ import type { Size } from "./grid"
 export type CardTier = Readonly<{ name: string; minW: number; minH: number }>
 type FrozenSize = Readonly<Size>
 
+/** The lucide-react icons card types may use (the client maps each name to its component). */
+export const CARD_ICON_NAMES = [
+  "Building2",
+  "Car",
+  "HeartPulse",
+  "Refrigerator",
+  "DoorOpen",
+  "Wrench",
+  "ShieldCheck",
+  "Calendar",
+  "Inbox",
+  "Clock",
+  "ShieldAlert",
+  "TrendingUp",
+  "ChartPie",
+] as const
+export type CardIconName = (typeof CARD_ICON_NAMES)[number]
+
+/** What an item picker picks from: one asset type's items (ids and names come from the server). */
+export type ConfigItemType = "PROPERTY" | "VEHICLE" | "EQUIPMENT" | "PERSON"
+
+export type ChoiceOption = Readonly<{
+  value: string
+  label: string
+  /** Offered only while this feature is on. */
+  requires?: "health" | "rooms"
+}>
+
+/**
+ * One control in a card's settings dialog, for one key of its configSchema.
+ * `item`: pick one item of `itemType`, or all (unset). `number`: a whole
+ * number in [min, max]. `choice`: one of `options`; with `allLabel` it may also
+ * be unset ("all").
+ */
+export type ConfigField = Readonly<
+  | { key: string; kind: "item"; label: string; help?: string; itemType: ConfigItemType; allLabel: string; noun: string }
+  | {
+      key: string
+      kind: "number"
+      label: string
+      help?: string
+      min: number
+      max: number
+      /** Used when the card's config has no value. */
+      default: number
+      /** Shown after the input: "days". */
+      unit: string
+      /** Not shown while this key is set (a limit means nothing for one item). */
+      hiddenWhenSet?: string
+    }
+  | { key: string; kind: "choice"; label: string; help?: string; options: readonly ChoiceOption[]; allLabel?: string }
+>
+
 export type CardTypeDef = {
   id: string
   label: string
   description: string
   /** A lucide-react icon name. */
-  icon: string
+  icon: CardIconName
   /** The site feature this card belongs to; hidden everywhere when it is off. */
   requires?: "health" | "rooms"
   min: FrozenSize
@@ -32,6 +85,8 @@ export type CardTypeDef = {
   tiers: readonly CardTier[]
   configSchema: z.ZodType<Record<string, unknown>>
   defaultConfig: Readonly<Record<string, unknown>>
+  /** The settings dialog's controls: one per configSchema key, in order ([] for none). */
+  configFields: readonly ConfigField[]
 }
 
 // ---- Config schemas ---------------------------------------------------------
@@ -51,6 +106,63 @@ const upcomingConfig = z.object({
 const spendingConfig = z.object({ range: z.enum(["ytd", "12m"]).optional() })
 
 const noConfig = z.object({})
+
+// ---- Config fields (the settings dialog) --------------------------------------
+
+const LIMIT_RANGE = { min: 1, max: 50 } as const
+
+const ASSET_TYPE_OPTIONS: readonly ChoiceOption[] = [
+  { value: "PROPERTY", label: "Properties" },
+  { value: "VEHICLE", label: "Vehicles" },
+  { value: "EQUIPMENT", label: "Equipment" },
+  { value: "PERSON", label: "People", requires: "health" },
+]
+
+const RANGE_FIELD: ConfigField = {
+  key: "range",
+  kind: "choice",
+  label: "Period",
+  options: [
+    { value: "ytd", label: "This year" },
+    { value: "12m", label: "Last 12 months" },
+  ],
+}
+
+function upcomingFields(windowLabel: string, windowDefault: number): ConfigField[] {
+  return [
+    { key: "windowDays", kind: "number", label: windowLabel, min: 1, max: 365, default: windowDefault, unit: "days" },
+    { key: "assetType", kind: "choice", label: "Show", allLabel: "Everything", options: ASSET_TYPE_OPTIONS },
+    { key: "limit", kind: "number", label: "List up to", ...LIMIT_RANGE, default: 6, unit: "items" },
+  ]
+}
+
+type ItemSpec = { itemType: ConfigItemType; label: string; allLabel: string; noun: string; plural: string }
+
+function assetFields(item: ItemSpec, limitDefault: number): ConfigField[] {
+  return [
+    { key: "itemId", kind: "item", label: item.label, itemType: item.itemType, allLabel: item.allLabel, noun: item.noun },
+    {
+      key: "limit",
+      kind: "number",
+      label: "Show up to",
+      help: "Most recently active first.",
+      ...LIMIT_RANGE,
+      default: limitDefault,
+      unit: item.plural,
+      hiddenWhenSet: "itemId",
+    },
+  ]
+}
+
+function freezeFields(fields: readonly ConfigField[]): readonly ConfigField[] {
+  return Object.freeze(
+    fields.map((f) =>
+      Object.freeze(
+        f.kind === "choice" ? { ...f, options: Object.freeze(f.options.map((o) => Object.freeze({ ...o }))) } : { ...f },
+      ),
+    ),
+  )
+}
 
 // ---- Shared size/tier shapes ------------------------------------------------
 
@@ -72,6 +184,7 @@ function freezeDef(d: CardTypeDef): CardTypeDef {
     phone: size(d.phone.w, d.phone.h),
     tiers: Object.isFrozen(d.tiers) ? d.tiers : freezeTiers([...d.tiers]),
     defaultConfig: Object.freeze({ ...d.defaultConfig }),
+    configFields: freezeFields(d.configFields),
   })
 }
 
@@ -98,10 +211,11 @@ function asset(
   id: string,
   label: string,
   description: string,
-  icon: string,
+  icon: CardIconName,
   large: Size,
   phone: Size,
   thumbnails: number,
+  item: ItemSpec,
   requires?: CardTypeDef["requires"],
 ): CardTypeDef {
   return {
@@ -116,6 +230,7 @@ function asset(
     tiers: ASSET_TIERS,
     configSchema: assetConfig,
     defaultConfig: { limit: thumbnails },
+    configFields: assetFields(item, thumbnails),
   }
 }
 
@@ -124,11 +239,65 @@ function asset(
 // Hero tiles (Properties, Vehicles) are 3x4 by default: tall enough for today's
 // photo mosaic. People/Equipment/Rooms default to a 4x2 strip of thumbnails.
 const DEFS: CardTypeDef[] = [
-  asset("properties", "Properties", "Your homes and land, with recent photos.", "Building2", { w: 3, h: 4 }, { w: 2, h: 4 }, 7),
-  asset("vehicles", "Vehicles", "Cars and other vehicles, with recent photos.", "Car", { w: 3, h: 4 }, { w: 2, h: 4 }, 7),
-  asset("people", "People", "Household members and their health records.", "HeartPulse", { w: 4, h: 2 }, { w: 2, h: 2 }, 18, "health"),
-  asset("equipment", "Equipment", "Appliances, tools and other equipment.", "Refrigerator", { w: 4, h: 2 }, { w: 2, h: 2 }, 18),
-  asset("rooms", "Rooms", "Rooms across your properties.", "DoorOpen", { w: 4, h: 2 }, { w: 2, h: 2 }, 18, "rooms"),
+  asset("properties", "Properties", "Your homes and land, with recent photos.", "Building2", { w: 3, h: 4 }, { w: 2, h: 4 }, 7, {
+    itemType: "PROPERTY",
+    label: "Property",
+    allLabel: "All properties",
+    noun: "property",
+    plural: "properties",
+  }),
+  asset("vehicles", "Vehicles", "Cars and other vehicles, with recent photos.", "Car", { w: 3, h: 4 }, { w: 2, h: 4 }, 7, {
+    itemType: "VEHICLE",
+    label: "Vehicle",
+    allLabel: "All vehicles",
+    noun: "vehicle",
+    plural: "vehicles",
+  }),
+  asset(
+    "people",
+    "People",
+    "Household members and their health records.",
+    "HeartPulse",
+    { w: 4, h: 2 },
+    { w: 2, h: 2 },
+    18,
+    { itemType: "PERSON", label: "Person", allLabel: "Everyone", noun: "person", plural: "people" },
+    "health",
+  ),
+  asset("equipment", "Equipment", "Appliances, tools and other equipment.", "Refrigerator", { w: 4, h: 2 }, { w: 2, h: 2 }, 18, {
+    itemType: "EQUIPMENT",
+    label: "Equipment",
+    allLabel: "All equipment",
+    noun: "item",
+    plural: "items",
+  }),
+  {
+    // Rooms belong to a property: its picker picks a property (all by
+    // default), and the limit bounds the room names listed, for one property too.
+    ...asset(
+      "rooms",
+      "Rooms",
+      "Rooms across your properties.",
+      "DoorOpen",
+      { w: 4, h: 2 },
+      { w: 2, h: 2 },
+      18,
+      { itemType: "PROPERTY", label: "Property", allLabel: "All properties", noun: "property", plural: "rooms" },
+      "rooms",
+    ),
+    configFields: [
+      {
+        key: "itemId",
+        kind: "item",
+        label: "Property",
+        help: "Show the rooms of one property.",
+        itemType: "PROPERTY",
+        allLabel: "All properties",
+        noun: "property",
+      },
+      { key: "limit", kind: "number", label: "List up to", help: "Room names, at the largest size.", ...LIMIT_RANGE, default: 18, unit: "rooms" },
+    ],
+  },
   {
     id: "records",
     label: "Records",
@@ -145,6 +314,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: noConfig,
     defaultConfig: {},
+    configFields: [],
   },
   {
     id: "active-warranties",
@@ -162,6 +332,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: noConfig,
     defaultConfig: {},
+    configFields: [],
   },
   {
     id: "due-maintenance",
@@ -180,6 +351,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: noConfig,
     defaultConfig: {},
+    configFields: [],
   },
   {
     id: "intake",
@@ -197,6 +369,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: noConfig,
     defaultConfig: {},
+    configFields: [],
   },
   {
     id: "reminders",
@@ -207,6 +380,7 @@ const DEFS: CardTypeDef[] = [
     tiers: UPCOMING_TIERS,
     configSchema: upcomingConfig,
     defaultConfig: { windowDays: 30, limit: 6 },
+    configFields: upcomingFields("Look ahead", 30),
   },
   {
     id: "expiring-warranties",
@@ -217,6 +391,7 @@ const DEFS: CardTypeDef[] = [
     tiers: UPCOMING_TIERS,
     configSchema: upcomingConfig,
     defaultConfig: { windowDays: 60, limit: 6 },
+    configFields: upcomingFields("Expiring within", 60),
   },
   {
     id: "spending-trend",
@@ -235,6 +410,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: spendingConfig,
     defaultConfig: { range: "ytd" },
+    configFields: [{ ...RANGE_FIELD, help: "Sets the total and the comparison. The chart always shows the last 12 months." }],
   },
   {
     id: "spending-breakdown",
@@ -252,6 +428,7 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: spendingConfig,
     defaultConfig: { range: "ytd" },
+    configFields: [RANGE_FIELD],
   },
 ]
 
@@ -268,6 +445,40 @@ const enabled = (d: CardTypeDef, f: Features): boolean => !d.requires || f[d.req
 /** Card types the "+ Add card" picker offers. */
 export function availableCardTypes(features: Features): CardTypeDef[] {
   return CARD_TYPES.filter((d) => enabled(d, features))
+}
+
+const NO_FIELDS: readonly ConfigField[] = Object.freeze([])
+
+/** The settings dialog's controls for a card type; [] when it has no settings (or is unknown). */
+export function configFieldsFor(typeId: string): readonly ConfigField[] {
+  return cardType(typeId)?.configFields ?? NO_FIELDS
+}
+
+// ---- Picker groups ------------------------------------------------------------
+
+/** How the "+ Add card" picker groups the catalog, in order. */
+export const CARD_GROUPS: readonly Readonly<{ label: string; types: readonly string[] }>[] = Object.freeze([
+  Object.freeze({ label: "Assets", types: Object.freeze(["properties", "vehicles", "people", "equipment", "rooms"]) }),
+  Object.freeze({
+    label: "Maintenance & warranties",
+    types: Object.freeze(["reminders", "due-maintenance", "records", "expiring-warranties", "active-warranties"]),
+  }),
+  Object.freeze({ label: "Money", types: Object.freeze(["spending-trend", "spending-breakdown"]) }),
+  Object.freeze({ label: "Inbox", types: Object.freeze(["intake"]) }),
+])
+
+export type CardGroup = { label: string; types: CardTypeDef[] }
+
+/**
+ * `types` grouped for the picker: CARD_GROUPS order, catalog order within a
+ * group (the order of `types`), empty groups left out, and any type no group
+ * names in a final "Other".
+ */
+export function groupCardTypes(types: readonly CardTypeDef[]): CardGroup[] {
+  const grouped = new Set(CARD_GROUPS.flatMap((g) => g.types))
+  const groups: CardGroup[] = CARD_GROUPS.map((g) => ({ label: g.label, types: types.filter((t) => g.types.includes(t.id)) }))
+  groups.push({ label: "Other", types: types.filter((t) => !grouped.has(t.id)) })
+  return groups.filter((g) => g.types.length > 0)
 }
 
 /** Size limits per card type, for validateLayout/repairLayout. */

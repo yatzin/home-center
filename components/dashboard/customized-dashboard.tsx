@@ -1,21 +1,11 @@
 import { loadFeatures } from "@/lib/features-server"
 import { getFormat } from "@/lib/regional-server"
 import { cardType } from "@/lib/dashboard/card-types"
+import { loadConfigItemOptions } from "@/lib/dashboard/config-options-server"
 import { loadDashboardLayout } from "@/lib/dashboard/layout-server"
-import { LOADERS, type CardResult, type LoaderContext } from "@/lib/dashboard/loaders"
-import type { CardInstance } from "@/lib/dashboard/layout"
+import { loadCard } from "@/lib/dashboard/load-cards-server"
+import { LOADERS, type LoaderContext } from "@/lib/dashboard/loaders"
 import { DashboardCanvas } from "./canvas/dashboard-canvas"
-
-async function loadCard(card: CardInstance, ctx: LoaderContext): Promise<CardResult> {
-  const base = { id: card.id, type: card.type, config: card.config }
-  try {
-    return { ...base, status: "ok", data: await LOADERS[card.type](card.config, ctx) }
-  } catch (error) {
-    // One failing card must not take down the page: it renders its own error state.
-    console.error(`[dashboard] card "${card.id}" (${card.type}) failed to load`, error)
-    return { ...base, status: "error" }
-  }
-}
 
 /**
  * The admin-arranged dashboard (features.customizedDashboards). Loads the saved
@@ -32,9 +22,20 @@ export async function CustomizedDashboard({ isAdmin }: { isAdmin: boolean }) {
     const def = cardType(c.type)
     return def !== undefined && (!def.requires || features[def.requires]) && Object.hasOwn(LOADERS, c.type)
   })
-  const cards = await Promise.all(placed.map((c) => loadCard(c, ctx)))
+  const [cards, itemOptions] = await Promise.all([
+    Promise.all(placed.map((c) => loadCard(c, ctx))),
+    // Only admins can open card settings, so only they get the item lists.
+    isAdmin ? loadConfigItemOptions(features) : null,
+  ])
 
   return (
-    <DashboardCanvas cards={cards} layout={layout} revision={revision} features={features} isAdmin={isAdmin} />
+    <DashboardCanvas
+      cards={cards}
+      layout={layout}
+      revision={revision}
+      features={features}
+      isAdmin={isAdmin}
+      itemOptions={itemOptions}
+    />
   )
 }

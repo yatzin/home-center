@@ -46,6 +46,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { compact, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
+import { isMissingData } from "@/lib/dashboard/card-data"
+import { configFieldsFor } from "@/lib/dashboard/card-types"
 import { editReducer, type EditAction, type EditState } from "@/lib/dashboard/edit-state"
 import {
   drawnToStored,
@@ -60,8 +62,10 @@ import {
 } from "@/lib/dashboard/grid-pointer"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
+import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardAdjustMenu, type AdjustGroup } from "./card-adjust-menu"
 import { CardFrame } from "./card-frame"
+import { CardGear } from "./card-gear"
 import { GAP, LARGE_MIN_WIDTH, ROW_HEIGHT } from "./grid-metrics"
 import { ResizeHandle } from "./resize-handle"
 import { useCardTier } from "./use-card-tier"
@@ -131,6 +135,7 @@ export function EditCanvas({
   readOnly,
   announce,
   onRemove,
+  onConfigure,
 }: {
   state: EditState
   dispatch: Dispatch<EditAction>
@@ -142,6 +147,8 @@ export function EditCanvas({
   readOnly: boolean
   announce: (message: string) => void
   onRemove: (id: string) => void
+  /** Opens a card's settings. */
+  onConfigure: (id: string) => void
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -183,9 +190,10 @@ export function EditCanvas({
           canvasRef={canvasRef}
           announce={announce}
           onRemove={onRemove}
+          onConfigure={onConfigure}
         />
       ) : (
-        <ViewGrid cards={cards} layout={state.layout} features={features} />
+        <ViewGrid cards={cards} layout={state.layout} features={features} onConfigure={readOnly ? undefined : onConfigure} />
       )}
     </div>
   )
@@ -199,6 +207,7 @@ function LargeEditor({
   canvasRef,
   announce,
   onRemove,
+  onConfigure,
 }: {
   state: EditState
   dispatch: Dispatch<EditAction>
@@ -207,6 +216,7 @@ function LargeEditor({
   canvasRef: React.RefObject<HTMLDivElement | null>
   announce: (message: string) => void
   onRemove: (id: string) => void
+  onConfigure: (id: string) => void
 }) {
   const pitch = useMemo(() => gridPitch(width, LARGE_COLS, ROW_HEIGHT, GAP), [width])
   const pitchRef = useRef(pitch)
@@ -477,6 +487,7 @@ function LargeEditor({
               keyboardMoveDisabled={gesture !== null}
               onKeyMove={(step) => keyMove(card.id, step)}
               onRemove={() => onRemove(card.id)}
+              onConfigure={configFieldsFor(card.type).length > 0 ? () => onConfigure(card.id) : undefined}
               onResizeStart={(edge) => resizeStart(card.id, edge)}
               onResizeMove={resizeMove}
               onResizeEnd={resizeEnd}
@@ -518,6 +529,7 @@ function EditableCard({
   keyboardMoveDisabled,
   onKeyMove,
   onRemove,
+  onConfigure,
   onResizeStart,
   onResizeMove,
   onResizeEnd,
@@ -534,6 +546,8 @@ function EditableCard({
   keyboardMoveDisabled: boolean
   onKeyMove: (step: Point) => void
   onRemove: () => void
+  /** Opens this card's settings; absent for a type without settings. */
+  onConfigure?: () => void
   onResizeStart: (edge: ResizeEdge) => void
   onResizeMove: (delta: Point) => void
   onResizeEnd: () => void
@@ -547,6 +561,8 @@ function EditableCard({
   // The live (preview) size: content changes tier as a resize crosses a threshold.
   const tier = useCardTier(card.type, size, "large")
   const resizing = resizingEdge !== null
+  // A card whose item is gone stays clickable: its "Choose another" button sits above the drag surface.
+  const missing = card.status === "ok" && isMissingData(card.data)
 
   const style: React.CSSProperties = {
     ...boxStyle(placement, pitch),
@@ -568,17 +584,20 @@ function EditableCard({
       )}
       style={style}
     >
-      <CardFrame
-        title={title}
-        failed={card.status === "error"}
-        editing
-        className={cn(
-          "ring-1 ring-primary/25 transition-shadow duration-200 group-hover/card:ring-primary/45",
-          (isDragging || resizing) && "shadow-xl ring-2 ring-primary/50",
-        )}
-      >
-        <CardView card={card} tier={tier} size={size} mode="large" editing />
-      </CardFrame>
+      <CardConfigureProvider value={missing ? (onConfigure ?? null) : null}>
+        <CardFrame
+          title={title}
+          failed={card.status === "error"}
+          editing
+          interactive={missing}
+          className={cn(
+            "ring-1 ring-primary/25 transition-shadow duration-200 group-hover/card:ring-primary/45",
+            (isDragging || resizing) && "shadow-xl ring-2 ring-primary/50",
+          )}
+        >
+          <CardView card={card} tier={tier} size={size} mode="large" editing />
+        </CardFrame>
+      </CardConfigureProvider>
 
       {/* The whole card is the drag surface (mouse, or a long press on touch). */}
       <div
@@ -626,6 +645,13 @@ function EditableCard({
             getGroups={adjustGroups}
             className="absolute -bottom-3.5 left-1.5 z-20 pointer-coarse:-bottom-5.5 pointer-coarse:left-0"
           />
+          {onConfigure && (
+            <CardGear
+              cardTitle={title}
+              onClick={onConfigure}
+              className="absolute -top-3.5 -left-3.5 z-20 pointer-coarse:-top-5.5 pointer-coarse:-left-5.5"
+            />
+          )}
           <button
             type="button"
             aria-label={`Remove ${title}`}

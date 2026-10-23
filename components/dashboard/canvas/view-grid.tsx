@@ -2,15 +2,18 @@
 
 import { useState } from "react"
 import { LayoutGrid, Loader2 } from "lucide-react"
-import { cardType } from "@/lib/dashboard/card-types"
+import { cardType, configFieldsFor } from "@/lib/dashboard/card-types"
+import type { CanvasCardData } from "@/lib/dashboard/card-data"
 import { compact, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
-import type { CardResult } from "@/lib/dashboard/loaders"
 import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
 import { CARD_VIEWS } from "@/components/dashboard/cards"
+import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardFrame } from "./card-frame"
+import { CardGear } from "./card-gear"
+import { CARD_ICONS } from "./card-icons"
 import { GAP, ROW_HEIGHT } from "./grid-metrics"
 import { useCardTier, type LayoutMode } from "./use-card-tier"
 
@@ -28,14 +31,7 @@ import { useCardTier, type LayoutMode } from "./use-card-tier"
 // The `/dash` container name keeps these queries pointed at the canvas even if
 // a card view declares its own @container.
 
-/**
- * A card to draw: its loader result, or "loading" for a card whose data the
- * page does not have yet (e.g. just put back by Reset to default, until the
- * page refreshes).
- */
-export type CanvasCardData =
-  | CardResult
-  | { id: string; type: string; config: Record<string, unknown>; status: "loading" }
+export type { CanvasCardData } from "@/lib/dashboard/card-data"
 
 /** Shown on the dashboard: a known card type with a view, whose feature is on. */
 export function isShownType(type: string, features: Features): boolean {
@@ -67,7 +63,36 @@ export function TierFade({ tier, children }: { tier: number; children: React.Rea
   )
 }
 
-/** A card's view at a tier, or a quiet placeholder while its data is on the way. */
+/**
+ * A card the page has no data for yet (just added, or put back by Reset to
+ * default): its name over a calm skeleton until the refresh brings its data.
+ */
+function CardSetup({ type }: { type: string }) {
+  const def = cardType(type)
+  const Icon = def ? CARD_ICONS[def.icon] : LayoutGrid
+  return (
+    <div role="status" className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden px-5 pt-4 pb-3">
+      <div className="flex shrink-0 items-center gap-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        <span className="truncate">{cardTitle(type)}</span>
+      </div>
+      <div aria-hidden className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden motion-safe:animate-pulse">
+        <div className="h-5 w-1/3 shrink-0 rounded-md bg-muted" />
+        <div className="h-3 w-3/4 shrink-0 rounded bg-muted/70" />
+        <div className="h-3 w-1/2 shrink-0 rounded bg-muted/70" />
+      </div>
+      <p className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden />
+        Setting up…
+      </p>
+    </div>
+  )
+}
+
+/**
+ * A card's view at a tier; a skeleton while its data is on the way; dimmed
+ * with an "Updating" chip while it shows data loaded for its previous settings.
+ */
 export function CardView({
   card,
   tier,
@@ -82,19 +107,25 @@ export function CardView({
   editing: boolean
 }) {
   const View = CARD_VIEWS[card.type]
-  if (card.status === "loading" || !View) {
-    return (
-      <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 motion-safe:animate-spin" aria-hidden />
-        Loading
-      </div>
-    )
-  }
+  if (card.status === "loading" || !View) return <CardSetup type={card.type} />
   const data = card.status === "ok" ? card.data : null
-  return (
+  const view = (
     <TierFade tier={tier}>
       <View data={data} config={card.config} tier={tier} size={size} mode={mode} editing={editing} />
     </TierFade>
+  )
+  if (!card.updating) return view
+  return (
+    <div className="relative h-full min-h-0" aria-busy>
+      <div className="h-full min-h-0 opacity-50 motion-safe:transition-opacity motion-safe:duration-300">{view}</div>
+      <span
+        role="status"
+        className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-full bg-popover/95 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border motion-safe:animate-in motion-safe:fade-in-0"
+      >
+        <Loader2 className="size-3 motion-safe:animate-spin" aria-hidden />
+        Updating
+      </span>
+    </div>
   )
 }
 
@@ -102,7 +133,17 @@ export function cardTitle(type: string): string {
   return cardType(type)?.label ?? "Card"
 }
 
-function CanvasCard({ card, large, phone }: { card: CanvasCardData; large: Placement; phone: Placement }) {
+function CanvasCard({
+  card,
+  large,
+  phone,
+  onConfigure,
+}: {
+  card: CanvasCardData
+  large: Placement
+  phone: Placement
+  onConfigure?: () => void
+}) {
   const largeSize: Size = { w: large.w, h: large.h }
   const phoneSize: Size = { w: phone.w, h: phone.h }
   const largeTier = useCardTier(card.type, largeSize, "large")
@@ -110,7 +151,8 @@ function CanvasCard({ card, large, phone }: { card: CanvasCardData; large: Place
 
   return (
     <div
-      className="min-h-0 min-w-0 [grid-column:var(--dash-pc)] [grid-row:var(--dash-pr)] @min-[40rem]/dash:[grid-column:var(--dash-lc)] @min-[40rem]/dash:[grid-row:var(--dash-lr)]"
+      data-card-id={card.id}
+      className="relative min-h-0 min-w-0 [grid-column:var(--dash-pc)] [grid-row:var(--dash-pr)] @min-[40rem]/dash:[grid-column:var(--dash-lc)] @min-[40rem]/dash:[grid-row:var(--dash-lr)]"
       style={
         {
           "--dash-pc": span(phone.x, phone.w),
@@ -120,20 +162,29 @@ function CanvasCard({ card, large, phone }: { card: CanvasCardData; large: Place
         } as React.CSSProperties
       }
     >
-      <CardFrame title={cardTitle(card.type)} failed={card.status === "error"}>
-        {largeTier === phoneTier ? (
-          <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
-        ) : (
-          <>
-            <div className="h-full min-h-0 @min-[40rem]/dash:hidden">
-              <CardView card={card} tier={phoneTier} size={phoneSize} mode="phone" editing={false} />
-            </div>
-            <div className="hidden h-full min-h-0 @min-[40rem]/dash:block">
-              <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
-            </div>
-          </>
-        )}
-      </CardFrame>
+      <CardConfigureProvider value={onConfigure ?? null}>
+        <CardFrame title={cardTitle(card.type)} failed={card.status === "error"}>
+          {largeTier === phoneTier ? (
+            <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
+          ) : (
+            <>
+              <div className="h-full min-h-0 @min-[40rem]/dash:hidden">
+                <CardView card={card} tier={phoneTier} size={phoneSize} mode="phone" editing={false} />
+              </div>
+              <div className="hidden h-full min-h-0 @min-[40rem]/dash:block">
+                <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
+              </div>
+            </>
+          )}
+        </CardFrame>
+      </CardConfigureProvider>
+      {onConfigure && configFieldsFor(card.type).length > 0 && (
+        <CardGear
+          cardTitle={cardTitle(card.type)}
+          onClick={onConfigure}
+          className="absolute -top-3.5 -right-3.5 z-10 pointer-coarse:-top-5.5 pointer-coarse:-right-5.5"
+        />
+      )}
     </div>
   )
 }
@@ -143,10 +194,13 @@ export function ViewGrid({
   cards,
   layout,
   features,
+  onConfigure,
 }: {
   cards: readonly CanvasCardData[]
   layout: DashboardLayout
   features: Features
+  /** Edit mode on small screens: a settings gear on configurable cards, and "Choose another" on a card whose item is gone. */
+  onConfigure?: (id: string) => void
 }) {
   const largeById = new Map(layout.large.map((p) => [p.id, p]))
   const phoneById = new Map(resolvePhoneLayout(layout, features).map((p) => [p.id, p]))
@@ -177,7 +231,13 @@ export function ViewGrid({
         style={GRID_STYLE}
       >
         {shown.map((card) => (
-          <CanvasCard key={card.id} card={card} large={large.get(card.id)!} phone={phone.get(card.id)!} />
+          <CanvasCard
+            key={card.id}
+            card={card}
+            large={large.get(card.id)!}
+            phone={phone.get(card.id)!}
+            onConfigure={onConfigure && (() => onConfigure(card.id))}
+          />
         ))}
       </div>
     </div>

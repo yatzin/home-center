@@ -73,7 +73,7 @@ export function EditBar({
   onDone: () => void
   /** Resolves when the reset finished (the dialog closes then). */
   onReset: () => Promise<void>
-  /** Opens the card picker; without it the button is shown but disabled. */
+  /** Opens the card picker; without it (after a conflict) the button is shown but disabled. */
   onAddCard?: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -90,6 +90,7 @@ export function EditBar({
         </div>
         <Button
           variant="ghost"
+          className="pointer-coarse:h-11 pointer-coarse:min-w-11"
           size="sm"
           onClick={() => setConfirming(true)}
           disabled={resetting}
@@ -100,16 +101,17 @@ export function EditBar({
         </Button>
         <Button
           variant="outline"
+          className="pointer-coarse:h-11 pointer-coarse:min-w-11"
           size="sm"
           onClick={onAddCard}
           disabled={!onAddCard}
-          title={onAddCard ? undefined : "Adding cards is coming soon"}
+          title={onAddCard ? undefined : "Reload first: the dashboard changed elsewhere"}
           aria-label="Add card"
         >
           <Plus aria-hidden />
           <span className="hidden sm:inline">Add card</span>
         </Button>
-        <Button size="sm" onClick={onDone} disabled={finishing} className="min-w-16" data-edit-done>
+        <Button size="sm" onClick={onDone} disabled={finishing} className="min-w-16 pointer-coarse:h-11" data-edit-done>
           {finishing ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}
           Done
         </Button>

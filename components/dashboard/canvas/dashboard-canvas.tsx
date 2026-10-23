@@ -13,22 +13,35 @@
 // Outside edit mode the page shows the props, unless the reducer holds a newer
 // revision (just saved; the refresh after Done has not landed yet), so leaving
 // edit mode never flashes the old layout.
+//
+// Card data comes only from the server. A card added in edit mode, or one whose
+// settings changed, has no current data until its save lands and the page
+// refreshes: it shows "Setting up…" (or its old data, marked "Updating") until
+// then. Adding or configuring saves at once; once a save lands, the editor
+// loads data for just those cards (loadDashboardCards) and merges it into its
+// data map (lib/dashboard/card-data.ts), without touching its layout. Fresh
+// props from a later refresh are merged the same way.
 
-import { useCallback, useEffect, useReducer, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { RefreshCw, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
-import { resetDashboardLayout } from "@/lib/actions/dashboard-layout"
-import { editReducer, initialEditState, snapshotCard } from "@/lib/dashboard/edit-state"
+import { loadDashboardCards, resetDashboardLayout } from "@/lib/actions/dashboard-layout"
+import { cardsNeedingData, mergeLoaded, withData, type CanvasCardData } from "@/lib/dashboard/card-data"
+import { cardType } from "@/lib/dashboard/card-types"
+import type { ConfigFormContext, ConfigItemOptions } from "@/lib/dashboard/config-form"
+import { editReducer, initialEditState, newCardId, snapshotCard } from "@/lib/dashboard/edit-state"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
 import type { CardResult } from "@/lib/dashboard/loaders"
 import type { Features } from "@/lib/features"
 import { Button } from "@/components/ui/button"
+import { AddCardDialog } from "./add-card-dialog"
+import { CardConfigDialog } from "./card-config-dialog"
 import { EditBar, type SaveStatus } from "./edit-bar"
 import { EditCanvas } from "./edit-canvas"
 import { useDashboardEditMode } from "./edit-context"
 import { useAutosave } from "./use-autosave"
-import { cardTitle, isShownType, ViewGrid, type CanvasCardData } from "./view-grid"
+import { cardTitle, isShownType, ViewGrid } from "./view-grid"
 
 type CanvasProps = {
   cards: CardResult[]
@@ -40,11 +53,13 @@ type CanvasProps = {
   features: Features
   /** Admins get edit mode. */
   isAdmin: boolean
+  /** What card settings can pick from (admins only; null otherwise). */
+  itemOptions: ConfigItemOptions | null
 }
 
-export function DashboardCanvas({ cards, layout, revision, features, isAdmin }: CanvasProps) {
+export function DashboardCanvas({ cards, layout, revision, features, isAdmin, itemOptions }: CanvasProps) {
   if (!isAdmin) return <ViewGrid cards={cards} layout={layout} features={features} />
-  return <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} />
+  return <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} itemOptions={itemOptions} />
 }
 
 /**
@@ -64,18 +79,31 @@ function reveal(el: HTMLElement) {
 
 /** The shown cards of a layout, in its order, with the data the page has for each. */
 function cardsOf(layout: DashboardLayout, features: Features, data: ReadonlyMap<string, CardResult>): CanvasCardData[] {
-  return layout.cards
-    .filter((c) => isShownType(c.type, features))
-    .map((c) => {
-      const loaded = data.get(c.id)
-      // The layout's config is the newest; the data is whatever was last loaded.
-      return loaded && loaded.type === c.type
-        ? { ...loaded, config: c.config }
-        : { id: c.id, type: c.type, config: c.config, status: "loading" as const }
-    })
+  return withData(
+    layout.cards.filter((c) => isShownType(c.type, features)),
+    data,
+  )
 }
 
-function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps, "isAdmin">) {
+/**
+ * A card's element, and what to focus for it: the first of `prefer` it has
+ * ("grip" in the large editor, "gear" on configurable cards), else nothing.
+ */
+function cardFocusTarget(
+  root: HTMLElement | null,
+  id: string,
+  prefer: readonly ("grip" | "gear")[],
+): { card: HTMLElement; focus: HTMLElement | null } | null {
+  const card = root?.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(id)}"]`)
+  if (!card) return null
+  for (const p of prefer) {
+    const el = card.querySelector<HTMLElement>(`[data-${p}]`)
+    if (el) return { card, focus: el }
+  }
+  return { card, focus: null }
+}
+
+function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omit<CanvasProps, "isAdmin">) {
   const router = useRouter()
   const { editing, setEditing } = useDashboardEditMode()
   const [state, dispatch] = useReducer(editReducer, null, () => initialEditState(layout, revision, features))
@@ -83,11 +111,12 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
 
   // Every card's data seen so far, so a removed card comes back instantly on
   // Undo, and a refresh that drops a card does not blank it mid-edit.
+  // Fresh props (a refresh) also bring data for added and reconfigured cards.
   const [loaded, setLoaded] = useState(() => new Map(cards.map((c) => [c.id, c])))
   const [seenCards, setSeenCards] = useState(cards)
   if (seenCards !== cards) {
     setSeenCards(cards)
-    setLoaded((prev) => new Map([...prev, ...cards.map((c) => [c.id, c] as const)]))
+    setLoaded((prev) => mergeLoaded(prev, cards))
   }
 
   // Entering edit mode starts from the newest layout we know of.
@@ -110,6 +139,23 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
   }
 
   const [, startRefresh] = useTransition()
+  const editCards = cardsOf(state.layout, features, loaded)
+
+  // A save landed while some cards have no current data: load theirs, once per
+  // saved revision, and merge it in. Not router.refresh(): a refresh fired
+  // right after a save was seen to stall now and then (its page never
+  // committed), leaving the card "Updating" until the next save. A failure
+  // leaves it "Updating" until the next save or Done.
+  const neededKey = cardsNeedingData(editCards).join("\n")
+  const loadedFor = useRef(state.revision)
+  useEffect(() => {
+    if (!neededKey || state.dirty || state.conflict || state.revision <= loadedFor.current) return
+    loadedFor.current = state.revision
+    loadDashboardCards(neededKey.split("\n"))
+      .then((fresh) => setLoaded((prev) => mergeLoaded(prev, fresh)))
+      .catch(() => {})
+  }, [neededKey, state.dirty, state.conflict, state.revision])
+
   const [finishing, setFinishing] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -185,6 +231,63 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
     undoToasts.current.add(toastId)
     announce(`${title} removed. Undo is in the notification.`)
   }
+
+  // ---- Add card ----
+
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickedRef = useRef<string | null>(null)
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of state.layout.cards) counts.set(c.type, (counts.get(c.type) ?? 0) + 1)
+    return counts
+  }, [state.layout.cards])
+
+  const addCard = (typeId: string) => {
+    const def = cardType(typeId)
+    if (!def) return
+    const id = newCardId(
+      typeId,
+      state.layout.cards.map((c) => c.id),
+    )
+    dispatch({ type: "add", cardType: typeId, id })
+    pickedRef.current = id
+    setPickerOpen(false)
+    announce(`${def.label} added at the bottom of the dashboard.`)
+    // Save now rather than after the debounce, so its data arrives sooner.
+    void flush()
+  }
+
+  /** On closing the picker: the new card (scrolled into view), or the Add card button (null). */
+  const pickerFinalFocus = () => {
+    const id = pickedRef.current
+    pickedRef.current = null
+    const target = id ? cardFocusTarget(rootRef.current, id, ["grip", "gear"]) : null
+    if (!target) return null
+    reveal(target.card)
+    return target.focus
+  }
+
+  // ---- Card settings ----
+
+  const [configuringId, setConfiguringId] = useState<string | null>(null)
+  const [configOpen, setConfigOpen] = useState(false)
+  const configuring = state.layout.cards.find((c) => c.id === configuringId) ?? null
+  const configCtx: ConfigFormContext = useMemo(() => ({ items: itemOptions, features }), [itemOptions, features])
+
+  const openConfig = useCallback((id: string) => {
+    setConfiguringId(id)
+    setConfigOpen(true)
+  }, [])
+
+  const saveConfig = (config: Record<string, unknown>) => {
+    if (!configuring) return
+    dispatch({ type: "config", id: configuring.id, config })
+    setConfigOpen(false)
+    announce(`${cardTitle(configuring.type)} settings saved. The card is updating.`)
+    void flush()
+  }
+
+  const configFinalFocus = () => (configuringId ? (cardFocusTarget(rootRef.current, configuringId, ["gear", "grip"])?.focus ?? null) : null)
 
   const done = async () => {
     if (finishing) return
@@ -263,13 +366,37 @@ function DashboardEditor({ cards, layout, revision, features }: Omit<CanvasProps
       <EditCanvas
         state={state}
         dispatch={dispatch}
-        cards={cardsOf(state.layout, features, loaded)}
+        cards={editCards}
         features={features}
         readOnly={state.conflict}
         announce={announce}
         onRemove={remove}
+        onConfigure={openConfig}
       />
-      <EditBar status={status} finishing={finishing} resetting={resetting} onDone={done} onReset={reset} />
+      <EditBar
+        status={status}
+        finishing={finishing}
+        resetting={resetting}
+        onDone={done}
+        onReset={reset}
+        onAddCard={state.conflict ? undefined : () => setPickerOpen(true)}
+      />
+      <AddCardDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        features={features}
+        counts={typeCounts}
+        onPick={addCard}
+        finalFocus={pickerFinalFocus}
+      />
+      <CardConfigDialog
+        card={configuring}
+        open={configOpen && configuring !== null && !state.conflict}
+        onOpenChange={setConfigOpen}
+        ctx={configCtx}
+        onSave={saveConfig}
+        finalFocus={configFinalFocus}
+      />
       <div aria-live="polite" role="status" className="sr-only">
         {announcement}
       </div>

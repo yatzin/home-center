@@ -31,12 +31,19 @@ export function CardFrame({
   title,
   failed,
   editing,
+  interactive,
   className,
   children,
 }: {
   title: string
   failed?: boolean
   editing?: boolean
+  /**
+   * With `editing`: leave the content usable (a card whose item is gone, for
+   * its "Choose another" button). Only `inert` changes, not the tree, so the
+   * view is not remounted when this flips.
+   */
+  interactive?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -54,7 +61,7 @@ export function CardFrame({
   return (
     <Card role="group" aria-label={title} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
       {editing ? (
-        <div inert className="h-full min-h-0 select-none">
+        <div inert={!interactive} className="h-full min-h-0 select-none">
           {body}
         </div>
       ) : (

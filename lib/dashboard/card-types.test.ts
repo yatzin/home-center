@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest"
+import { z } from "zod"
 import type { Features } from "@/lib/features"
 import {
   CARD_TYPES,
   availableCardTypes,
+  CARD_GROUPS,
   cardType,
+  configFieldsFor,
   defaultLayout,
+  groupCardTypes,
   limitsMap,
   PHONE_WIDTH_SCALE,
   tierOf,
@@ -303,5 +307,108 @@ describe("defaultLayout", () => {
     // Mutating one result does not leak into the next.
     a.cards[0].config.limit = 99
     expect(defaultLayout(ALL_ON).cards[0].config.limit).not.toBe(99)
+  })
+})
+
+describe("configFieldsFor", () => {
+  const shapeOf = (d: CardTypeDef): Record<string, z.ZodTypeAny> => {
+    expect(d.configSchema).toBeInstanceOf(z.ZodObject)
+    return (d.configSchema as unknown as z.ZodObject<z.ZodRawShape>).shape
+  }
+  /** The schema under ZodOptional/ZodDefault wrappers. */
+  const inner = (s: z.ZodTypeAny): z.ZodTypeAny => (s instanceof z.ZodOptional ? inner(s.unwrap()) : s)
+
+  it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s describes every config key exactly once", (_id, d) => {
+    const keys = configFieldsFor(d.id).map((f) => f.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect([...keys].sort()).toEqual(Object.keys(shapeOf(d)).sort())
+  })
+
+  it("returns [] for types without config and for unknown types", () => {
+    for (const id of ["records", "active-warranties", "due-maintenance", "intake"]) expect(configFieldsFor(id)).toEqual([])
+    expect(configFieldsFor("nope")).toEqual([])
+  })
+
+  it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s field kinds match the schema", (_id, d) => {
+    const shape = shapeOf(d)
+    for (const f of configFieldsFor(d.id)) {
+      const s = inner(shape[f.key])
+      expect(f.label.length).toBeGreaterThan(0)
+      if (f.kind === "item") {
+        expect(s).toBeInstanceOf(z.ZodString)
+        expect(d.configSchema.safeParse({ [f.key]: "abc" }).success).toBe(true)
+      } else if (f.kind === "number") {
+        expect(s).toBeInstanceOf(z.ZodNumber)
+        // The field's bounds are exactly the schema's.
+        expect(d.configSchema.safeParse({ [f.key]: f.min }).success).toBe(true)
+        expect(d.configSchema.safeParse({ [f.key]: f.max }).success).toBe(true)
+        expect(d.configSchema.safeParse({ [f.key]: f.min - 1 }).success).toBe(false)
+        expect(d.configSchema.safeParse({ [f.key]: f.max + 1 }).success).toBe(false)
+        expect(f.default >= f.min && f.default <= f.max).toBe(true)
+      } else {
+        expect(s).toBeInstanceOf(z.ZodEnum)
+        // Every option is a schema value, and every schema value is offered.
+        expect(f.options.map((o) => o.value).sort()).toEqual([...(s as z.ZodEnum<[string, ...string[]]>).options].sort())
+      }
+    }
+  })
+
+  it("rooms picks a property; the asset cards pick their own type", () => {
+    const item = (id: string) => configFieldsFor(id).find((f) => f.kind === "item")
+    expect(item("rooms")).toMatchObject({ key: "itemId", itemType: "PROPERTY" })
+    expect(item("properties")).toMatchObject({ itemType: "PROPERTY" })
+    expect(item("vehicles")).toMatchObject({ itemType: "VEHICLE" })
+    expect(item("people")).toMatchObject({ itemType: "PERSON" })
+    expect(item("equipment")).toMatchObject({ itemType: "EQUIPMENT" })
+  })
+
+  it("offers People in an assetType choice only with Health (requires)", () => {
+    const at = configFieldsFor("reminders").find((f) => f.key === "assetType")
+    expect(at?.kind).toBe("choice")
+    if (at?.kind !== "choice") return
+    expect(at.options.find((o) => o.value === "PERSON")?.requires).toBe("health")
+    expect(at.allLabel).toBeTruthy()
+  })
+
+  it("is frozen", () => {
+    for (const d of CARD_TYPES) {
+      const fields = configFieldsFor(d.id)
+      expect(Object.isFrozen(fields)).toBe(true)
+      for (const f of fields) expect(Object.isFrozen(f)).toBe(true)
+    }
+  })
+})
+
+describe("groupCardTypes", () => {
+  it("puts every catalog type in exactly one named group, in group then catalog order", () => {
+    const groups = groupCardTypes(CARD_TYPES)
+    const ids = groups.flatMap((g) => g.types.map((t) => t.id))
+    expect([...ids].sort()).toEqual(CARD_TYPES.map((d) => d.id).sort())
+    expect(groups.map((g) => g.label)).toEqual(CARD_GROUPS.map((g) => g.label))
+    for (const g of groups) {
+      const order = g.types.map((t) => CARD_TYPES.indexOf(t))
+      expect(order).toEqual([...order].sort((a, b) => a - b))
+    }
+  })
+
+  it("leaves out empty groups", () => {
+    const groups = groupCardTypes(CARD_TYPES.filter((d) => d.id === "intake"))
+    expect(groups).toHaveLength(1)
+    expect(groups[0].types.map((t) => t.id)).toEqual(["intake"])
+  })
+
+  it("follows availableCardTypes: People and Rooms gone with their features off", () => {
+    const off: Features = { ...ALL_ON, health: false, rooms: false }
+    const ids = groupCardTypes(availableCardTypes(off)).flatMap((g) => g.types.map((t) => t.id))
+    expect(ids).not.toContain("people")
+    expect(ids).not.toContain("rooms")
+    expect(ids).toHaveLength(11)
+  })
+
+  it("puts a type with no group in a trailing Other group", () => {
+    const stray = { ...CARD_TYPES[0], id: "stray" }
+    const groups = groupCardTypes([stray, CARD_TYPES[0]])
+    expect(groups.map((g) => g.label)).toEqual([CARD_GROUPS[0].label, "Other"])
+    expect(groups[1].types[0].id).toBe("stray")
   })
 })

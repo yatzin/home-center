@@ -8,6 +8,7 @@ import { assetHref } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 import type { AssetType } from "@/app/generated/prisma/client"
 import type { AssetCardData, AssetCardItem } from "@/lib/dashboard/loaders"
+import { ChooseAnother } from "./card-configure"
 import { CardMessage, CardShell } from "./card-shell"
 import type { CardViewProps } from "./types"
 
@@ -29,8 +30,6 @@ export type AssetCardSpec = {
 
 const TIER_COUNT = 0
 const TIER_THUMBNAILS = 1
-
-const MISSING_NOTE = "An admin can choose another one for this card."
 
 function isAssetCardData(data: unknown): data is AssetCardData {
   if (typeof data !== "object" || data === null || !("missing" in data)) return false
@@ -93,7 +92,17 @@ function StatRow({ spec, data, className }: { spec: AssetCardSpec; data: Extract
  * The notice for the smallest tier, where a centred icon block would not fit:
  * text only, wrapping to two lines rather than truncating mid-word.
  */
-function InlineNotice({ message, note, action }: { message: string; note?: string; action?: { href: string; label: string } }) {
+function InlineNotice({
+  message,
+  note,
+  action,
+  footer,
+}: {
+  message: string
+  note?: string
+  action?: { href: string; label: string }
+  footer?: React.ReactNode
+}) {
   return (
     <div className="flex h-full min-w-0 flex-col justify-center gap-0.5 px-4">
       <p className="line-clamp-2 text-[13px] leading-snug text-muted-foreground">{message}</p>
@@ -103,6 +112,7 @@ function InlineNotice({ message, note, action }: { message: string; note?: strin
         </Link>
       )}
       {note && <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground/80">{note}</p>}
+      {footer}
     </div>
   )
 }
@@ -198,10 +208,10 @@ export function AssetStatCard({ spec, data, tier }: CardViewProps & { spec: Asse
 
   if (data.missing) {
     return tier === TIER_COUNT ? (
-      <InlineNotice message={spec.missingMessage} note={MISSING_NOTE} />
+      <InlineNotice message={spec.missingMessage} footer={<ChooseAnother compact />} />
     ) : (
       <CardShell title={spec.label}>
-        <CardMessage icon={spec.icon} message={spec.missingMessage} note={MISSING_NOTE} />
+        <CardMessage icon={spec.icon} message={spec.missingMessage} footer={<ChooseAnother />} />
       </CardShell>
     )
   }

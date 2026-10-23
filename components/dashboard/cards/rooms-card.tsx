@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ChevronRight, DoorOpen } from "lucide-react"
 import type { RoomsCardData } from "@/lib/dashboard/loaders"
+import { ChooseAnother } from "./card-configure"
 import { CardMessage, CardShell } from "./card-shell"
 import { CountTile, CountWithList } from "./count-card"
 import type { CardViewProps } from "./types"
@@ -17,7 +18,6 @@ const TIER_PROPERTIES = 1
 const LABEL = "Rooms"
 const LIST_HREF = "/assets/properties"
 const MISSING_MESSAGE = "This property no longer exists."
-const MISSING_NOTE = "An admin can choose another one for this card."
 
 function isRoomsData(data: unknown): data is RoomsCardData {
   if (typeof data !== "object" || data === null || !("missing" in data)) return false
@@ -40,7 +40,7 @@ export function RoomsCard({ data, tier }: CardViewProps) {
   if (data.missing) {
     return (
       <CardShell title={LABEL}>
-        <CardMessage icon={DoorOpen} message={MISSING_MESSAGE} note={MISSING_NOTE} />
+        <CardMessage icon={DoorOpen} message={MISSING_MESSAGE} footer={<ChooseAnother />} />
       </CardShell>
     )
   }
