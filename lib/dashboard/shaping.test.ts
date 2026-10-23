@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { DueInput, MileageIndex } from "@/lib/maintenance-due"
 import { createFormatter, DEFAULT_REGIONAL } from "@/lib/regional"
-import { dueLabel, dueMaintenance, dueMaintenanceCount, roomsByProperty } from "./shaping"
+import { dueLabel, dueMaintenance, dueMaintenanceCount, roomGroups } from "./shaping"
 
 const NOW = new Date("2026-06-15T12:00:00Z")
 const day = (n: number) => new Date(NOW.getTime() + n * 86400000)
@@ -64,18 +64,45 @@ describe("dueMaintenance", () => {
   })
 })
 
-describe("roomsByProperty", () => {
-  it("groups rooms under their property, properties and rooms by name", () => {
-    const rooms = [
-      { id: "1", name: "Kitchen", propertyId: "b", propertyName: "Beach house" },
-      { id: "2", name: "Attic", propertyId: "a", propertyName: "Apartment" },
-      { id: "3", name: "Bath", propertyId: "b", propertyName: "Beach house" },
+describe("roomGroups", () => {
+  it("keeps the true count per property when the chips are cut", () => {
+    // 12 rooms across three properties; only 7 chips were fetched (the limit).
+    const counts = [
+      { propertyId: "c", propertyName: "Cabin", count: 2 },
+      { propertyId: "a", propertyName: "Apartment", count: 6 },
+      { propertyId: "b", propertyName: "Beach house", count: 4 },
     ]
-    expect(roomsByProperty(rooms)).toEqual([
-      { propertyId: "a", propertyName: "Apartment", rooms: [{ id: "2", name: "Attic" }] },
+    const chips = [
+      ...["R1", "R2", "R3", "R4", "R5", "R6"].map((name, i) => ({ id: `a${i}`, name, propertyId: "a" })),
+      { id: "b0", name: "Bath", propertyId: "b" },
+    ]
+    const groups = roomGroups(counts, chips)
+    expect(groups.map((g) => [g.propertyName, g.roomCount, g.rooms.length])).toEqual([
+      ["Apartment", 6, 6],
+      ["Beach house", 4, 1],
+      ["Cabin", 2, 0],
+    ])
+    expect(groups.reduce((n, g) => n + g.roomCount, 0)).toBe(12)
+  })
+
+  it("orders properties and room chips by name", () => {
+    const groups = roomGroups(
+      [
+        { propertyId: "b", propertyName: "Beach house", count: 2 },
+        { propertyId: "a", propertyName: "Apartment", count: 1 },
+      ],
+      [
+        { id: "1", name: "Kitchen", propertyId: "b" },
+        { id: "3", name: "Bath", propertyId: "b" },
+        { id: "2", name: "Attic", propertyId: "a" },
+      ],
+    )
+    expect(groups).toEqual([
+      { propertyId: "a", propertyName: "Apartment", roomCount: 1, rooms: [{ id: "2", name: "Attic" }] },
       {
         propertyId: "b",
         propertyName: "Beach house",
+        roomCount: 2,
         rooms: [
           { id: "3", name: "Bath" },
           { id: "1", name: "Kitchen" },
@@ -85,7 +112,27 @@ describe("roomsByProperty", () => {
   })
 
   it("is empty for no rooms", () => {
-    expect(roomsByProperty([])).toEqual([])
+    expect(roomGroups([], [])).toEqual([])
+  })
+})
+
+describe("dueMaintenance ranking", () => {
+  it("ranks a truck past its mileage above a date-only item", () => {
+    const list = [
+      sched({ id: "date", nextDueDate: day(2) }),
+      sched({ id: "truck", assetType: "VEHICLE", assetId: "v1", nextDueDate: day(400), nextDueMileage: 49_700 }),
+    ]
+    expect(dueMaintenance(list, mileage, NOW).map(({ s }) => s.id)).toEqual(["truck", "date"])
+  })
+
+  it("sorts a mileage-due schedule with no date after dated ones of equal severity", () => {
+    const list = [
+      sched({ id: "nodate", assetType: "VEHICLE", assetId: "v1", nextDueDate: null, nextDueMileage: 49_000 }),
+      sched({ id: "dated", assetType: "VEHICLE", assetId: "v1", nextDueDate: day(-2) }),
+    ]
+    const ranked = dueMaintenance(list, mileage, NOW)
+    expect(ranked.map(({ s }) => s.id)).toEqual(["dated", "nodate"])
+    expect(ranked[1].due.daysLeft).toBeNull()
   })
 })
 

@@ -12,7 +12,7 @@ import { assetHref } from "@/lib/assets"
 import { dueCandidateFilter } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { AssetType } from "@/app/generated/prisma/client"
-import { dueLabel, dueMaintenance, roomsByProperty, type PropertyRooms } from "./shaping"
+import { dueLabel, dueMaintenance, roomGroups, type PropertyRooms } from "./shaping"
 
 export type LoaderContext = { now: Date; features: Features; fmt: Formatter }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
@@ -120,7 +120,7 @@ const loadVehicles = assetLoader(
     }),
   (r, fmt) => ({
     detail: [r.year, r.make, r.model].filter(Boolean).join(" "),
-    facts: r.currentMileage != null ? `${r.currentMileage.toLocaleString()} ${fmt.meterShort(r.meterUnit)}` : "",
+    facts: r.currentMileage != null ? `${r.currentMileage.toLocaleString("en-US")} ${fmt.meterShort(r.meterUnit)}` : "",
   }),
 )
 
@@ -146,8 +146,9 @@ const RELATIONSHIP_LABELS: Record<string, string> = {
   OTHER: "Other",
 }
 
-// People exist only with Health on; the dashboard skips the card otherwise.
-const loadPeople = assetLoader(
+// People exist only with Health on: with it off the loader returns nothing,
+// whatever the caller does.
+const loadPeopleRows = assetLoader(
   "PERSON",
   (itemId) =>
     prisma.person.findMany({
@@ -156,6 +157,9 @@ const loadPeople = assetLoader(
     }),
   (r) => ({ detail: RELATIONSHIP_LABELS[r.relationship] ?? "", facts: "" }),
 )
+
+const loadPeople: CardLoader = async (config, ctx): Promise<AssetCardData> =>
+  ctx.features.health ? ((await loadPeopleRows(config, ctx)) as AssetCardData) : { missing: false, total: 0, single: false, items: [] }
 
 // ---- Rooms --------------------------------------------------------------------
 
@@ -172,24 +176,36 @@ const loadRooms: CardLoader = async (config, { features }): Promise<RoomsCardDat
   const none: RoomsCardData = { missing: false, total: 0, single: false, propertyCount: 0, properties: [] }
   if (!features.rooms) return none
   const itemId = configItemId(config)
-  const rows = await prisma.room.findMany({
-    where: itemId ? { propertyId: itemId } : undefined,
-    select: { id: true, name: true, propertyId: true, property: { select: { name: true } } },
-  })
-  if (itemId && rows.length === 0 && (await prisma.property.count({ where: { id: itemId } })) === 0) return { missing: true }
-
-  const groups = roomsByProperty(
-    rows.map((r) => ({ id: r.id, name: r.name, propertyId: r.propertyId, propertyName: r.property.name })),
+  const where = itemId ? { propertyId: itemId } : undefined
+  // Counts per property (every property keeps its true count); only the chips
+  // shown at the large tier are bounded by config.limit.
+  const [grouped, chips] = await Promise.all([
+    prisma.room.groupBy({ by: ["propertyId"], where, _count: { _all: true } }),
+    prisma.room.findMany({
+      where,
+      orderBy: [{ property: { name: "asc" } }, { name: "asc" }, { id: "asc" }],
+      take: configLimit(config),
+      select: { id: true, name: true, propertyId: true },
+    }),
+  ])
+  if (itemId && grouped.length === 0) {
+    if ((await prisma.property.count({ where: { id: itemId } })) === 0) return { missing: true }
+    return { ...none, single: true }
+  }
+  const names = new Map(
+    (await prisma.property.findMany({ where: { id: { in: grouped.map((g) => g.propertyId) } }, select: { id: true, name: true } })).map((p) => [p.id, p.name]),
   )
-  let budget = configLimit(config)
-  const properties = groups
-    .map((g) => {
-      const rooms = g.rooms.slice(0, Math.max(budget, 0))
-      budget -= rooms.length
-      return { ...g, rooms }
-    })
-    .filter((g) => g.rooms.length > 0)
-  return { missing: false, total: rows.length, single: itemId !== null, propertyCount: groups.length, properties }
+  const properties = roomGroups(
+    grouped.map((g) => ({ propertyId: g.propertyId, propertyName: names.get(g.propertyId) ?? "", count: g._count._all })),
+    chips,
+  )
+  return {
+    missing: false,
+    total: properties.reduce((n, p) => n + p.roomCount, 0),
+    single: itemId !== null,
+    propertyCount: properties.length,
+    properties,
+  }
 }
 
 // ---- Records, warranties, due maintenance ---------------------------------------
@@ -248,8 +264,7 @@ export type WarrantiesCardData = {
 
 const loadWarranties: CardLoader = async (_config, { now, features }): Promise<WarrantiesCardData> => {
   const where = { ...ownedWhere(features), expirationDate: { gt: now } }
-  const [total, groups, rows, index] = await Promise.all([
-    prisma.warranty.count({ where }),
+  const [groups, rows, index] = await Promise.all([
     prisma.warranty.groupBy({ by: ["assetType"], where, _count: { _all: true } }),
     prisma.warranty.findMany({
       where,
@@ -260,7 +275,7 @@ const loadWarranties: CardLoader = async (_config, { now, features }): Promise<W
     assetIndex(),
   ])
   return {
-    total,
+    total: groups.reduce((n, g) => n + g._count._all, 0),
     breakdown: groups
       .map((g) => ({ label: WARRANTY_TYPE_LABELS[g.assetType][g._count._all === 1 ? 0 : 1], count: g._count._all }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),

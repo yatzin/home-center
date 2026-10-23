@@ -21,17 +21,30 @@ type CountSpec = {
   emptyMessage: string
 }
 
-/** The number, its label and the type's icon; urgent (destructive) when `urgent`. */
-function CountRow({ spec, count, urgent, className }: { spec: CountSpec; count: number; urgent?: boolean; className?: string }) {
-  const Icon = spec.icon
+/** The number, its label and the type icon; urgent (destructive) when `urgent`. */
+export function CountTile({
+  label,
+  icon: Icon,
+  href,
+  count,
+  urgent,
+  className,
+}: {
+  label: string
+  icon: LucideIcon
+  href: string
+  count: number
+  urgent?: boolean
+  className?: string
+}) {
   return (
     <Link
-      href={spec.listHref}
+      href={href}
       className={cn("flex items-center justify-between gap-3 px-5 transition-colors duration-150 hover:bg-muted/60", className)}
     >
       <div className="min-w-0">
         <div className={cn("text-[28px] font-semibold leading-none tabular-nums", urgent && "text-destructive")}>{count}</div>
-        <div className="mt-2 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{spec.label}</div>
+        <div className="mt-2 truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       </div>
       <div
         className={cn(
@@ -45,7 +58,33 @@ function CountRow({ spec, count, urgent, className }: { spec: CountSpec; count: 
   )
 }
 
-/** `compact` drops the asset name (it is still in the tooltip) for the narrow middle tier. */
+/** The count tile with a bordered list beneath it (the middle tier). */
+export function CountWithList({
+  tile,
+  scroll,
+  children,
+}: {
+  tile: Parameters<typeof CountTile>[0]
+  scroll?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <CountTile {...tile} />
+      <div className={cn("min-h-0 flex-1 border-t", scroll ? "overflow-y-auto" : "overflow-hidden")}>{children}</div>
+    </div>
+  )
+}
+
+const specTile = (spec: CountSpec, count: number, urgent?: boolean, className?: string) => ({
+  label: spec.label,
+  icon: spec.icon,
+  href: spec.listHref,
+  count,
+  urgent,
+  className,
+})
+
 function LineRow({ line, overdue, compact }: { line: CardLine; overdue?: boolean; compact?: boolean }) {
   return (
     <Link
@@ -58,16 +97,6 @@ function LineRow({ line, overdue, compact }: { line: CardLine; overdue?: boolean
       <span className={cn("shrink-0 text-xs tabular-nums", overdue ? "font-medium text-destructive" : "text-muted-foreground")}>{line.meta}</span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
     </Link>
-  )
-}
-
-/** The count with a short list beneath it (the middle tier). */
-function Peek({ spec, count, urgent, children }: { spec: CountSpec; count: number; urgent?: boolean; children: React.ReactNode }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <CountRow spec={spec} count={count} urgent={urgent} className="min-h-0 flex-1" />
-      <div className="shrink-0 overflow-hidden border-t px-3 py-1.5">{children}</div>
-    </div>
   )
 }
 
@@ -89,7 +118,7 @@ function ListCard({
   peek: React.ReactNode
   overdueOf?: (line: CardLine) => boolean
 }) {
-  if (tier === TIER_COUNT) return <CountRow spec={spec} count={count} urgent={urgent} className="h-full" />
+  if (tier === TIER_COUNT) return <CountTile {...specTile(spec, count, urgent, "h-full")} />
 
   if (lines.length === 0) {
     return (
@@ -101,9 +130,9 @@ function ListCard({
 
   if (tier === TIER_PEEK) {
     return (
-      <Peek spec={spec} count={count} urgent={urgent}>
-        {peek}
-      </Peek>
+      <CountWithList tile={specTile(spec, count, urgent, "flex-1")}>
+        <div className="px-3 py-1.5">{peek}</div>
+      </CountWithList>
     )
   }
 
@@ -210,7 +239,7 @@ export function DueMaintenanceCard({ data, tier }: CardViewProps) {
             {next.overdue ? (
               <AlertTriangle className="ml-2 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
             ) : (
-              <Clock className="ml-2 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden />
+              <Clock className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
             )}
             <div className="min-w-0 flex-1">
               <LineRow line={next} overdue={next.overdue} compact />

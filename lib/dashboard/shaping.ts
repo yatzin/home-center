@@ -37,21 +37,36 @@ export function dueMaintenanceCount<T extends DueInput & { id: string }>(
   return dueMaintenance(candidates, mileage, now).length
 }
 
-export type PropertyRooms = { propertyId: string; propertyName: string; rooms: { id: string; name: string }[] }
+export type PropertyRooms = {
+  propertyId: string
+  propertyName: string
+  /** The property's true room count, whatever `rooms` was cut to. */
+  roomCount: number
+  /** Room chips for the large tier; a bounded sample, possibly fewer than roomCount (or none). */
+  rooms: { id: string; name: string }[]
+}
 
-/** Rooms grouped under their property; properties and rooms ordered by name. */
-export function roomsByProperty(
-  rooms: readonly { id: string; name: string; propertyId: string; propertyName: string }[],
+/**
+ * Per-property room counts joined with a (bounded) sample of room names. Every
+ * property with rooms stays in the result with its true count; only the chips
+ * are limited. Properties and rooms ordered by name.
+ */
+export function roomGroups(
+  counts: readonly { propertyId: string; propertyName: string; count: number }[],
+  chips: readonly { id: string; name: string; propertyId: string }[],
 ): PropertyRooms[] {
-  const groups = new Map<string, PropertyRooms>()
-  for (const r of rooms) {
-    let g = groups.get(r.propertyId)
-    if (!g) groups.set(r.propertyId, (g = { propertyId: r.propertyId, propertyName: r.propertyName, rooms: [] }))
-    g.rooms.push({ id: r.id, name: r.name })
-  }
   const byName = (a: string, b: string) => a.localeCompare(b)
-  return [...groups.values()]
-    .map((g) => ({ ...g, rooms: g.rooms.sort((a, b) => byName(a.name, b.name)) }))
+  return counts
+    .filter((c) => c.count > 0)
+    .map((c) => ({
+      propertyId: c.propertyId,
+      propertyName: c.propertyName,
+      roomCount: c.count,
+      rooms: chips
+        .filter((r) => r.propertyId === c.propertyId)
+        .map((r) => ({ id: r.id, name: r.name }))
+        .sort((a, b) => byName(a.name, b.name)),
+    }))
     .sort((a, b) => byName(a.propertyName, b.propertyName))
 }
 
@@ -60,8 +75,8 @@ export function dueLabel(due: Due, fmt: { meterShort: (u: NonNullable<Due["meter
   if (due.reason === "mileage" && due.milesLeft != null) {
     const unit = fmt.meterShort(due.meterUnit ?? "MILES")
     return due.milesLeft < 0
-      ? `${Math.abs(due.milesLeft).toLocaleString()} ${unit} over`
-      : `${due.milesLeft.toLocaleString()} ${unit}`
+      ? `${Math.abs(due.milesLeft).toLocaleString("en-US")} ${unit} over`
+      : `${due.milesLeft.toLocaleString("en-US")} ${unit}`
   }
   const d = due.daysLeft
   if (d === null) return "—"
