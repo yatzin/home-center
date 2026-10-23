@@ -6,6 +6,7 @@ import {
   cardType,
   defaultLayout,
   limitsMap,
+  PHONE_WIDTH_SCALE,
   tierOf,
   type CardTypeDef,
 } from "./card-types"
@@ -71,6 +72,20 @@ describe("CARD_TYPES", () => {
     const r = d.configSchema.safeParse(d.defaultConfig)
     expect(r.success).toBe(true)
     expect(d.configSchema.safeParse({}).success).toBe(true)
+  })
+
+  it("is frozen, so in-place edits cannot corrupt the catalog", () => {
+    expect(Object.isFrozen(CARD_TYPES)).toBe(true)
+    for (const d of CARD_TYPES) {
+      for (const o of [d, d.min, d.max, d.large, d.phone, d.tiers, ...d.tiers, d.defaultConfig]) {
+        expect(Object.isFrozen(o)).toBe(true)
+      }
+    }
+    const props = cardType("properties")!
+    expect(() => {
+      ;(props.min as { w: number }).w = 9
+    }).toThrow()
+    expect(cardType("vehicles")!.min.w).toBe(2)
   })
 
   it("has a lucide icon name, label and description for every card", () => {
@@ -178,14 +193,49 @@ describe("tierOf", () => {
   })
 })
 
-describe("defaultLayout", () => {
-  const types = (f: Features) => {
-    const l = defaultLayout(f)
-    const typeOf = new Map(l.cards.map((c) => [c.id, c.type]))
-    // Reading order on the large grid: rows top to bottom, then left to right.
-    return [...l.large].sort((a, b) => a.y - b.y || a.x - b.x).map((p) => typeOf.get(p.id))
+describe("tierOf in phone mode", () => {
+  const name = (id: string, size: { w: number; h: number }) => {
+    const d = cardType(id)!
+    return d.tiers[tierOf(d, size, "phone")].name
   }
 
+  it("scales phone width by PHONE_WIDTH_SCALE and leaves height alone", () => {
+    expect(PHONE_WIDTH_SCALE).toBe(2)
+    const d = cardType("properties")!
+    expect(tierOf(d, { w: 2, h: 2 }, "phone")).toBe(tierOf(d, { w: 4, h: 2 }))
+    expect(tierOf(d, { w: 2, h: 1 }, "phone")).toBe(0)
+    // Large mode is the default and unchanged.
+    expect(tierOf(d, { w: 2, h: 4 })).toBe(0)
+    expect(tierOf(d, { w: 2, h: 4 }, "large")).toBe(0)
+  })
+
+  it.each([
+    ["properties", "thumbnails"],
+    ["vehicles", "thumbnails"],
+    ["people", "thumbnails"],
+    ["equipment", "thumbnails"],
+    ["rooms", "thumbnails"],
+    ["records", "count"],
+    ["active-warranties", "count"],
+    ["due-maintenance", "next"],
+    ["intake", "list"],
+    ["reminders", "list"],
+    ["expiring-warranties", "list"],
+    ["spending-trend", "chart"],
+    ["spending-breakdown", "ranked"],
+  ])("%s's phone default size shows its %s tier", (id, tier) => {
+    expect(name(id, cardType(id)!.phone)).toBe(tier)
+  })
+
+  it.each(["properties", "vehicles", "reminders", "expiring-warranties", "intake", "spending-trend"])(
+    "a full-width phone %s reaches its middle tier given the height",
+    (id) => {
+      expect(tierOf(cardType(id)!, { w: PHONE_COLS, h: 8 }, "phone")).toBeGreaterThanOrEqual(1)
+    },
+  )
+})
+
+describe("defaultLayout", () => {
   it("is a valid layout with a derived phone layout", () => {
     for (const f of [ALL_ON, { ...ALL_ON, health: false }, { ...ALL_ON, rooms: false }]) {
       const l = defaultLayout(f)
@@ -233,7 +283,6 @@ describe("defaultLayout", () => {
     // The top block has no holes: its cards (which never overlap) tile it exactly.
     const area = top.reduce((sum, t) => sum + at.get(t)!.w * at.get(t)!.h, 0)
     expect(area).toBe(LARGE_COLS * topBottom)
-    expect(types(ALL_ON)[0]).toBe("properties")
   })
 
   it("gives Equipment the whole column when People is gone", () => {

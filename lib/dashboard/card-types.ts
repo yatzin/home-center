@@ -11,7 +11,8 @@ import type { Features } from "@/lib/features"
 import { LAYOUT_FORMAT, type CardInstance, type CardLimits, type DashboardLayout, type Placement } from "./layout"
 import type { Size } from "./grid"
 
-export type CardTier = { name: string; minW: number; minH: number }
+export type CardTier = Readonly<{ name: string; minW: number; minH: number }>
+type FrozenSize = Readonly<Size>
 
 export type CardTypeDef = {
   id: string
@@ -21,16 +22,16 @@ export type CardTypeDef = {
   icon: string
   /** The site feature this card belongs to; hidden everywhere when it is off. */
   requires?: "health" | "rooms"
-  min: Size
-  max: Size
+  min: FrozenSize
+  max: FrozenSize
   /** Size when added on the large grid (also its repair default). */
-  large: Size
+  large: FrozenSize
   /** Size when added on the phone grid. */
-  phone: Size
+  phone: FrozenSize
   /** Ascending: each tier needs at least the previous one's width and height. */
-  tiers: CardTier[]
+  tiers: readonly CardTier[]
   configSchema: z.ZodType<Record<string, unknown>>
-  defaultConfig: Record<string, unknown>
+  defaultConfig: Readonly<Record<string, unknown>>
 }
 
 // ---- Config schemas ---------------------------------------------------------
@@ -46,29 +47,52 @@ const upcomingConfig = z.object({
   limit: limit.optional(),
 })
 
+/** `range` sets the period of the headline and totals only; the trend chart always spans 12 months. */
 const spendingConfig = z.object({ range: z.enum(["ytd", "12m"]).optional() })
 
 const noConfig = z.object({})
 
 // ---- Shared size/tier shapes ------------------------------------------------
 
+function size(w: number, h: number): FrozenSize {
+  return Object.freeze({ w, h })
+}
+
+function freezeTiers(tiers: CardTier[]): readonly CardTier[] {
+  return Object.freeze(tiers.map((t) => Object.freeze({ ...t })))
+}
+
+/** Deep-freezes a def's data (not its zod schema) so callers cannot mutate the catalog. */
+function freezeDef(d: CardTypeDef): CardTypeDef {
+  return Object.freeze({
+    ...d,
+    min: size(d.min.w, d.min.h),
+    max: size(d.max.w, d.max.h),
+    large: size(d.large.w, d.large.h),
+    phone: size(d.phone.w, d.phone.h),
+    tiers: Object.isFrozen(d.tiers) ? d.tiers : freezeTiers([...d.tiers]),
+    defaultConfig: Object.freeze({ ...d.defaultConfig }),
+  })
+}
+
 // Count alone fits a short tile; a photo strip needs ~a quarter of the page and
 // two rows; a per-item list needs half the page and enough rows for 3+ items.
-const ASSET_TIERS: CardTier[] = [
+// Shared between card types, so frozen: an in-place clamp must not corrupt the catalog.
+const ASSET_TIERS = freezeTiers([
   { name: "count", minW: 2, minH: 1 },
   { name: "thumbnails", minW: 3, minH: 2 },
   { name: "list", minW: 6, minH: 4 },
-]
-const ASSET_LIMITS = { min: { w: 2, h: 1 }, max: { w: 12, h: 8 } }
+])
+const ASSET_LIMITS = Object.freeze({ min: size(2, 1), max: size(12, 8) })
 
 // Reminder-like lists: one headline item, a dated list, then (wide) grouped by
 // urgency into overdue / soon / later columns.
-const UPCOMING_TIERS: CardTier[] = [
+const UPCOMING_TIERS = freezeTiers([
   { name: "next", minW: 2, minH: 2 },
   { name: "list", minW: 3, minH: 3 },
   { name: "grouped", minW: 6, minH: 4 },
-]
-const UPCOMING_LIMITS = { min: { w: 2, h: 2 }, max: { w: 12, h: 8 }, large: { w: 3, h: 4 }, phone: { w: 2, h: 4 } }
+])
+const UPCOMING_LIMITS = Object.freeze({ min: size(2, 2), max: size(12, 8), large: size(3, 4), phone: size(2, 4) })
 
 function asset(
   id: string,
@@ -99,7 +123,7 @@ function asset(
 
 // Hero tiles (Properties, Vehicles) are 3x4 by default: tall enough for today's
 // photo mosaic. People/Equipment/Rooms default to a 4x2 strip of thumbnails.
-export const CARD_TYPES: readonly CardTypeDef[] = [
+const DEFS: CardTypeDef[] = [
   asset("properties", "Properties", "Your homes and land, with recent photos.", "Building2", { w: 3, h: 4 }, { w: 2, h: 4 }, 7),
   asset("vehicles", "Vehicles", "Cars and other vehicles, with recent photos.", "Car", { w: 3, h: 4 }, { w: 2, h: 4 }, 7),
   asset("people", "People", "Household members and their health records.", "HeartPulse", { w: 4, h: 2 }, { w: 2, h: 2 }, 18, "health"),
@@ -231,6 +255,8 @@ export const CARD_TYPES: readonly CardTypeDef[] = [
   },
 ]
 
+export const CARD_TYPES: readonly CardTypeDef[] = Object.freeze(DEFS.map(freezeDef))
+
 const BY_ID = new Map(CARD_TYPES.map((d) => [d.id, d]))
 
 export function cardType(id: string): CardTypeDef | undefined {
@@ -249,11 +275,22 @@ export function limitsMap(): ReadonlyMap<string, CardLimits> {
   return new Map(CARD_TYPES.map((d) => [d.id, { min: d.min, max: d.max, default: d.large }]))
 }
 
-/** Index of the richest tier the size allows (0 when below the first). */
-export function tierOf(def: CardTypeDef, size: Size): number {
+/**
+ * Large-grid columns one phone column counts as for tier selection. A
+ * full-width (2-column) phone card is ~360px, comparable to ~4 large columns.
+ */
+export const PHONE_WIDTH_SCALE = 2
+
+/**
+ * Index of the richest tier the size allows (0 when below the first). Tier
+ * minimums are in large-grid units; in phone mode the width is scaled by
+ * PHONE_WIDTH_SCALE first (height is unchanged: rows are the same height).
+ */
+export function tierOf(def: CardTypeDef, size: Size, mode: "large" | "phone" = "large"): number {
+  const w = mode === "phone" ? size.w * PHONE_WIDTH_SCALE : size.w
   let tier = 0
   def.tiers.forEach((t, i) => {
-    if (t.minW <= size.w && t.minH <= size.h) tier = i
+    if (t.minW <= w && t.minH <= size.h) tier = i
   })
   return tier
 }
@@ -285,14 +322,16 @@ export function defaultLayout(features: Features): DashboardLayout {
     const d = cardType(s.type)
     return d !== undefined && enabled(d, features)
   })
-  const hasPeople = slots.some((s) => s.type === "people")
+  const people = slots.find((s) => s.type === "people")
+  // People's slot, when People is off, so Equipment can take the whole column.
+  const freed = DEFAULT_SLOTS.find((s) => s.type === "people")!
   const cards: CardInstance[] = []
   const large: Placement[] = []
   for (const s of slots) {
     const def = cardType(s.type)!
     cards.push({ id: s.type, type: s.type, config: { ...def.defaultConfig } })
     // With Health off, Equipment has the column to itself, as it does today.
-    const p = s.type === "equipment" && !hasPeople ? { ...s, y: 0, h: 4 } : s
+    const p = s.type === "equipment" && !people ? { ...s, y: freed.y, h: freed.h + s.h } : s
     large.push({ id: s.type, x: p.x, y: p.y, w: p.w, h: p.h })
   }
   return { format: LAYOUT_FORMAT, cards, large, phone: null }
