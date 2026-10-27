@@ -40,6 +40,16 @@ export function createFormatter(r: Regional) {
   const full = currencyFormat(r.currency)
   const whole = currencyFormat(r.currency, { maximumFractionDigits: 0, minimumFractionDigits: 0 })
   const currencySymbol = full?.formatToParts(0).find((p) => p.type === "currency")?.value ?? r.currency
+  const numberFormats = new Map<number, Intl.NumberFormat>()
+  /** A plain number with digit grouping, rounded to `maxFractionDigits` (0: whole). */
+  const number = (n: number, maxFractionDigits = 0) => {
+    let f = numberFormats.get(maxFractionDigits)
+    if (!f) {
+      f = new Intl.NumberFormat(undefined, { maximumFractionDigits: maxFractionDigits })
+      numberFormats.set(maxFractionDigits, f)
+    }
+    return f.format(n)
+  }
   const km = r.distanceUnit === "KM"
   const sqm = r.areaUnit === "SQM"
 
@@ -108,6 +118,7 @@ export function createFormatter(r: Regional) {
     /** Axis ticks and captions: "$12.5k", "€980". */
     moneyCompact: (n: number) =>
       Math.abs(n) >= 1000 ? `${currencySymbol}${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `${currencySymbol}${Math.round(n)}`,
+    number,
     distanceShort: km ? "km" : "mi",
     distanceWord: km ? "kilometre" : "mile",
     distanceWords: km ? "kilometres" : "miles",

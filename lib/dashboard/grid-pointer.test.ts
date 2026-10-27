@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest"
 import { moveCard, type Placement } from "./grid"
-import { drawnToStored, gridPitch, moveKeyStep, resizeKeyStep, snapMove, snapResize, stepMove } from "./grid-pointer"
+import {
+  drawnToStored,
+  gridPitch,
+  moveKeyStep,
+  nearestStripRow,
+  resizeKeyStep,
+  snapMove,
+  snapResize,
+  stepMove,
+  stripRows,
+  stripRowTop,
+} from "./grid-pointer"
 
 const p = (id: string, x: number, y: number, w: number, h: number): Placement => ({ id, x, y, w, h })
 
@@ -135,5 +146,50 @@ describe("drawnToStored", () => {
 
   it("never proposes a negative row or column", () => {
     expect(drawnToStored({ x: 0, y: 0 }, { x: 3, y: 5 }, { x: 1, y: 2 })).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe("phone editor rows (a control strip above every row where a card starts)", () => {
+  // Phone: A (rows 0-3), B (row 4-5), then C and D side by side at row 6.
+  const layout = [p("a", 0, 0, 2, 4), p("b", 0, 4, 2, 2), p("c", 0, 6, 1, 1), p("d", 1, 6, 1, 3)]
+  const pitchY = 104
+  const strip = 48
+
+  it("stripRows lists each starting row once, ascending, whatever the input order", () => {
+    expect(stripRows(layout)).toEqual([0, 4, 6])
+    expect(stripRows([...layout].reverse())).toEqual([0, 4, 6])
+    expect(stripRows([])).toEqual([])
+  })
+
+  it("stripRowTop adds one strip for every starting row at or above the row", () => {
+    const strips = stripRows(layout)
+    expect(stripRowTop(0, strips, pitchY, strip)).toBe(48)
+    expect(stripRowTop(3, strips, pitchY, strip)).toBe(3 * 104 + 48)
+    expect(stripRowTop(4, strips, pitchY, strip)).toBe(4 * 104 + 96)
+    expect(stripRowTop(6, strips, pitchY, strip)).toBe(6 * 104 + 144)
+    expect(stripRowTop(9, strips, pitchY, strip)).toBe(9 * 104 + 144)
+  })
+
+  it("stripRowTop never decreases down the grid, so cards drawn at those tops never overlap", () => {
+    const strips = stripRows(layout)
+    for (let y = 1; y < 12; y++)
+      expect(stripRowTop(y, strips, pitchY, strip) - stripRowTop(y - 1, strips, pitchY, strip)).toBeGreaterThanOrEqual(pitchY)
+  })
+
+  it("nearestStripRow picks the row whose top is nearest, within 0..maxRow", () => {
+    const strips = stripRows(layout)
+    const top = (y: number) => stripRowTop(y, strips, pitchY, strip)
+    expect(nearestStripRow(top(4), strips, pitchY, strip, 9)).toBe(4)
+    expect(nearestStripRow(top(4) + 40, strips, pitchY, strip, 9)).toBe(4)
+    expect(nearestStripRow(top(4) - 40, strips, pitchY, strip, 9)).toBe(4)
+    expect(nearestStripRow(top(5) - 10, strips, pitchY, strip, 9)).toBe(5)
+    expect(nearestStripRow(-500, strips, pitchY, strip, 9)).toBe(0)
+    expect(nearestStripRow(99_999, strips, pitchY, strip, 9)).toBe(9)
+  })
+
+  it("nearestStripRow treats a non-finite position as the top, and a negative maxRow as 0", () => {
+    const strips = stripRows(layout)
+    expect(nearestStripRow(Number.NaN, strips, pitchY, strip, 9)).toBe(0)
+    expect(nearestStripRow(300, strips, pitchY, strip, -1)).toBe(0)
   })
 })

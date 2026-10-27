@@ -1,7 +1,10 @@
 "use client"
 
-// The dashboard in edit mode on a large canvas (>= LARGE_MIN_WIDTH): cards are
-// absolutely positioned on the 12-column grid so they can glide between cells.
+// The dashboard in edit mode. On a large canvas (>= LARGE_MIN_WIDTH) cards are
+// absolutely positioned on the 12-column grid so they can glide between cells;
+// below it the phone editor (phone-controls.tsx) edits the phone layout. The
+// reducer's mode follows the canvas width, so rotating a tablet or resizing a
+// window mid-edit switches editors without losing anything.
 //
 // All geometry goes through the reducer: while a card is dragged or resized,
 // the preview is `editReducer(state, <the action a drop would dispatch>)`, so
@@ -16,20 +19,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch } from "react"
 import {
   DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
   useDraggable,
-  useSensor,
-  useSensors,
   type Announcements,
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
   type KeyboardCoordinateGetter,
-  type Modifier,
   type PointerActivationConstraint,
-  type PointerSensorOptions,
 } from "@dnd-kit/core"
 import {
   ArrowDown,
@@ -41,8 +37,6 @@ import {
   ChevronsRightLeft,
   ChevronsUpDown,
   GripHorizontal,
-  MonitorSmartphone,
-  X,
   type LucideIcon,
 } from "lucide-react"
 import { compact, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
@@ -65,27 +59,14 @@ import { cn } from "@/lib/utils"
 import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardAdjustMenu, type AdjustGroup } from "./card-adjust-menu"
 import { CardFrame } from "./card-frame"
-import { CardGear } from "./card-gear"
+import { CardGear, CardRemoveButton } from "./card-gear"
+import { useDragCancel, inReadingOrder, useKeepInCanvas, useCommit, useEditorSensors, useGestureRef, useLatest } from "./drag-sensors"
 import { GAP, LARGE_MIN_WIDTH, ROW_HEIGHT } from "./grid-metrics"
+import { PhoneEditor } from "./phone-controls"
 import { ResizeHandle } from "./resize-handle"
 import { useCardTier } from "./use-card-tier"
-import { CardView, cardTitle, isBusy, ViewGrid, type CanvasCardData } from "./view-grid"
+import { CardView, cardLabel, cardTitle, isBusy, ViewGrid, type CanvasCardData } from "./view-grid"
 
-/** Mouse and pen only: touch goes through TouchSensor's long press, so a swipe still scrolls the page. */
-class MouseSensor extends PointerSensor {
-  static activators = [
-    {
-      eventName: "onPointerDown" as const,
-      handler: ({ nativeEvent: event }: React.PointerEvent, { onActivation }: PointerSensorOptions) => {
-        if (!event.isPrimary || event.button !== 0 || event.pointerType === "touch") return false
-        onActivation?.({ event })
-        return true
-      },
-    },
-  ]
-}
-
-const MOUSE_CONSTRAINT: PointerActivationConstraint = { distance: 4 }
 // Hold ~200 ms to pick a card up; moving more than 8 px first is a scroll.
 const TOUCH_CONSTRAINT: PointerActivationConstraint = { delay: 200, tolerance: 8 }
 const EXTRA_ROWS = 2
@@ -133,6 +114,7 @@ export function EditCanvas({
   cards,
   features,
   readOnly,
+  frozen,
   announce,
   onRemove,
   onConfigure,
@@ -145,6 +127,8 @@ export function EditCanvas({
   features: Features
   /** No arranging (after a conflict, until Reload): changes could not be saved. */
   readOnly: boolean
+  /** Done is finishing the last save: the editor stays drawn, its controls are disabled. */
+  frozen: boolean
   announce: (message: string) => void
   onRemove: (id: string) => void
   /** Opens a card's settings. */
@@ -169,31 +153,37 @@ export function EditCanvas({
     if (measuredMode) dispatch({ type: "mode", mode: measuredMode })
   }, [measuredMode, dispatch])
 
-  const editable = !readOnly && measuredMode === "large" && state.mode === "large"
+  const largeEditor = !readOnly && measuredMode === "large" && state.mode === "large"
+  const phoneEditor = !readOnly && measuredMode === "phone" && state.mode === "phone"
 
   return (
     <div ref={rootRef} className="@container/dash">
-      {measuredMode === "phone" && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          <MonitorSmartphone className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p>
-            Editing on small screens is coming next. To arrange cards, use a wider window or turn your tablet sideways.
-          </p>
-        </div>
-      )}
-      {editable ? (
+      {largeEditor ? (
         <LargeEditor
           state={state}
           dispatch={dispatch}
           cards={cards}
           width={width}
           canvasRef={canvasRef}
+          frozen={frozen}
+          announce={announce}
+          onRemove={onRemove}
+          onConfigure={onConfigure}
+        />
+      ) : phoneEditor ? (
+        <PhoneEditor
+          state={state}
+          dispatch={dispatch}
+          cards={cards}
+          width={width}
+          frozen={frozen}
           announce={announce}
           onRemove={onRemove}
           onConfigure={onConfigure}
         />
       ) : (
-        <ViewGrid cards={cards} layout={state.layout} features={features} onConfigure={readOnly ? undefined : onConfigure} />
+        // After a conflict (until Reload), or for the moment the editor and the reducer's mode disagree.
+        <ViewGrid cards={cards} layout={state.layout} features={features} />
       )}
     </div>
   )
@@ -205,6 +195,7 @@ function LargeEditor({
   cards,
   width,
   canvasRef,
+  frozen,
   announce,
   onRemove,
   onConfigure,
@@ -214,24 +205,14 @@ function LargeEditor({
   cards: readonly CanvasCardData[]
   width: number
   canvasRef: React.RefObject<HTMLDivElement | null>
+  frozen: boolean
   announce: (message: string) => void
   onRemove: (id: string) => void
   onConfigure: (id: string) => void
 }) {
   const pitch = useMemo(() => gridPitch(width, LARGE_COLS, ROW_HEIGHT, GAP), [width])
-  const pitchRef = useRef(pitch)
-  const canvasBoxRef = useRef<DOMRect | null>(null)
-  useLayoutEffect(() => {
-    pitchRef.current = pitch
-  }, [pitch])
-
-  const [gesture, setGestureState] = useState<Gesture | null>(null)
-  // Handlers read the latest gesture between renders (a drop can follow a move immediately).
-  const gestureRef = useRef<Gesture | null>(null)
-  const setGesture = useCallback((g: Gesture | null) => {
-    gestureRef.current = g
-    setGestureState(g)
-  }, [])
+  const pitchRef = useLatest(pitch)
+  const [gesture, gestureRef, setGesture] = useGestureRef<Gesture>()
 
   const ids = useMemo(() => new Set(cards.map((c) => c.id)), [cards])
   const base = useMemo(() => displayed(state, ids), [state, ids])
@@ -241,19 +222,23 @@ function LargeEditor({
   }, [state, gesture])
   const preview = useMemo(() => (previewState === state ? base : displayed(previewState, ids)), [previewState, state, base, ids])
 
-  const title = (id: string) => cardTitle(cards.find((c) => c.id === id)?.type ?? "")
+  const title = (id: string) => {
+    const card = cards.find((c) => c.id === id)
+    return card ? cardLabel(card, cards) : cardTitle("")
+  }
   const storedOf = (id: string) => state.layout.large.find((p) => p.id === id)
 
+  const commitAction = useCommit(state, dispatch, announce, canvasRef)
   /** Applies an action now and announces where the card ended up. */
   const commit = (action: EditAction, id: string, describe: (p: Placement) => string, unchanged: string) => {
-    const next = editReducer(state, action)
-    if (next === state) {
-      announce(unchanged)
-      return
-    }
-    dispatch(action)
-    const p = displayed(next, ids).get(id)
-    if (p) announce(describe(p))
+    commitAction(
+      action,
+      (next) => {
+        const p = displayed(next, ids).get(id)
+        return p ? describe(p) : ""
+      },
+      unchanged,
+    )
   }
 
   // ---- Drag (dnd-kit) ----
@@ -263,26 +248,9 @@ function LargeEditor({
     if (!step) return undefined
     const { x, y } = pitchRef.current
     return { x: currentCoordinates.x + step.x * x, y: currentCoordinates.y + step.y * y }
-  }, [])
-  const sensors = useSensors(
-    useSensor(MouseSensor, useMemo(() => ({ activationConstraint: MOUSE_CONSTRAINT }), [])),
-    useSensor(TouchSensor, useMemo(() => ({ activationConstraint: TOUCH_CONSTRAINT }), [])),
-    useSensor(KeyboardSensor, useMemo(() => ({ coordinateGetter: keyboardCoordinates }), [keyboardCoordinates])),
-  )
-
-  // Keep the dragged card over the canvas horizontally (and not above its top).
-  const keepInCanvas: Modifier = useCallback(({ transform, draggingNodeRect }) => {
-    const box = canvasBoxRef.current
-    if (!box || !draggingNodeRect) return transform
-    const minX = box.left - draggingNodeRect.left
-    const maxX = box.right - draggingNodeRect.right
-    return {
-      ...transform,
-      x: Math.min(Math.max(transform.x, minX), Math.max(minX, maxX)),
-      y: Math.max(transform.y, box.top - draggingNodeRect.top),
-    }
-  }, [])
-  const modifiers = useMemo(() => [keepInCanvas], [keepInCanvas])
+  }, [pitchRef])
+  const sensors = useEditorSensors(TOUCH_CONSTRAINT, keyboardCoordinates)
+  const [modifiers, canvasBoxRef] = useKeepInCanvas()
 
   const onDragStart = ({ active }: DragStartEvent) => {
     const id = String(active.id)
@@ -312,11 +280,7 @@ function LargeEditor({
     const to = drawnToStored(drawnTo, g.origin, g.stored)
     commit({ type: "move", id: g.id, to }, g.id, (p) => `${title(g.id)} moved to ${where(p)}.`, `${title(g.id)} stayed where it was.`)
   }
-  const onDragCancel = () => {
-    const g = gestureRef.current
-    setGesture(null)
-    if (g) announce(`Move cancelled. ${title(g.id)} is back where it was.`)
-  }
+  const onDragCancel = useDragCancel(gestureRef, setGesture, announce, title)
 
   const announcements: Announcements = {
     onDragStart: ({ active }) =>
@@ -462,7 +426,7 @@ function LargeEditor({
     >
       <div
         ref={canvasRef}
-        className={cn("relative w-full", "motion-safe:transition-[height] motion-safe:duration-200")}
+        className={cn("relative w-full", "motion-safe:transition-[height] motion-safe:duration-200", frozen && "pointer-events-none")}
         style={{ height }}
       >
         <GridUnderlay rows={rows} active={gesture !== null} />
@@ -473,18 +437,21 @@ function LargeEditor({
             style={boxStyle(target, pitch)}
           />
         )}
-        {cards.map((card) => {
+        {/* In the reading order of the layout as it stands (not the drag preview), so Tab order matches the screen and holds still mid-drag. */}
+        {inReadingOrder(cards, base).map((card) => {
           const at = (moving?.id === card.id ? moving.origin : preview.get(card.id)) ?? base.get(card.id)
           if (!at) return null
           return (
             <EditableCard
               key={card.id}
               card={card}
+              label={title(card.id)}
               placement={at}
               pitch={pitch}
               busy={gesture !== null && gesture.id !== card.id}
+              frozen={frozen}
               resizingEdge={gesture?.kind === "resize" && gesture.id === card.id ? gesture.edge : null}
-              keyboardMoveDisabled={gesture !== null}
+              keyboardMoveDisabled={gesture !== null || frozen}
               onKeyMove={(step) => keyMove(card.id, step)}
               onRemove={() => onRemove(card.id)}
               onConfigure={configFieldsFor(card.type).length > 0 ? () => onConfigure(card.id) : undefined}
@@ -522,9 +489,11 @@ function GridUnderlay({ rows, active }: { rows: number; active: boolean }) {
 
 function EditableCard({
   card,
+  label,
   placement,
   pitch,
   busy,
+  frozen,
   resizingEdge,
   keyboardMoveDisabled,
   onKeyMove,
@@ -538,10 +507,14 @@ function EditableCard({
   adjustGroups,
 }: {
   card: CanvasCardData
+  /** What the controls call it (numbered when the type repeats). */
+  label: string
   placement: Placement
   pitch: Pitch
   /** Another card is being moved or resized: this one only makes room. */
   busy: boolean
+  /** Done is finishing: controls disabled. */
+  frozen: boolean
   resizingEdge: ResizeEdge | null
   keyboardMoveDisabled: boolean
   onKeyMove: (step: Point) => void
@@ -556,13 +529,14 @@ function EditableCard({
   adjustGroups: () => AdjustGroup[]
 }) {
   const title = cardTitle(card.type)
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: card.id })
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: card.id, disabled: frozen })
   const size: Size = { w: placement.w, h: placement.h }
   // The live (preview) size: content changes tier as a resize crosses a threshold.
   const tier = useCardTier(card.type, size, "large")
   const resizing = resizingEdge !== null
-  // A card whose item is gone stays clickable: its "Choose another" button sits above the drag surface.
-  const missing = card.status === "ok" && isMissingData(card.data)
+  // A card whose item is gone stays clickable: its "Choose another" button sits above the drag surface
+  // (not while Done is finishing).
+  const missing = card.status === "ok" && isMissingData(card.data) && !frozen
 
   const style: React.CSSProperties = {
     ...boxStyle(placement, pitch),
@@ -619,7 +593,7 @@ function EditableCard({
         {...attributes}
         {...listeners}
         data-grip
-        aria-label={`Move ${title}`}
+        aria-label={`Move ${label}`}
         onKeyDown={(e) => {
           const step = moveKeyStep(e.key)
           if (step && !keyboardMoveDisabled && !e.altKey && !e.ctrlKey && !e.metaKey) {
@@ -642,35 +616,35 @@ function EditableCard({
       {!isDragging && (
         <>
           <CardAdjustMenu
-            cardTitle={title}
+            cardTitle={label}
             getGroups={adjustGroups}
-            className="absolute -bottom-3.5 left-1.5 z-20 pointer-coarse:-bottom-5.5 pointer-coarse:left-0"
+            disabled={frozen}
+            // On a narrow card a touch-sized chip below the edge would sit on
+            // the grip of the card underneath (centred, so close): it goes inside.
+            className={cn(
+              "absolute -bottom-3.5 left-1.5 z-20",
+              size.w <= 2 ? "pointer-coarse:bottom-1.5 pointer-coarse:left-1.5" : "pointer-coarse:-bottom-5.5 pointer-coarse:left-0",
+            )}
           />
           {onConfigure && (
             <CardGear
-              cardTitle={title}
+              cardTitle={label}
               onClick={onConfigure}
+              disabled={frozen}
               className="absolute -top-3.5 -left-3.5 z-20 pointer-coarse:-top-5.5 pointer-coarse:-left-5.5"
             />
           )}
-          <button
-            type="button"
-            aria-label={`Remove ${title}`}
-            title="Remove card"
+          <CardRemoveButton
+            label={label}
             onClick={onRemove}
-            className={cn(
-              "absolute -top-2.5 -right-2.5 z-20 flex size-6 items-center justify-center rounded-full border border-border bg-popover text-muted-foreground shadow-sm outline-none transition-colors duration-150",
-              "hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring",
-              "pointer-coarse:size-8 pointer-coarse:-top-3.5 pointer-coarse:-right-3.5",
-            )}
-          >
-            <X className="size-3.5" aria-hidden />
-          </button>
+            disabled={frozen}
+            className="absolute -top-3 -right-3 z-20 pointer-coarse:-top-5 pointer-coarse:-right-5"
+          />
           {(["right", "bottom", "corner"] as const).map((edge) => (
             <ResizeHandle
               key={edge}
               edge={edge}
-              cardTitle={title}
+              cardTitle={label}
               active={resizingEdge === edge}
               onStart={() => onResizeStart(edge)}
               onMove={onResizeMove}

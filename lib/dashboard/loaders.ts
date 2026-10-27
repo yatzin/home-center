@@ -14,8 +14,7 @@ import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { listInboxItems } from "@/lib/inbox-server"
 import { inboxReadiness, type InboxReadiness } from "@/lib/inbox-form"
-import { intakeSummary } from "@/lib/intake-ui"
-import { headlineOf } from "@/components/dashboard/intake-card"
+import { headlineOf, intakeSummary } from "@/lib/intake-ui"
 import { loadCostRecords } from "@/lib/costs-server"
 import { categoryColor, categoryLabel, cents, type BucketPoint, type CategoryKey } from "@/lib/costs"
 import {
@@ -29,6 +28,7 @@ import {
 } from "./spending"
 import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
 import {
+  candidateWindowDays,
   dueLabel,
   dueMaintenance,
   expiringWarranties,
@@ -39,6 +39,7 @@ import {
   type PropertyRooms,
   type Urgency,
 } from "./shaping"
+import { configItemId, configLimit, hiddenByHealth, upcomingConfig } from "./gating"
 
 export type LoaderContext = { now: Date; features: Features; fmt: Formatter }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
@@ -53,17 +54,7 @@ const assetIndex = cache(loadAssetIndex)
 // Every Spending card (any number of either type) reads the same rows once.
 const costRecords = cache(() => loadCostRecords())
 
-const DEFAULT_LIMIT = 7
 const LIST_LENGTH = 8
-
-function configLimit(config: Record<string, unknown>): number {
-  const n = config.limit
-  return typeof n === "number" && Number.isInteger(n) && n >= 1 ? Math.min(n, 50) : DEFAULT_LIMIT
-}
-
-function configItemId(config: Record<string, unknown>): string | null {
-  return typeof config.itemId === "string" && config.itemId.length > 0 ? config.itemId : null
-}
 
 // ---- Asset cards ----------------------------------------------------------------
 
@@ -148,7 +139,7 @@ const loadVehicles = assetLoader(
     }),
   (r, fmt) => ({
     detail: [r.year, r.make, r.model].filter(Boolean).join(" "),
-    facts: r.currentMileage != null ? `${r.currentMileage.toLocaleString("en-US")} ${fmt.meterShort(r.meterUnit)}` : "",
+    facts: r.currentMileage != null ? `${fmt.number(r.currentMileage)} ${fmt.meterShort(r.meterUnit)}` : "",
   }),
 )
 
@@ -347,22 +338,6 @@ const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt }): 
 
 // ---- Reminders, expiring warranties, intake -------------------------------------
 
-const ASSET_TYPES: readonly AssetType[] = ["PROPERTY", "VEHICLE", "EQUIPMENT", "PERSON"]
-
-/** The window, assetType and limit shared by the two "upcoming" cards. */
-function upcomingConfig(config: Record<string, unknown>, defaults: { windowDays: number; limit: number }) {
-  const w = config.windowDays
-  const l = config.limit
-  return {
-    windowDays: typeof w === "number" && Number.isInteger(w) && w >= 1 ? Math.min(w, 365) : defaults.windowDays,
-    limit: typeof l === "number" && Number.isInteger(l) && l >= 1 ? Math.min(l, 50) : defaults.limit,
-    assetType: ASSET_TYPES.find((t) => t === config.assetType) ?? null,
-  }
-}
-
-/** Person-owned rows never leave the server with Health off, whatever the config asks for. */
-const hiddenByHealth = (assetType: AssetType | null, features: Features) => assetType === "PERSON" && !features.health
-
 export type ReminderItem = {
   schedule: MaintenanceSchedule
   assetName: string | null
@@ -386,9 +361,14 @@ export type RemindersCardData = {
 const loadReminders: CardLoader = async (config, { now, features, fmt }): Promise<RemindersCardData> => {
   const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 30, limit: 6 })
   if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
+  const scope = { ...ownedWhere(features), ...(assetType ? { assetType } : {}) }
+  // Fetch through the longest reminder lead too: an item due soon by its own
+  // lead counts even when that is past the card's window.
+  const lead = await prisma.maintenanceSchedule.aggregate({ where: scope, _max: { reminderDaysBefore: true } })
+  const fetchDays = candidateWindowDays(windowDays, lead._max.reminderDaysBefore)
   const [candidates, mileage, index] = await Promise.all([
     prisma.maintenanceSchedule.findMany({
-      where: { AND: [dueCandidateFilter(windowDays, now), { ...ownedWhere(features), ...(assetType ? { assetType } : {}) }] },
+      where: { AND: [dueCandidateFilter(fetchDays, now), scope] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
@@ -475,8 +455,11 @@ export type IntakeCardData = {
   items: { id: string; headline: string; readiness: InboxReadiness }[]
 }
 
+// Shared by every Intake card on the page (and their loaders) per request.
+const inboxItems = cache((now: Date) => listInboxItems(now))
+
 const loadIntake: CardLoader = async (_config, { now, fmt }): Promise<IntakeCardData> => {
-  const { items, householdNames } = await listInboxItems(now)
+  const { items, householdNames } = await inboxItems(now)
   const { count, newest } = intakeSummary(items, LIST_LENGTH)
   return {
     count,
@@ -559,6 +542,11 @@ export type SpendingBreakdownData = {
   /** Sum of the categories (positive spending only), and formatted. */
   total: number
   totalText: string
+  /**
+   * True when a category netted to a refund and was left out, so `total` is
+   * more than the period's net spend (the Spending Trend headline).
+   */
+  refundsExcluded: boolean
   /** Largest first. */
   categories: SpendingCategory[]
 }
@@ -576,6 +564,7 @@ const loadSpendingBreakdown: CardLoader = async (config, { now, fmt }): Promise<
     periodText: periodText(range, now),
     total,
     totalText: fmt.money(total),
+    refundsExcluded: spendingSummary(rows, range, now).total < total,
     categories: totals.map(({ category, total: t }) => {
       const key = category as CategoryKey
       return {

@@ -122,11 +122,6 @@ export function cardsNeedingData(cards: readonly CanvasCardData[]): string[] {
   return cards.filter((c) => c.status === "loading" || c.updating === true || c.loadFailed === true).map((c) => c.id)
 }
 
-/** Some card has no data yet, data for an older config, or a failed load. */
-export function needsData(cards: readonly CanvasCardData[]): boolean {
-  return cardsNeedingData(cards).length > 0
-}
-
 /** A loader's "the configured item no longer exists" result. */
 export function isMissingData(data: unknown): boolean {
   return typeof data === "object" && data !== null && (data as { missing?: unknown }).missing === true

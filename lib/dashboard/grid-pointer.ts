@@ -97,3 +97,35 @@ export function drawnToStored(target: Point, drawnOrigin: Point, storedOrigin: P
     y: Math.max(0, storedOrigin.y + target.y - drawnOrigin.y),
   }
 }
+
+// ---- Phone editor rows ------------------------------------------------------
+// The phone editor draws a control strip (grip, menu, gear, remove) above each
+// card, so a row where a card starts is `strip` px lower than the plain grid
+// puts it. These map rows to pixels and back for that drawing.
+
+/** The rows where at least one card starts, ascending, each once. */
+export function stripRows(ps: readonly Placement[]): number[] {
+  return [...new Set(ps.map((p) => p.y))].sort((a, b) => a - b)
+}
+
+/** Pixel top of grid row `y` when every row in `strips` has a `strip` px band above it. */
+export function stripRowTop(y: number, strips: readonly number[], pitchY: number, strip: number): number {
+  let bands = 0
+  for (const s of strips) if (s <= y) bands++
+  return y * pitchY + bands * strip
+}
+
+/** The row in 0..maxRow whose top (stripRowTop) is nearest `px`; ties go to the upper row. */
+export function nearestStripRow(px: number, strips: readonly number[], pitchY: number, strip: number, maxRow: number): number {
+  if (!Number.isFinite(px)) return 0
+  let best = 0
+  let bestDist = Infinity
+  for (let y = 0; y <= Math.max(0, maxRow); y++) {
+    const d = Math.abs(stripRowTop(y, strips, pitchY, strip) - px)
+    if (d < bestDist) {
+      best = y
+      bestDist = d
+    }
+  }
+  return best
+}

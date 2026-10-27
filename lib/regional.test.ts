@@ -138,3 +138,14 @@ describe("monthYear", () => {
     expect(fmt({ dateFormat: "ISO" }).monthYear(DAY, { utc: true })).toBe("2026-01")
   })
 })
+
+describe("number", () => {
+  it("groups digits in the runtime locale, like area()", () => {
+    expect(fmt().number(1234567)).toBe((1234567).toLocaleString())
+    expect(fmt().number(-300)).toBe((-300).toLocaleString())
+  })
+  it("rounds to whole numbers by default, or to the given fraction digits", () => {
+    expect(fmt().number(12.6)).toBe((13).toLocaleString())
+    expect(fmt().number(12.25, 1)).toBe((12.3).toLocaleString())
+  })
+})

@@ -44,13 +44,16 @@ import type { DashboardLayout } from "@/lib/dashboard/layout"
 import type { CardResult } from "@/lib/dashboard/loaders"
 import type { Features } from "@/lib/features"
 import { Button } from "@/components/ui/button"
+import { Toaster } from "@/components/ui/sonner"
 import { AddCardDialog } from "./add-card-dialog"
 import { CardConfigDialog } from "./card-config-dialog"
 import { EditBar, type SaveStatus } from "./edit-bar"
 import { EditCanvas } from "./edit-canvas"
 import { useDashboardEditMode } from "./edit-context"
+import { ViewerIsAdminProvider } from "@/components/dashboard/cards/card-configure"
+import { reveal } from "./reveal"
 import { useAutosave } from "./use-autosave"
-import { cardTitle, isShownType, ViewGrid } from "./view-grid"
+import { cardLabel, isShownType, ViewGrid } from "./view-grid"
 
 type CanvasProps = {
   cards: CardResult[]
@@ -67,23 +70,15 @@ type CanvasProps = {
 }
 
 export function DashboardCanvas({ cards, layout, revision, features, isAdmin, itemOptions }: CanvasProps) {
-  if (!isAdmin) return <ViewGrid cards={cards} layout={layout} features={features} />
-  return <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} itemOptions={itemOptions} />
-}
-
-/**
- * Scrolls the nearest scrolling ancestor just enough to show `el`. Not
- * scrollIntoView: that also scrolls the app shell's overflow-hidden boxes.
- */
-function reveal(el: HTMLElement) {
-  let scroller = el.parentElement
-  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement
-  if (!scroller) return
-  const box = scroller.getBoundingClientRect()
-  const r = el.getBoundingClientRect()
-  const margin = 96
-  if (r.top < box.top + margin) scroller.scrollBy({ top: r.top - box.top - margin })
-  else if (r.bottom > box.bottom - margin) scroller.scrollBy({ top: r.bottom - box.bottom + margin })
+  return (
+    <ViewerIsAdminProvider value={isAdmin}>
+      {isAdmin ? (
+        <DashboardEditor cards={cards} layout={layout} revision={revision} features={features} itemOptions={itemOptions} />
+      ) : (
+        <ViewGrid cards={cards} layout={layout} features={features} />
+      )}
+    </ViewerIsAdminProvider>
+  )
 }
 
 /** The shown cards of a layout, in its order, with the data the page has for each. */
@@ -111,6 +106,15 @@ function cardFocusTarget(
   }
   return { card, focus: null }
 }
+
+/**
+ * Edit mode's own toaster (Undo after removing a card): bottom centre, just
+ * above the sticky edit bar, where a thumb is. The app's top-right toaster is
+ * unchanged; toasts sent here carry this id.
+ */
+const EDIT_TOASTER = "dashboard-edit"
+/** Until the bar is measured: about a phone bar's height above the bottom, clear of the safe area. */
+const TOAST_FALLBACK_BOTTOM = "calc(4.5rem + env(safe-area-inset-bottom))"
 
 function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omit<CanvasProps, "isAdmin">) {
   const router = useRouter()
@@ -168,12 +172,18 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
   const [loadError, setLoadError] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const loadData = useCallback(async (ids: readonly string[]): Promise<boolean> => {
-    if (ids.length === 0) return true
+    if (ids.length === 0) {
+      // Nothing left to load (the cards were removed, or all have data): no stale banner.
+      setLoadError(false)
+      return true
+    }
     const fail = (missing: ReadonlySet<string>) => {
       const s = stateRef.current
+      // Only cards still on the dashboard count; one removed meanwhile is no error.
       const failed = s.layout.cards.filter((c) => missing.has(c.id))
       if (failed.length > 0) setLoaded((prev) => markLoadFailed(prev, failed, s.revision))
-      setLoadError(true)
+      setLoadError(failed.length > 0)
+      return failed.length === 0
     }
     try {
       const { revision: read, cards: fresh } = await loadDashboardCards([...ids])
@@ -182,15 +192,13 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
       const left = new Set(ids.filter((id) => !returned.has(id)))
       if (left.size > 0) {
         console.error("[dashboard] no data came back for", [...left])
-        fail(left)
-        return false
+        return fail(left)
       }
       setLoadError(false)
       return true
     } catch (e) {
       console.error("[dashboard] couldn't load card data", e)
-      fail(new Set(ids))
-      return false
+      return fail(new Set(ids))
     }
   }, [])
 
@@ -211,6 +219,39 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
 
   const [finishing, setFinishing] = useState(false)
   const [resetting, setResetting] = useState(false)
+
+  // Edit-mode toasts sit just above the edit bar. The bar's height above the
+  // window's bottom depends on the shell (footer, the page's bottom padding,
+  // the safe area), so it is measured, on scroll and resize too (at the end of
+  // the page the bar rides higher, in the page flow).
+  const [toastBottom, setToastBottom] = useState<string | number>(TOAST_FALLBACK_BOTTOM)
+  useEffect(() => {
+    if (!editing) return
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const bar = rootRef.current?.querySelector<HTMLElement>("[data-edit-bar]")
+        if (!bar) return
+        const bottom = Math.max(16, Math.round(window.innerHeight - bar.getBoundingClientRect().top + 8))
+        setToastBottom((prev) => (prev === bottom ? prev : bottom))
+      })
+    }
+    measure()
+    // The bar's height changes without a window resize too (its message
+    // lines, the conflict banner): watch the bar itself.
+    const bar = rootRef.current?.querySelector<HTMLElement>("[data-edit-bar]")
+    const observer = typeof ResizeObserver === "undefined" || !bar ? null : new ResizeObserver(measure)
+    if (bar) observer?.observe(bar)
+    window.addEventListener("resize", measure)
+    document.addEventListener("scroll", measure, { capture: true, passive: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener("resize", measure)
+      document.removeEventListener("scroll", measure, { capture: true })
+    }
+  }, [editing])
 
   const [announcement, setAnnouncement] = useState("")
   const announce = useCallback((message: string) => {
@@ -258,7 +299,7 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
   const remove = (id: string) => {
     const snapshot = snapshotCard(state, id)
     if (!snapshot) return
-    const title = cardTitle(snapshot.card.type)
+    const title = cardLabel(snapshot.card, editCards)
     // Focus goes to the next card in tab order (the previous one if this was
     // the last; Done if none is left), never to the top of the page.
     const els = [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])]
@@ -268,7 +309,10 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
     if (neighbour) focusCardOrDone(neighbour)
     else requestAnimationFrame(() => rootRef.current?.querySelector<HTMLElement>("[data-edit-done]")?.focus())
     const toastId: string | number = toast(`${title} removed`, {
+      toasterId: EDIT_TOASTER,
       duration: 8000,
+      // A 44px Undo on touch screens (sonner's own is 24px).
+      classNames: { actionButton: "pointer-coarse:h-11! pointer-coarse:px-4! pointer-coarse:text-sm!" },
       action: {
         label: "Undo",
         onClick: () => {
@@ -336,7 +380,7 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
     if (!configuring) return
     dispatch({ type: "config", id: configuring.id, config })
     setConfigOpen(false)
-    announce(`${cardTitle(configuring.type)} settings saved. The card is updating.`)
+    announce(`${cardLabel(configuring, editCards)} settings saved. The card is updating.`)
     void flush()
   }
 
@@ -345,22 +389,37 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
   const done = async () => {
     if (finishing) return
     setFinishing(true)
-    const ok = await flush()
-    // Not saved (error or conflict): stay in edit mode; the bar or banner says why.
-    if (!ok) {
+    try {
+      // Save, then load data for every card's current config, so the dashboard
+      // never shows "Setting up…" outside edit mode. A change that slipped in
+      // while waiting (or a card that still has no data) goes round again; if it
+      // still is not settled, stay in edit mode rather than leave it unsaved.
+      for (let round = 0; round < 3; round++) {
+        // Not saved (error or conflict): stay; the bar or banner says why.
+        if (!(await flush())) return
+        // Failed to load: stay; the banner offers Retry.
+        if (!(await loadData(cardsNeedingData(cardsOf(stateRef.current.layout, features, loadedRef.current))))) return
+        // Let React commit what the save and the load dispatched before checking.
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        const s = stateRef.current
+        const settled = !s.dirty && !s.conflict && cardsNeedingData(cardsOf(s.layout, features, loadedRef.current)).length === 0
+        if (settled) {
+          dismissUndoToasts()
+          setEditing(false)
+          // A background top-up only: the merge ignores anything older than what we have.
+          startRefresh(() => router.refresh())
+          return
+        }
+      }
+      // Not settled after three rounds: stay, and say why. Changes that kept
+      // arriving are still saving; otherwise some card's data is still on its way.
+      const s = stateRef.current
+      const message = s.dirty ? "Still saving" : "Some cards are still updating"
+      announce(`${message}. Tap Done again.`)
+      toast(`${message} — tap Done again`, { toasterId: EDIT_TOASTER, duration: 5000 })
+    } finally {
       setFinishing(false)
-      return
     }
-    // Data for every card's current config before leaving, so the dashboard
-    // never shows "Setting up…" outside edit mode. If that fails, stay (the
-    // banner offers Retry).
-    const loadedAll = await loadData(cardsNeedingData(cardsOf(stateRef.current.layout, features, loadedRef.current)))
-    setFinishing(false)
-    if (!loadedAll) return
-    dismissUndoToasts()
-    setEditing(false)
-    // A background top-up only: the merge ignores anything older than what we have.
-    startRefresh(() => router.refresh())
   }
 
   const reload = () => {
@@ -446,6 +505,7 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
         cards={editCards}
         features={features}
         readOnly={state.conflict}
+        frozen={finishing}
         announce={announce}
         onRemove={remove}
         onConfigure={openConfig}
@@ -454,6 +514,7 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
         status={status}
         finishing={finishing}
         resetting={resetting}
+        phone={state.mode === "phone"}
         onDone={done}
         onReset={reset}
         onAddCard={state.conflict ? undefined : () => setPickerOpen(true)}
@@ -473,6 +534,12 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
         ctx={configCtx}
         onSave={saveConfig}
         finalFocus={configFinalFocus}
+      />
+      <Toaster
+        id={EDIT_TOASTER}
+        position="bottom-center"
+        offset={{ bottom: toastBottom }}
+        mobileOffset={{ bottom: toastBottom }}
       />
       <div aria-live="polite" role="status" className="sr-only">
         {announcement}

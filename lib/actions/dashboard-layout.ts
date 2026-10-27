@@ -8,7 +8,7 @@ import { getFormat } from "@/lib/regional-server"
 import { DASHBOARD_LAYOUT_ID, loadDashboardLayout } from "@/lib/dashboard/layout-server"
 import { loadCard } from "@/lib/dashboard/load-cards-server"
 import { LOADERS, type CardResult, type LoaderContext } from "@/lib/dashboard/loaders"
-import { cardType, defaultLayout, invalidCardConfig, limitsMap } from "@/lib/dashboard/card-types"
+import { cardType, defaultLayout, invalidCardConfig, limitsMap, normalizeCardConfigs } from "@/lib/dashboard/card-types"
 import { parseLayout, validateLayout, type DashboardLayout } from "@/lib/dashboard/layout"
 
 const MAX_BYTES = 256 * 1024
@@ -24,10 +24,14 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
   await requireAdmin()
   const baseRevision = input?.baseRevision
   if (!Number.isInteger(baseRevision) || baseRevision < 0) return { error: "Invalid layout." }
-  const layout = parseLayout(input.layout)
-  if (!layout) return { error: "Invalid layout." }
-  const message = validateLayout(layout, limitsMap()) ?? invalidCardConfig(layout)
+  // Cheap early reject, before any parsing.
+  if (JSON.stringify(input.layout ?? null)?.length > MAX_BYTES) return { error: "The layout is too large." }
+  const parsedLayout = parseLayout(input.layout)
+  if (!parsedLayout) return { error: "Invalid layout." }
+  const message = validateLayout(parsedLayout, limitsMap()) ?? invalidCardConfig(parsedLayout)
   if (message) return { error: message }
+  // Store what each card's schema parsed, not the raw config (unknown keys dropped).
+  const layout = normalizeCardConfigs(parsedLayout)
   const data = JSON.stringify(layout)
   if (data.length > MAX_BYTES) return { error: "The layout is too large." }
 

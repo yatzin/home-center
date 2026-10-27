@@ -2,7 +2,10 @@
 
 // The floating bar shown while editing the dashboard: save status, Reset to
 // default (with a confirmation), Add card, and Done. It sticks to the bottom of
-// the scrolling page so Done is always in reach.
+// the scrolling page so Done is always in reach. On a phone it spans the width,
+// with 44px buttons under the thumb, clear of the bottom safe area. It sits in
+// the page flow after the cards, so scrolled to the end it never covers the
+// last one.
 
 import { useState } from "react"
 import { Check, CircleAlert, Loader2, Plus, RotateCcw } from "lucide-react"
@@ -26,7 +29,12 @@ export type SaveStatus =
   /** The conflict banner explains it; the bar stays quiet. */
   | { kind: "conflict" }
 
-function Status({ status }: { status: SaveStatus }) {
+/** A long label, or a short one in the phone bar. */
+function Label({ phone, long, short }: { phone: boolean; long: string; short: string }) {
+  return <span className="truncate">{phone ? short : long}</span>
+}
+
+function Status({ status, phone }: { status: SaveStatus; phone: boolean }) {
   const base = "flex min-w-0 items-center gap-1.5 text-xs"
   switch (status.kind) {
     case "pending":
@@ -40,7 +48,7 @@ function Status({ status }: { status: SaveStatus }) {
       return (
         <span className={cn(base, "text-muted-foreground")}>
           <Check className="size-3.5 shrink-0" aria-hidden />
-          All changes saved
+          <Label phone={phone} long="All changes saved" short="Saved" />
         </span>
       )
     case "error":
@@ -54,7 +62,11 @@ function Status({ status }: { status: SaveStatus }) {
       // The conflict banner is the one signal; the bar stays quiet.
       return null
     default:
-      return <span className={cn(base, "text-muted-foreground")}>Changes save automatically</span>
+      return (
+        <span className={cn(base, "text-muted-foreground")}>
+          <Label phone={phone} long="Changes save automatically" short="Saves as you go" />
+        </span>
+      )
   }
 }
 
@@ -62,14 +74,17 @@ export function EditBar({
   status,
   finishing,
   resetting,
+  phone = false,
   onDone,
   onReset,
   onAddCard,
 }: {
   status: SaveStatus
-  /** Done was pressed and the last changes are being saved. */
+  /** Done was pressed and the last changes are being saved (Add and Reset wait). */
   finishing: boolean
   resetting: boolean
+  /** The phone editor: a full-width bar with thumb-sized buttons. */
+  phone?: boolean
   onDone: () => void
   /** Resolves when the reset finished (the dialog closes then). */
   onReset: () => Promise<void>
@@ -79,39 +94,55 @@ export function EditBar({
   const [confirming, setConfirming] = useState(false)
 
   return (
-    <div className="pointer-events-none sticky bottom-4 z-40 mt-6 flex justify-center">
+    <div
+      className={cn(
+        "pointer-events-none sticky z-40 mt-6 flex justify-center",
+        phone ? "bottom-[max(0.5rem,env(safe-area-inset-bottom))]" : "bottom-4",
+      )}
+    >
       <div
         role="toolbar"
         aria-label="Dashboard editing"
-        className="pointer-events-auto flex max-w-full items-center select-none gap-2 rounded-2xl border border-border bg-popover/95 py-1.5 pr-1.5 pl-3.5 text-popover-foreground shadow-lg ring-1 ring-foreground/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
+        data-edit-bar
+        className={cn(
+          "pointer-events-auto flex max-w-full items-center select-none gap-2 rounded-2xl border border-border bg-popover/95 text-popover-foreground shadow-lg ring-1 ring-foreground/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2",
+          phone ? "w-full gap-1 p-1.5 pl-3" : "py-1.5 pr-1.5 pl-3.5",
+        )}
       >
-        <div role="status" aria-live="polite" className="mr-1 min-w-0 flex-1 sm:min-w-40">
-          <Status status={status} />
+        <div role="status" aria-live="polite" className={cn("mr-1 min-w-0 flex-1", !phone && "sm:min-w-40")}>
+          <Status status={status} phone={phone} />
         </div>
         <Button
           variant="ghost"
-          className="pointer-coarse:h-11 pointer-coarse:min-w-11"
+          className={cn("pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
           size="sm"
           onClick={() => setConfirming(true)}
-          disabled={resetting}
+          disabled={resetting || finishing}
           aria-label="Reset to default"
+          title="Reset to default"
         >
           <RotateCcw aria-hidden />
-          <span className="hidden sm:inline">Reset to default</span>
+          <span className={phone ? "hidden" : "hidden sm:inline"}>Reset to default</span>
         </Button>
         <Button
           variant="outline"
-          className="pointer-coarse:h-11 pointer-coarse:min-w-11"
+          className={cn("pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
           size="sm"
           onClick={onAddCard}
-          disabled={!onAddCard}
+          disabled={!onAddCard || finishing}
           title={onAddCard ? undefined : "Reload first: the dashboard changed elsewhere"}
           aria-label="Add card"
         >
           <Plus aria-hidden />
-          <span className="hidden sm:inline">Add card</span>
+          <span className={phone ? "" : "hidden sm:inline"}>{phone ? "Add" : "Add card"}</span>
         </Button>
-        <Button size="sm" onClick={onDone} disabled={finishing} className="min-w-16 pointer-coarse:h-11" data-edit-done>
+        <Button
+          size="sm"
+          onClick={onDone}
+          disabled={finishing}
+          className={cn("min-w-16 pointer-coarse:h-11", phone && "h-11 min-w-20")}
+          data-edit-done
+        >
           {finishing ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}
           Done
         </Button>

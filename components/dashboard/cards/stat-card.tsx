@@ -4,7 +4,9 @@ import Link from "next/link"
 import { Building2, Car, ChevronRight, HeartPulse, Refrigerator, type LucideIcon } from "lucide-react"
 import { assetImageSrc } from "@/components/asset-image"
 import { InitialsTile } from "@/components/dashboard/summary-card"
+import { useSize } from "@/components/charts/primitives/use-width"
 import { assetHref } from "@/lib/assets"
+import { mosaicFit } from "@/lib/dashboard/mosaic-fit"
 import { cn } from "@/lib/utils"
 import type { AssetType } from "@/app/generated/prisma/client"
 import type { AssetCardData, AssetCardItem } from "@/lib/dashboard/loaders"
@@ -111,36 +113,49 @@ function InlineNotice({
           {action.label}
         </Link>
       )}
-      {note && <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground/80">{note}</p>}
+      {note && <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{note}</p>}
       {footer}
     </div>
   )
 }
 
 function Mosaic({ spec, data }: { spec: AssetCardSpec; data: Extract<AssetCardData, { missing: false }> }) {
-  const shown = data.items.slice(0, 4)
-  const remaining = data.total - shown.length
-  const grid = shown.length <= 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2"
+  const [boxRef, { width, height }] = useSize<HTMLDivElement>()
+  const measured = width > 0 && height > 0
+  // Until measured (server render, first paint) show the first four, as a 2x2.
+  const fit = measured
+    ? mosaicFit({ width, height, itemCount: data.items.length, total: data.total })
+    : mosaicFit({ width: 150, height: 150, itemCount: data.items.length, total: data.total })
+  const shown = data.items.slice(0, fit.visible)
   return (
-    <div className={cn("grid min-h-0 flex-1 gap-0.5 overflow-hidden", grid)}>
-      {shown.map((item, i) => (
-        // The badge sits beside the link, not inside it, so the link's name is just the item's.
-        <div key={item.id} className={cn("relative min-h-0 overflow-hidden", shown.length === 3 && i === 0 && "row-span-2")}>
-          <Link href={assetHref(spec.assetType, item.id)} aria-label={item.name} className="group block h-full overflow-hidden">
-            <Tile
-              spec={spec}
-              item={item}
-              className="h-full w-full transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100"
-              text="text-2xl"
-            />
-          </Link>
-          {i === shown.length - 1 && remaining > 0 && (
-            <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
-              +{remaining} more
-            </span>
-          )}
-        </div>
-      ))}
+    <div ref={boxRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div
+        className="absolute inset-0 grid gap-0.5"
+        style={{ gridTemplateColumns: `repeat(${fit.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${fit.rows}, minmax(0, 1fr))` }}
+      >
+        {shown.map((item, i) => (
+          // The badge sits beside the link, not inside it, so the link's name is just the item's.
+          <div
+            key={item.id}
+            className="relative min-h-0 min-w-0 overflow-hidden"
+            style={i === shown.length - 1 && fit.lastSpan > 1 ? { gridColumn: `span ${fit.lastSpan}` } : undefined}
+          >
+            <Link href={assetHref(spec.assetType, item.id)} aria-label={item.name} className="group block h-full overflow-hidden">
+              <Tile
+                spec={spec}
+                item={item}
+                className="h-full w-full transition-transform duration-150 group-hover:scale-105 motion-reduce:group-hover:scale-100"
+                text="text-2xl"
+              />
+            </Link>
+            {i === shown.length - 1 && fit.hidden > 0 && (
+              <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm">
+                +{fit.hidden} more
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -160,7 +175,7 @@ function ItemList({ spec, data }: { spec: AssetCardSpec; data: Extract<AssetCard
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{item.name}</p>
                 {item.detail && <p className="truncate text-xs text-muted-foreground">{item.detail}</p>}
-                {item.facts && <p className="truncate text-xs text-muted-foreground/80">{item.facts}</p>}
+                {item.facts && <p className="truncate text-xs text-muted-foreground">{item.facts}</p>}
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
             </Link>
@@ -191,7 +206,7 @@ function ItemDetail({ spec, item }: { spec: AssetCardSpec; item: AssetCardItem }
         <h2 className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">{spec.label}</h2>
         <p className="mt-1 truncate font-heading text-lg font-semibold leading-tight">{item.name}</p>
         {item.detail && <p className="text-sm text-muted-foreground">{item.detail}</p>}
-        {item.facts && <p className="text-xs text-muted-foreground/80">{item.facts}</p>}
+        {item.facts && <p className="text-xs text-muted-foreground">{item.facts}</p>}
         <Link
           href={href}
           className="mt-auto self-start rounded-md px-2 py-1 -ml-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-primary/10 hover:text-primary"

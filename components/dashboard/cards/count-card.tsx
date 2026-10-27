@@ -71,7 +71,10 @@ export function CountWithList({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <CountTile {...tile} />
-      <div className={cn("min-h-0 flex-1 border-t", scroll ? "overflow-y-auto" : "overflow-hidden")}>{children}</div>
+      {/* A scrolling list fills the card. Otherwise the list takes the height
+          its rows need and the tile (flex-1) the rest: in a short card the
+          list gives way first, never the count. */}
+      <div className={cn("min-h-0 border-t", scroll ? "flex-1 overflow-y-auto" : "shrink overflow-hidden")}>{children}</div>
     </div>
   )
 }
@@ -95,7 +98,10 @@ function LineRow({ line, overdue, compact }: { line: CardLine; overdue?: boolean
       <span className="min-w-0 flex-1 truncate font-medium">{line.title}</span>
       {line.assetName && !compact && <span className="min-w-0 max-w-[40%] shrink truncate text-xs text-muted-foreground">{line.assetName}</span>}
       <span className={cn("shrink-0 text-xs tabular-nums", overdue ? "font-medium text-destructive" : "text-muted-foreground")}>{line.meta}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
+      {/* Compact rows (a narrow peek) give the chevron's room to the title. */}
+      {!compact && (
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
+      )}
     </Link>
   )
 }

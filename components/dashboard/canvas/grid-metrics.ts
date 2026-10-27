@@ -7,8 +7,8 @@ export const ROW_HEIGHT = 88
 export const GAP = 16
 /**
  * Canvas width (its own width, not the viewport's) at which the large layout
- * replaces the phone one: 40rem. Below it a 12-column cell would be under
- * ~40px. The `@min-[40rem]/dash:` classes in view-grid.tsx encode this
+ * replaces the phone one: 640px (not rem, so it matches what the editor measures). Below it a 12-column cell would be under
+ * ~40px. The `@min-[640px]/dash:` classes in view-grid.tsx encode this
  * value; Tailwind needs it spelled out in the class names, so keep them in step.
  */
 export const LARGE_MIN_WIDTH = 640

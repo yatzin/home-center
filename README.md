@@ -258,6 +258,14 @@ The container sets up its database and admin account automatically on first boot
 
 HomeCenter works fully without these. Add them when you want them.
 
+### Customized dashboards (optional)
+
+Arrange the dashboard your way: choose which cards it shows, how big each one is, and what each one covers. A card shows more as it grows: Properties goes from a count, to photos, to a list with addresses; Spending goes from a total, to a chart, to month-by-month bars. You can add the same card more than once, say one Reminders card for vehicles and another for the house. The layout is shared by everyone in the household. Phones get a layout of their own, so you can arrange the small screen separately.
+
+- **Turn it on:** an admin goes to **Settings → Features** and switches on **Customized dashboards**. Turning it off brings back the standard dashboard. Your layout is kept, so it's still there when you switch it back on.
+- **Edit:** admins click **Edit dashboard**. Drag a card to move it and drag its edges to resize it. Every card also has a **Move & resize** button (and arrow keys on its handle) for moving without dragging. Use the gear for a card's settings, **×** to remove it (with Undo) and **Add card** to add one. Changes save as you go; click **Done** when you're finished. **Reset to default** brings back the standard layout on both desktop and phone.
+- **On a phone:** tap **Edit dashboard**, then use a card's **Move & resize** menu to move it up or down and pick Small, Medium or Large. You can also press and hold its handle to drag it.
+
 ### Email notifications (optional)
 
 Until a mail server is set up, reminders only appear in the app. There are two
@@ -455,6 +463,8 @@ npm run db:migrate   # create/apply a migration
 npm run db:studio    # browse the database
 npm run build         # production build
 ```
+
+**Adding a dashboard card type:** add its definition (sizes, tiers, settings) to `CARD_TYPES` in `lib/dashboard/card-types.ts`, a loader that fetches its data in `lib/dashboard/loaders.ts` (`LOADERS`), and a view in `components/dashboard/cards/` registered in `components/dashboard/cards/index.ts`. Unit tests for the pure layout logic live beside it in `lib/dashboard/*.test.ts`.
 
 `npm run models:fetch-builtin` downloads the built-in model into `./models/builtin/` (needed once for meaning search in development).
 

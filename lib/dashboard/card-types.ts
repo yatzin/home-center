@@ -9,7 +9,7 @@
 import { z } from "zod"
 import type { Features } from "@/lib/features"
 import { LAYOUT_FORMAT, type CardInstance, type CardLimits, type DashboardLayout, type Placement } from "./layout"
-import type { Size } from "./grid"
+import { PHONE_COLS, type Size } from "./grid"
 
 export type CardTier = Readonly<{ name: string; minW: number; minH: number }>
 type FrozenSize = Readonly<Size>
@@ -402,10 +402,10 @@ const DEFS: CardTypeDef[] = [
     max: { w: 12, h: 6 },
     large: { w: 3, h: 4 },
     phone: { w: 2, h: 4 },
-    // The chart needs three rows under the headline to read as a trend.
+    // The chart needs four rows (three under the headline) to read as a trend.
     tiers: [
       { name: "headline", minW: 2, minH: 2 },
-      { name: "chart", minW: 3, minH: 3 },
+      { name: "chart", minW: 3, minH: 4 },
       { name: "bars", minW: 6, minH: 4 },
     ],
     configSchema: spendingConfig,
@@ -423,7 +423,8 @@ const DEFS: CardTypeDef[] = [
     phone: { w: 2, h: 3 },
     tiers: [
       { name: "top", minW: 2, minH: 2 },
-      { name: "ranked", minW: 3, minH: 3 },
+      // Four columns: at three the title and the bar labels truncate.
+      { name: "ranked", minW: 4, minH: 3 },
       { name: "composition", minW: 6, minH: 3 },
     ],
     configSchema: spendingConfig,
@@ -493,6 +494,21 @@ export function invalidCardConfig(layout: DashboardLayout): string | null {
   return null
 }
 
+/**
+ * The layout with each known card's config replaced by what its configSchema
+ * parsed (unknown keys dropped). Call after invalidCardConfig returned null;
+ * a config that does not parse is left as it is. Does not mutate the input.
+ */
+export function normalizeCardConfigs(layout: DashboardLayout): DashboardLayout {
+  return {
+    ...layout,
+    cards: layout.cards.map((c) => {
+      const parsed = cardType(c.type)?.configSchema.safeParse(c.config)
+      return parsed?.success ? { ...c, config: parsed.data as Record<string, unknown> } : c
+    }),
+  }
+}
+
 /** Size limits per card type, for validateLayout/repairLayout. */
 export function limitsMap(): ReadonlyMap<string, CardLimits> {
   return new Map(CARD_TYPES.map((d) => [d.id, { min: d.min, max: d.max, default: d.large }]))
@@ -516,6 +532,39 @@ export function tierOf(def: CardTypeDef, size: Size, mode: "large" | "phone" = "
     if (t.minW <= w && t.minH <= size.h) tier = i
   })
   return tier
+}
+
+export type PhoneSizePreset = { name: "Small" | "Medium" | "Large"; w: number; h: number }
+
+/**
+ * The size choices a card offers in phone editing, smallest first (at least
+ * one, no two alike). Small is its smallest readable size (its minimum height,
+ * and half width when the type may be one column wide); Medium is its phone
+ * default at full width (a little taller than Small when the default is the
+ * minimum); Large is half again taller. All within the type's limits and
+ * PHONE_COLS: the reducer applies the type's limits to the phone grid as-is,
+ * so a minimum wider than the phone grid means full width.
+ */
+export function phoneSizePresets(def: CardTypeDef): PhoneSizePreset[] {
+  const minW = Math.min(def.min.w, PHONE_COLS)
+  const maxW = Math.max(minW, Math.min(def.max.w, PHONE_COLS))
+  const minH = def.min.h
+  const maxH = Math.max(minH, def.max.h)
+  const clampH = (h: number) => Math.min(Math.max(h, minH), maxH)
+
+  const small: PhoneSizePreset = { name: "Small", w: minW, h: minH }
+  let medium: PhoneSizePreset = { name: "Medium", w: maxW, h: clampH(def.phone.h) }
+  if (medium.w === small.w && medium.h === small.h) medium = { ...medium, h: clampH(medium.h + 1) }
+  const large: PhoneSizePreset = { name: "Large", w: maxW, h: clampH(Math.max(medium.h + 2, Math.ceil(medium.h * 1.5))) }
+
+  // Small is never bigger than Medium in either direction, nor Large smaller:
+  // a preset that matches Medium's size gives way to it.
+  const area = (p: PhoneSizePreset) => p.w * p.h
+  return [
+    ...(area(small) < area(medium) ? [small] : []),
+    medium,
+    ...(area(large) > area(medium) ? [large] : []),
+  ]
 }
 
 // ---- Default layout ---------------------------------------------------------

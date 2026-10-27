@@ -62,7 +62,7 @@ function TopCategory({ data }: { data: SpendingBreakdownData }) {
           : `${percent(top.total, data.total)}% of ${data.totalText} ${data.periodText}.`}
       </p>
       {rest > 0 && (
-        <p className="mt-1 text-xs text-muted-foreground/80">
+        <p className="mt-1 text-xs text-muted-foreground">
           +{rest} more {rest === 1 ? "category" : "categories"}
         </p>
       )}
@@ -78,6 +78,7 @@ function TotalLine({ data }: { data: SpendingBreakdownData }) {
       <span className="text-lg font-semibold leading-none">{data.totalText}</span>
       <span className="text-xs text-muted-foreground">
         {data.periodText} · {n} {n === 1 ? "category" : "categories"}
+        {data.refundsExcluded ? " · excluding refunds" : ""}
       </span>
     </p>
   )

@@ -1,7 +1,7 @@
 // Dashboard layout model: shape parsing, validation (what may be saved) and
 // repair (what is rendered when stored data is stale or damaged). Pure TS.
 import { z } from "zod"
-import { LARGE_COLS, PHONE_COLS, resolveOverlaps, type Placement, type Size } from "./grid"
+import { LARGE_COLS, MAX_ROW, PHONE_COLS, resolveOverlaps, type Placement, type Size } from "./grid"
 
 export { LARGE_COLS, PHONE_COLS } from "./grid"
 export type { Placement } from "./grid"
@@ -13,8 +13,6 @@ export type CardInstance = { id: string; type: string; config: Record<string, un
 export type DashboardLayout = { format: number; cards: CardInstance[]; large: Placement[]; phone: Placement[] | null }
 export type CardLimits = { min: Size; max: Size; default: Size }
 
-// Mirrors the row cap in grid.ts: y and h never exceed this.
-const MAX_ROW = 10_000
 
 const placementSchema = z.object({ id: z.string(), x: z.number(), y: z.number(), w: z.number(), h: z.number() })
 const layoutSchema = z.object({

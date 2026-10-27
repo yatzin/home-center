@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { CostRow } from "@/lib/costs"
-import { chartable, monthlyAverage, spendingByCategory, spendingSummary, spendTrend, spendWindow } from "./spending"
+import { chartable, monthlyAverage, spendDelta, spendingByCategory, spendingSummary, spendTrend, spendWindow } from "./spending"
 
 // Local dates throughout: the cost helpers bucket by local calendar fields.
 const NOW = new Date(2026, 9, 22, 12, 0, 0) // 22 Oct 2026
@@ -140,7 +140,23 @@ describe("chartable", () => {
     expect(chartable([])).toBe(false)
     expect(chartable([0, 0, 5, 0])).toBe(false)
     expect(chartable([0, 3, 5])).toBe(true)
-    expect(chartable([-2, 4])).toBe(true)
+  })
+  it("counts only positive points: a net-refund month is not spending to chart", () => {
+    expect(chartable([-2, 4])).toBe(false)
+    expect(chartable([-2, 4, 0, 1])).toBe(true)
+  })
+})
+
+describe("spendDelta", () => {
+  it("rounds to a whole percent with a direction", () => {
+    expect(spendDelta(0.124)).toEqual({ direction: "up", percent: 12 })
+    expect(spendDelta(-0.5)).toEqual({ direction: "down", percent: 50 })
+    expect(spendDelta(12.345)).toEqual({ direction: "up", percent: 1235 })
+  })
+  it("calls a change that rounds to 0% flat, either way", () => {
+    expect(spendDelta(0)).toEqual({ direction: "flat", percent: 0 })
+    expect(spendDelta(0.004)).toEqual({ direction: "flat", percent: 0 })
+    expect(spendDelta(-0.004)).toEqual({ direction: "flat", percent: 0 })
   })
 })
 

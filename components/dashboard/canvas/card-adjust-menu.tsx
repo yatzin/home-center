@@ -8,7 +8,7 @@
 // the card can be watched changing.
 
 import type { LucideIcon } from "lucide-react"
-import { Move } from "lucide-react"
+import { Check, Move } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,8 @@ export type AdjustItem = {
   icon: LucideIcon
   /** Nothing would change (an edge or a size limit). */
   disabled?: boolean
+  /** The card is at this choice now (a size preset): shown with a check. */
+  checked?: boolean
   onSelect: () => void
 }
 
@@ -49,6 +51,12 @@ function Groups({ getGroups }: { getGroups: () => AdjustGroup[] }) {
           >
             <item.icon aria-hidden />
             {item.label}
+            {item.checked && (
+              <>
+                <Check className="ml-auto text-primary" aria-hidden />
+                <span className="sr-only">(current)</span>
+              </>
+            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuGroup>
@@ -59,21 +67,27 @@ function Groups({ getGroups }: { getGroups: () => AdjustGroup[] }) {
 export function CardAdjustMenu({
   cardTitle,
   getGroups,
+  disabled,
+  align = "start",
   className,
 }: {
   cardTitle: string
   getGroups: () => AdjustGroup[]
+  disabled?: boolean
+  /** Which edge of the trigger the menu lines up with. */
+  align?: "start" | "end"
   className?: string
 }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        disabled={disabled}
         aria-label={`Move and resize ${cardTitle}`}
         title="Move & resize"
         className={cn(
           // A 44px touch target on touch screens; the visible chip is smaller.
           "group/adjust flex size-7 items-center justify-center rounded-full pointer-coarse:size-11",
-          "focus-visible:[&>span]:ring-2 focus-visible:[&>span]:ring-ring",
+          "focus-visible:[&>span]:ring-2 focus-visible:[&>span]:ring-ring data-[disabled]:opacity-50",
           className,
         )}
       >
@@ -81,7 +95,7 @@ export function CardAdjustMenu({
           <Move className="size-3.5" aria-hidden />
         </span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-auto min-w-44">
+      <DropdownMenuContent align={align} className="w-auto min-w-44">
         <Groups getGroups={getGroups} />
       </DropdownMenuContent>
     </DropdownMenu>

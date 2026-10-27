@@ -6,7 +6,7 @@ import type { Prisma } from "@/app/generated/prisma/client"
 
 export const FEATURE_SETTINGS_ID = "singleton"
 
-/** The saved switches, or the defaults (everything on) when nobody has saved them. Once per request. */
+/** The saved switches, or the defaults (Health, Rooms and Equipment on, Customized Dashboards off) when nobody has saved them. Once per request. */
 export const loadFeatures = cache(async (): Promise<Features> => {
   const row = await prisma.featureSettings.findUnique({ where: { id: FEATURE_SETTINGS_ID } })
   return {

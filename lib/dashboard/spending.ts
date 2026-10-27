@@ -34,7 +34,7 @@ export function spendWindow(range: SpendRange, now: Date, yearsBack = 0): DateRa
   return { start, end }
 }
 
-export function rowsInWindow(rows: CostRow[], { start, end }: DateRange): CostRow[] {
+function rowsInWindow(rows: CostRow[], { start, end }: DateRange): CostRow[] {
   return rows.filter((r) => r.date >= start && r.date <= end)
 }
 
@@ -85,9 +85,23 @@ export function spendTrend(rows: CostRow[], now: Date): { points: BucketPoint[];
   return { points, prior: priorPeriod(rows, points, "month") }
 }
 
-/** A chart earns its place only with at least two non-zero points. */
+/**
+ * A chart earns its place only with at least two points of real spending. A
+ * month or category that nets to a refund (zero or less) does not count: the
+ * charts draw it at the baseline.
+ */
 export function chartable(values: number[]): boolean {
-  return values.filter((v) => v !== 0).length >= 2
+  return values.filter((v) => v > 0).length >= 2
+}
+
+/**
+ * The change against a year earlier as the headline pill shows it: a whole
+ * percent and its direction; a change that rounds to 0% is "flat".
+ */
+export function spendDelta(delta: number): { direction: "up" | "down" | "flat"; percent: number } {
+  const percent = Math.round(Math.abs(delta) * 100)
+  if (percent === 0) return { direction: "flat", percent: 0 }
+  return { direction: delta > 0 ? "up" : "down", percent }
 }
 
 /**

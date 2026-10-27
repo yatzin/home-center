@@ -31,14 +31,6 @@ export function dueMaintenance<T extends DueInput & { id: string }>(
     )
 }
 
-export function dueMaintenanceCount<T extends DueInput & { id: string }>(
-  candidates: readonly T[],
-  mileage: MileageIndex,
-  now: Date,
-): number {
-  return dueMaintenance(candidates, mileage, now).length
-}
-
 export type PropertyRooms = {
   propertyId: string
   propertyName: string
@@ -73,16 +65,27 @@ export function roomGroups(
 }
 
 /** Mileage-driven items report the meter; date-driven ones report days. */
-export function dueLabel(due: Due, fmt: { meterShort: (u: NonNullable<Due["meterUnit"]>) => string }): string {
+export function dueLabel(
+  due: Due,
+  fmt: { meterShort: (u: NonNullable<Due["meterUnit"]>) => string; number: (n: number) => string },
+): string {
   if (due.reason === "mileage" && due.milesLeft != null) {
     const unit = fmt.meterShort(due.meterUnit ?? "MILES")
-    return due.milesLeft < 0
-      ? `${Math.abs(due.milesLeft).toLocaleString("en-US")} ${unit} over`
-      : `${due.milesLeft.toLocaleString("en-US")} ${unit}`
+    return due.milesLeft < 0 ? `${fmt.number(Math.abs(due.milesLeft))} ${unit} over` : `${fmt.number(due.milesLeft)} ${unit}`
   }
   const d = due.daysLeft
   if (d === null) return "—"
   return d < 0 ? `${Math.abs(d)}d late` : d === 0 ? "Today" : `${d}d`
+}
+
+/**
+ * How many days ahead to fetch candidate schedules for a `windowDays` list.
+ * dueMaintenance also keeps any schedule due soon by its own reminder lead,
+ * which can reach past the window: fetch through the longest lead
+ * (`longestLead`, the largest reminderDaysBefore; null when there are none).
+ */
+export function candidateWindowDays(windowDays: number, longestLead: number | null): number {
+  return Math.max(windowDays, longestLead ?? 0)
 }
 
 /** The most urgent `limit` due schedules (ranked as the legacy Reminders card), and how many are due in all. */

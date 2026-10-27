@@ -8,7 +8,6 @@ import {
   isMissingData,
   markLoadFailed,
   mergeLoaded,
-  needsData,
   sameConfig,
   withData,
   type LoadedEntry,
@@ -62,7 +61,7 @@ describe("mergeLoaded", () => {
     // A card it had not seen yet is still taken.
     expect(late.get("c")?.result).toMatchObject({ data: "c5" })
     const cards: CardInstance[] = [{ id: "a", type: "reminders", config: { windowDays: 14 } }]
-    expect(needsData(withData(cards, late))).toBe(false)
+    expect(cardsNeedingData(withData(cards, late)).length > 0).toBe(false)
   })
 
   it("two quick config changes: a load for the first never replaces data for the current one", () => {
@@ -119,7 +118,7 @@ describe("withData", () => {
     // Stale data for the old config: shown, marked updating, with the config it was loaded for.
     expect(out[1]).toMatchObject({ status: "ok", updating: true, config: { windowDays: 30 } })
     expect(out[2]).toEqual({ id: "c", type: "intake", config: {}, status: "loading" })
-    expect(needsData(out)).toBe(true)
+    expect(cardsNeedingData(out).length > 0).toBe(true)
     expect(cardsNeedingData(out)).toEqual(["b", "c"])
   })
 
@@ -133,7 +132,7 @@ describe("withData", () => {
       cards.map((c) => ok(c.id, c.type, c.config)),
       1,
     )
-    expect(needsData(withData(cards, loaded))).toBe(false)
+    expect(cardsNeedingData(withData(cards, loaded)).length > 0).toBe(false)
     expect(cardsNeedingData(withData(cards, loaded))).toEqual([])
   })
 
@@ -141,7 +140,7 @@ describe("withData", () => {
     const err: CardResult = { id: "c", type: "intake", config: {}, status: "error" }
     const out = withData([cards[2]], entriesOf([err], 1))
     expect(out[0]).toMatchObject({ status: "error", updating: false })
-    expect(needsData(out)).toBe(false)
+    expect(cardsNeedingData(out).length > 0).toBe(false)
   })
 })
 

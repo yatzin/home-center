@@ -5,25 +5,10 @@ import { Badge } from "@/components/ui/badge"
 import { InboxDropZone } from "@/components/inbox/inbox-drop-zone"
 import { IntakeTip } from "@/components/dashboard/intake-tip"
 import { getFormat } from "@/lib/regional-server"
-import type { Formatter } from "@/lib/regional"
-import { inboxHeadline, inboxReadiness, readFields } from "@/lib/inbox-form"
+import { inboxReadiness } from "@/lib/inbox-form"
 import { CHIP } from "./intake-chip"
-import { intakeSummary } from "@/lib/intake-ui"
+import { headlineOf, intakeSummary } from "@/lib/intake-ui"
 import type { InboxListItem } from "@/lib/inbox-server"
-
-export function headlineOf(item: InboxListItem, householdNames: string[], fmt: Formatter) {
-  const first = item.attachments[0]
-  const fileName = first ? (item.attachments.length > 1 ? `${first.originalName} +${item.attachments.length - 1}` : first.originalName) : "Uploading…"
-  const fields = readFields(item, householdNames)
-  return inboxHeadline(
-    {
-      total: item.parsedTotal != null ? fmt.money(item.parsedTotal) : null,
-      vendor: fields.vendor.state === "found" ? item.parsedVendor : null,
-      date: item.parsedDate ? fmt.date(item.parsedDate, { utc: true }) : null,
-    },
-    fileName
-  )
-}
 
 /** Dashboard card: what's waiting in Intake, and a place to drop more. */
 export async function IntakeCard({ items, householdNames }: { items: InboxListItem[]; householdNames: string[] }) {

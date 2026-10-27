@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils"
 import type { RemindersCardData, ReminderItem } from "@/lib/dashboard/loaders"
 import { groupByUrgency } from "@/lib/dashboard/shaping"
 import { ReminderRow } from "@/components/dashboard/reminder-row"
-import { CardMessage, CardShell, GroupHeading } from "./card-shell"
+import { CardMessage, CardShell, GroupHeading, MoreLink } from "./card-shell"
+import { useViewerIsAdmin } from "./card-configure"
 import type { CardViewProps } from "./types"
 
 // Reminders: the next item, then a short list, then (wide) grouped by urgency.
@@ -44,7 +45,11 @@ function Row({ item }: { item: ReminderItem }) {
   )
 }
 
-/** The smallest tier: one line pair, no actions (the card is a link into Maintenance). */
+/**
+ * Two lines, no actions (the row is a link into the asset): the smallest
+ * tier's headline item, and the list tier's rows, where a narrow card has no
+ * room for the full row's actions. Those come with the grouped tier.
+ */
 function NextRow({ item }: { item: ReminderItem }) {
   return (
     <Link
@@ -71,6 +76,7 @@ function NextRow({ item }: { item: ReminderItem }) {
 }
 
 export function RemindersCard({ data, tier }: CardViewProps) {
+  const isAdmin = useViewerIsAdmin()
   if (!isRemindersData(data)) throw new Error("Unexpected Reminders card data")
   const title = "Reminders"
   const href = "/maintenance"
@@ -78,7 +84,7 @@ export function RemindersCard({ data, tier }: CardViewProps) {
   if (data.hidden) {
     return (
       <CardShell title={title} href={href}>
-        <CardMessage icon={EyeOff} message="Reminders for people are hidden." note="Turn on Health in Settings to see them." />
+        <CardMessage icon={EyeOff} message="Reminders for people are hidden." note={isAdmin ? "Turn on Health in Settings to see them." : undefined} />
       </CardShell>
     )
   }
@@ -92,10 +98,11 @@ export function RemindersCard({ data, tier }: CardViewProps) {
 
   if (tier === TIER_NEXT) {
     return (
-      <CardShell title={title} href={href}>
+      // Too narrow for the header link beside the title: "+N more" links to the list.
+      <CardShell title={title}>
         <div className="px-3">
           <NextRow item={data.items[0]} />
-          {data.total > 1 && <p className="px-2 pt-1 text-xs text-muted-foreground">+{data.total - 1} more due</p>}
+          {data.total > 1 && <MoreLink href={href} text={`+${data.total - 1} more due`} />}
         </div>
       </CardShell>
     )
@@ -114,7 +121,7 @@ export function RemindersCard({ data, tier }: CardViewProps) {
         <ul className="space-y-0.5 px-3 pb-2">
           {data.items.map((item) => (
             <li key={item.schedule.id}>
-              <Row item={item} />
+              <NextRow item={item} />
             </li>
           ))}
         </ul>

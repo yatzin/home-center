@@ -5,7 +5,8 @@ import { EyeOff, ShieldCheck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import type { ExpiringItem, ExpiringWarrantiesCardData } from "@/lib/dashboard/loaders"
 import { groupByMonth } from "@/lib/dashboard/shaping"
-import { CardMessage, CardShell, GroupHeading } from "./card-shell"
+import { CardMessage, CardShell, GroupHeading, MoreLink } from "./card-shell"
+import { useViewerIsAdmin } from "./card-configure"
 import type { CardViewProps } from "./types"
 
 // Expiring Warranties: the next one to expire, then a dated list, then (wide) by month.
@@ -43,7 +44,7 @@ function Row({ item }: { item: ExpiringItem }) {
   )
 }
 
-/** The smallest tier: name, then expiry and countdown on a second line. */
+/** The smallest tier: name, then the countdown and the expiry date (once) on a second line. */
 function NextRow({ item }: { item: ExpiringItem }) {
   return (
     <Link
@@ -59,13 +60,18 @@ function NextRow({ item }: { item: ExpiringItem }) {
         <Badge variant="secondary" className="shrink-0 text-xs">
           {item.daysLeft}d
         </Badge>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">{item.assetName ?? item.expires}</span>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          <span className="sr-only">Expires </span>
+          {item.expires}
+        </span>
       </span>
+      {item.assetName && <span className="mt-0.5 block truncate pl-5.5 text-xs text-muted-foreground">{item.assetName}</span>}
     </Link>
   )
 }
 
 export function ExpiringWarrantiesCard({ data, tier }: CardViewProps) {
+  const isAdmin = useViewerIsAdmin()
   if (!isExpiringData(data)) throw new Error("Unexpected Expiring Warranties card data")
   const title = "Expiring Warranties"
   const href = "/warranties"
@@ -73,7 +79,7 @@ export function ExpiringWarrantiesCard({ data, tier }: CardViewProps) {
   if (data.hidden) {
     return (
       <CardShell title={title} href={href}>
-        <CardMessage icon={EyeOff} message="Warranties for people are hidden." note="Turn on Health in Settings to see them." />
+        <CardMessage icon={EyeOff} message="Warranties for people are hidden." note={isAdmin ? "Turn on Health in Settings to see them." : undefined} />
       </CardShell>
     )
   }
@@ -87,12 +93,12 @@ export function ExpiringWarrantiesCard({ data, tier }: CardViewProps) {
 
   if (tier === TIER_NEXT) {
     const next = data.items[0]
+    // Too narrow for the header link beside the title: "+N more" links to the list.
     return (
-      <CardShell title={title} href={href}>
+      <CardShell title={title}>
         <div className="px-3">
           <NextRow item={next} />
-          <p className="px-2 pt-1 text-xs text-muted-foreground">Expires {next.expires}</p>
-          {data.total > 1 && <p className="px-2 pt-1 text-xs text-muted-foreground">+{data.total - 1} more expiring</p>}
+          {data.total > 1 && <MoreLink href={href} text={`+${data.total - 1} more expiring`} />}
         </div>
       </CardShell>
     )

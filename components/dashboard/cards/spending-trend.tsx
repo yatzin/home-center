@@ -6,7 +6,7 @@ import { SpendArea } from "@/components/charts/spend-area"
 import { MonthBars } from "@/components/charts/month-bars"
 import { useFormat } from "@/components/regional-provider"
 import type { SpendingTrendData } from "@/lib/dashboard/loaders"
-import { chartable } from "@/lib/dashboard/spending"
+import { chartable, spendDelta } from "@/lib/dashboard/spending"
 import { CardMessage, CardShell } from "./card-shell"
 import type { CardViewProps } from "./types"
 
@@ -38,17 +38,24 @@ function isTrendData(data: unknown): data is SpendingTrendData {
 
 /** The figure, its period and the change against a year earlier (as the classic card). */
 function Headline({ data }: { data: SpendingTrendData }) {
-  const { delta } = data
+  const fmt = useFormat()
+  const change = data.delta === null ? null : spendDelta(data.delta)
   return (
     <div className="shrink-0">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         {/* Proportional figures: tabular-nums reads loose at this size. */}
         <span className="text-2xl font-semibold leading-none">{data.totalText}</span>
         <span className="text-xs text-muted-foreground">{data.periodText}</span>
-        {delta !== null && (
+        {change !== null && (
           <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-            <span aria-hidden="true">{delta >= 0 ? "↑" : "↓"}</span>
-            <span className="sr-only">{delta >= 0 ? "Up" : "Down"}</span> {Math.abs(delta * 100).toFixed(0)}%
+            {change.direction === "flat" ? (
+              "No change"
+            ) : (
+              <>
+                <span aria-hidden="true">{change.direction === "up" ? "↑" : "↓"}</span>
+                <span className="sr-only">{change.direction === "up" ? "Up" : "Down"}</span> {fmt.number(change.percent)}%
+              </>
+            )}
           </span>
         )}
       </div>

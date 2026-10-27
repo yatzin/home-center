@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { LayoutGrid, Loader2 } from "lucide-react"
-import { cardType, configFieldsFor } from "@/lib/dashboard/card-types"
+import { cardType } from "@/lib/dashboard/card-types"
 import type { CanvasCardData } from "@/lib/dashboard/card-data"
 import { compact, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
@@ -10,16 +10,14 @@ import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
 import { CARD_VIEWS } from "@/components/dashboard/cards"
-import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardFrame } from "./card-frame"
-import { CardGear } from "./card-gear"
 import { CARD_ICONS } from "./card-icons"
 import { GAP, ROW_HEIGHT } from "./grid-metrics"
 import { useCardTier, type LayoutMode } from "./use-card-tier"
 
 // Both layouts are in the markup at once: each card carries its phone and its
 // large placement as CSS variables, and a container query on the canvas's own
-// width (LARGE_MIN_WIDTH, 40rem) picks one. Measuring the canvas rather than
+// width (LARGE_MIN_WIDTH, 640px) picks one. Measuring the canvas rather than
 // the viewport keeps a tablet with the sidebar open on the phone layout. The
 // server and the first client render are identical, so there is no hydration
 // mismatch and no layout flash.
@@ -137,16 +135,27 @@ export function cardTitle(type: string): string {
   return cardType(type)?.label ?? "Card"
 }
 
+/**
+ * What edit controls and announcements call a card: its title, numbered
+ * ("Records 2") when `cards` (in layout order) has more than one of its type,
+ * so two Records cards never share a "Remove Records" button.
+ */
+export function cardLabel(card: { id: string; type: string }, cards: readonly { id: string; type: string }[]): string {
+  const title = cardTitle(card.type)
+  const same = cards.filter((c) => c.type === card.type)
+  if (same.length < 2) return title
+  const n = same.findIndex((c) => c.id === card.id)
+  return n < 0 ? title : `${title} ${n + 1}`
+}
+
 function CanvasCard({
   card,
   large,
   phone,
-  onConfigure,
 }: {
   card: CanvasCardData
   large: Placement
   phone: Placement
-  onConfigure?: () => void
 }) {
   const largeSize: Size = { w: large.w, h: large.h }
   const phoneSize: Size = { w: phone.w, h: phone.h }
@@ -156,7 +165,7 @@ function CanvasCard({
   return (
     <div
       data-card-id={card.id}
-      className="relative min-h-0 min-w-0 [grid-column:var(--dash-pc)] [grid-row:var(--dash-pr)] @min-[40rem]/dash:[grid-column:var(--dash-lc)] @min-[40rem]/dash:[grid-row:var(--dash-lr)]"
+      className="relative min-h-0 min-w-0 [grid-column:var(--dash-pc)] [grid-row:var(--dash-pr)] @min-[640px]/dash:[grid-column:var(--dash-lc)] @min-[640px]/dash:[grid-row:var(--dash-lr)]"
       style={
         {
           "--dash-pc": span(phone.x, phone.w),
@@ -166,29 +175,20 @@ function CanvasCard({
         } as React.CSSProperties
       }
     >
-      <CardConfigureProvider value={onConfigure ?? null}>
-        <CardFrame title={cardTitle(card.type)} failed={card.status === "error"} busy={isBusy(card)}>
-          {largeTier === phoneTier ? (
-            <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
-          ) : (
-            <>
-              <div className="h-full min-h-0 @min-[40rem]/dash:hidden">
-                <CardView card={card} tier={phoneTier} size={phoneSize} mode="phone" editing={false} />
-              </div>
-              <div className="hidden h-full min-h-0 @min-[40rem]/dash:block">
-                <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
-              </div>
-            </>
-          )}
-        </CardFrame>
-      </CardConfigureProvider>
-      {onConfigure && configFieldsFor(card.type).length > 0 && (
-        <CardGear
-          cardTitle={cardTitle(card.type)}
-          onClick={onConfigure}
-          className="absolute -top-3.5 -right-3.5 z-10 pointer-coarse:-top-5.5 pointer-coarse:-right-5.5"
-        />
-      )}
+      <CardFrame title={cardTitle(card.type)} failed={card.status === "error"} busy={isBusy(card)}>
+        {largeTier === phoneTier ? (
+          <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
+        ) : (
+          <>
+            <div className="h-full min-h-0 @min-[640px]/dash:hidden">
+              <CardView card={card} tier={phoneTier} size={phoneSize} mode="phone" editing={false} />
+            </div>
+            <div className="hidden h-full min-h-0 @min-[640px]/dash:block">
+              <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
+            </div>
+          </>
+        )}
+      </CardFrame>
     </div>
   )
 }
@@ -198,13 +198,10 @@ export function ViewGrid({
   cards,
   layout,
   features,
-  onConfigure,
 }: {
   cards: readonly CanvasCardData[]
   layout: DashboardLayout
   features: Features
-  /** Edit mode on small screens: a settings gear on configurable cards, and "Choose another" on a card whose item is gone. */
-  onConfigure?: (id: string) => void
 }) {
   const largeById = new Map(layout.large.map((p) => [p.id, p]))
   const phoneById = new Map(resolvePhoneLayout(layout, features).map((p) => [p.id, p]))
@@ -231,7 +228,7 @@ export function ViewGrid({
   return (
     <div className="@container/dash">
       <div
-        className="grid auto-rows-(--dash-row) grid-cols-[repeat(var(--dash-cols-phone),minmax(0,1fr))] gap-(--dash-gap) @min-[40rem]/dash:grid-cols-[repeat(var(--dash-cols-large),minmax(0,1fr))]"
+        className="grid auto-rows-(--dash-row) grid-cols-[repeat(var(--dash-cols-phone),minmax(0,1fr))] gap-(--dash-gap) @min-[640px]/dash:grid-cols-[repeat(var(--dash-cols-large),minmax(0,1fr))]"
         style={GRID_STYLE}
       >
         {shown.map((card) => (
@@ -240,7 +237,6 @@ export function ViewGrid({
             card={card}
             large={large.get(card.id)!}
             phone={phone.get(card.id)!}
-            onConfigure={onConfigure && (() => onConfigure(card.id))}
           />
         ))}
       </div>

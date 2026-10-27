@@ -67,7 +67,7 @@ export function CardMessage({
     <div className="flex h-full flex-col items-center justify-center gap-1.5 px-4 py-3 text-center">
       <Icon className="h-5 w-5 shrink-0 text-muted-foreground/50" strokeWidth={1.5} aria-hidden />
       <p className="text-sm text-muted-foreground">{message}</p>
-      {note && <p className="text-xs text-muted-foreground/80">{note}</p>}
+      {note && <p className="text-xs text-muted-foreground">{note}</p>}
       {action && (
         <Link
           href={action.href}
@@ -86,7 +86,19 @@ export function GroupHeading({ label, count }: { label: string; count: number })
   return (
     <h3 className="flex items-baseline gap-1.5 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       {label}
-      <span className="tabular-nums text-muted-foreground/70">{count}</span>
+      <span className="tabular-nums text-muted-foreground">{count}</span>
     </h3>
+  )
+}
+
+/** "+3 more due": the small tiers' way into the full list (no room for a header link). */
+export function MoreLink({ href, text }: { href: string; text: string }) {
+  return (
+    <Link
+      href={href}
+      className="mt-1 inline-block rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted/60 hover:text-foreground"
+    >
+      {text}
+    </Link>
   )
 }

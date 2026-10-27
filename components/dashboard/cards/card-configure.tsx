@@ -15,13 +15,19 @@ const ConfigureContext = createContext<(() => void) | null>(null)
 /** Gives the cards inside it a way to open their settings (edit mode, admins). */
 export const CardConfigureProvider = ConfigureContext.Provider
 
+const ViewerIsAdminContext = createContext(false)
+
+/** Whether the person looking at the dashboard is an admin (for hints only admins can act on). */
+export const ViewerIsAdminProvider = ViewerIsAdminContext.Provider
+export const useViewerIsAdmin = () => useContext(ViewerIsAdminContext)
+
 const NOTE = "An admin can choose another one for this card."
 
 /** Under a "no longer exists" message: the "Choose another" button, or a note. */
 export function ChooseAnother({ compact, className }: { compact?: boolean; className?: string }) {
   const configure = useContext(ConfigureContext)
   if (!configure) {
-    return <p className={cn("text-muted-foreground/80", compact ? "line-clamp-2 text-[11px] leading-snug" : "text-xs", className)}>{NOTE}</p>
+    return <p className={cn("text-muted-foreground", compact ? "line-clamp-2 text-[11px] leading-snug" : "text-xs", className)}>{NOTE}</p>
   }
   return (
     <Button

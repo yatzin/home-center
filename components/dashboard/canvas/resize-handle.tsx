@@ -5,13 +5,35 @@
 // drag keeps going outside it and never scrolls the page: touch-action is none
 // here only); arrow keys resize by one grid unit. The handle reports raw pixel
 // movement and key steps; the canvas snaps them to the grid and the reducer
-// clamps them to the card's limits.
+// clamps them to the card's limits. The movement counts the page's scroll too,
+// and holding the pointer near the top or bottom of the scrolling area scrolls
+// it, so a card can grow past what is on screen.
 
-import { useRef } from "react"
+import { useEffect, useRef } from "react"
 import type { Point, ResizeEdge } from "@/lib/dashboard/grid-pointer"
 import { resizeKeyStep } from "@/lib/dashboard/grid-pointer"
 import type { Size } from "@/lib/dashboard/grid"
 import { cn } from "@/lib/utils"
+import { scrollParent } from "./reveal"
+
+/** Within this many px of the scroller's top or bottom edge, a resize scrolls it. */
+const EDGE_ZONE = 48
+/** Fastest auto-scroll, in px per frame (at the very edge). */
+const MAX_SCROLL_STEP = 14
+
+type Drag = {
+  pointerId: number
+  x: number
+  y: number
+  scroller: HTMLElement | null
+  scrollTop: number
+  /** The latest pointer position (client px). */
+  lastX: number
+  lastY: number
+  /** The scroll position the last report counted. */
+  reportedScroll: number
+  frame: number
+}
 
 const EDGE_NAME: Record<ResizeEdge, string> = { right: "width", bottom: "height", corner: "size" }
 
@@ -52,11 +74,47 @@ export function ResizeHandle({
   /** Arrow key: grow or shrink by one unit (`w`/`h` are -1, 0 or 1). */
   onKeyStep: (step: Size) => void
 }) {
-  const start = useRef<{ pointerId: number; x: number; y: number } | null>(null)
+  const start = useRef<Drag | null>(null)
+
+  // Pixels moved since the drag began, counting what the page scrolled meanwhile.
+  const report = (s: Drag) => {
+    s.reportedScroll = s.scroller?.scrollTop ?? 0
+    const scrolled = s.reportedScroll - s.scrollTop
+    onMove({ x: s.lastX - s.x, y: s.lastY - s.y + scrolled })
+  }
+
+  // Near the scroller's top or bottom edge, scroll it a little each frame.
+  const autoScroll = () => {
+    const s = start.current
+    if (!s) return
+    s.frame = requestAnimationFrame(autoScroll)
+    if (!s.scroller) return
+    const box = s.scroller.getBoundingClientRect()
+    const below = s.lastY - (box.bottom - EDGE_ZONE)
+    const above = box.top + EDGE_ZONE - s.lastY
+    const step =
+      below > 0 ? Math.ceil((Math.min(below, EDGE_ZONE) / EDGE_ZONE) * MAX_SCROLL_STEP)
+      : above > 0 ? -Math.ceil((Math.min(above, EDGE_ZONE) / EDGE_ZONE) * MAX_SCROLL_STEP)
+      : 0
+    if (step === 0) {
+      // Scrolled some other way (a wheel): the card follows.
+      if (s.scroller.scrollTop !== s.reportedScroll) report(s)
+      return
+    }
+    const before = s.scroller.scrollTop
+    s.scroller.scrollTop = before + step
+    if (s.scroller.scrollTop !== before) report(s)
+  }
+
+  // Unmounted mid-drag: stop the frame loop.
+  useEffect(() => () => {
+    if (start.current) cancelAnimationFrame(start.current.frame)
+  }, [])
 
   const finish = (el: HTMLElement, commit: boolean) => {
     const s = start.current
     if (!s) return
+    cancelAnimationFrame(s.frame)
     start.current = null
     if (el.hasPointerCapture(s.pointerId)) el.releasePointerCapture(s.pointerId)
     if (commit) onEnd()
@@ -78,13 +136,27 @@ export function ResizeHandle({
         e.preventDefault()
         e.stopPropagation()
         e.currentTarget.setPointerCapture(e.pointerId)
-        start.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+        const scroller = scrollParent(e.currentTarget)
+        start.current = {
+          pointerId: e.pointerId,
+          x: e.clientX,
+          y: e.clientY,
+          scroller,
+          scrollTop: scroller?.scrollTop ?? 0,
+          lastX: e.clientX,
+          lastY: e.clientY,
+          reportedScroll: scroller?.scrollTop ?? 0,
+          frame: 0,
+        }
         onStart()
+        start.current.frame = requestAnimationFrame(autoScroll)
       }}
       onPointerMove={(e) => {
         const s = start.current
         if (!s || s.pointerId !== e.pointerId) return
-        onMove({ x: e.clientX - s.x, y: e.clientY - s.y })
+        s.lastX = e.clientX
+        s.lastY = e.clientY
+        report(s)
       }}
       onPointerUp={(e) => {
         if (start.current?.pointerId === e.pointerId) finish(e.currentTarget, true)

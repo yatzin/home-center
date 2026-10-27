@@ -90,4 +90,3 @@ Per-card size tiers (below are the designer's guesses; refine during planning):
 - Layout data model and JSON shape (including versioning so old layouts survive card changes).
 - Exact size tiers, minimum/maximum sizes, and per-card config options.
 - Visual design of edit mode, the card picker, and empty states.
-- Implementation model: the owner suggested Opus may suit the build; recommend it for implementation.

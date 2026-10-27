@@ -28,7 +28,7 @@ function byPosition(a: Placement, b: Placement): number {
 
 // Upper bound for a stored y or h. Far beyond any real dashboard, but it keeps
 // arithmetic exact and loops short when a corrupt layout carries 1e300.
-const MAX_ROW = 10_000
+export const MAX_ROW = 10_000
 
 /** Integer coordinates, at least 1x1, no wider than the grid, inside it. */
 function normalize(p: Placement, cols: number): Placement {

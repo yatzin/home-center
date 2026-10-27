@@ -106,8 +106,8 @@ export function newCardId(type: string, existing: Iterable<string>, rand: () => 
   }
 }
 
-/** The phone placements as shown: stored, or derived from the large layout. */
-function phoneOf(state: EditState): Placement[] {
+/** The phone placements phone-mode edits apply to: stored, or derived from the large layout. */
+export function phonePlacements(state: EditState): Placement[] {
   return state.layout.phone ?? resolvePhoneLayout(state.layout, state.features)
 }
 
@@ -139,7 +139,7 @@ function editPlacements(
     if (samePlacements(large, state.layout.large)) return state
     return { ...state, layout: { ...state.layout, large }, dirty: true }
   }
-  const before = phoneOf(state)
+  const before = phonePlacements(state)
   const phone = op(before, PHONE_COLS)
   if (samePlacements(phone, before)) return state
   return { ...state, layout: { ...state.layout, phone }, dirty: true }
@@ -149,7 +149,7 @@ function editPlacements(
 export function snapshotCard(state: EditState, id: string): CardSnapshot | null {
   const card = state.layout.cards.find((c) => c.id === id)
   const large = state.layout.large.find((p) => p.id === id)
-  const phone = phoneOf(state).find((p) => p.id === id)
+  const phone = phonePlacements(state).find((p) => p.id === id)
   if (!card || !large || !phone) return null
   return {
     card: { ...card, config: { ...card.config } },
@@ -195,7 +195,7 @@ export function editReducer(state: EditState, action: EditAction): EditState {
           ...layout,
           cards: [...layout.cards, card],
           large: appendCard(layout.large, card.id, { ...def.large }, LARGE_COLS),
-          phone: appendCard(phoneOf(state), card.id, phoneSize(def.id)!, PHONE_COLS),
+          phone: appendCard(phonePlacements(state), card.id, phoneSize(def.id)!, PHONE_COLS),
         },
         dirty: true,
       }
@@ -205,7 +205,7 @@ export function editReducer(state: EditState, action: EditAction): EditState {
       if (!layout.cards.some((c) => c.id === action.id)) return state
       // In large mode a derived phone layout stays derived; in phone mode the edit stores it.
       const phone =
-        layout.phone === null && state.mode === "large" ? null : removeCard(phoneOf(state), action.id, PHONE_COLS)
+        layout.phone === null && state.mode === "large" ? null : removeCard(phonePlacements(state), action.id, PHONE_COLS)
       return {
         ...state,
         layout: {

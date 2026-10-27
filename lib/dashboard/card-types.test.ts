@@ -8,10 +8,12 @@ import {
   cardType,
   configFieldsFor,
   invalidCardConfig,
+  normalizeCardConfigs,
   defaultLayout,
   groupCardTypes,
   limitsMap,
   PHONE_WIDTH_SCALE,
+  phoneSizePresets,
   tierOf,
   type CardTypeDef,
 } from "./card-types"
@@ -195,6 +197,19 @@ describe("tierOf", () => {
     expect(tierName("spending-trend")).toBe("chart")
     expect(tierName("reminders")).toBe("list")
     expect(tierName("records")).toBe("count")
+  })
+
+  it("keeps the spending chart and ranked bars to sizes that fit them", () => {
+    const at = (id: string, w: number, h: number) => {
+      const d = cardType(id)!
+      return d.tiers[tierOf(d, { w, h })].name
+    }
+    // Three rows leave the trend chart too little height: the headline only.
+    expect(at("spending-trend", 3, 3)).toBe("headline")
+    expect(at("spending-trend", 3, 4)).toBe("chart")
+    // Three columns truncate the breakdown's title and bar labels: top category only.
+    expect(at("spending-breakdown", 3, 3)).toBe("top")
+    expect(at("spending-breakdown", 4, 3)).toBe("ranked")
   })
 })
 
@@ -435,5 +450,131 @@ describe("invalidCardConfig", () => {
   it("leaves unknown types to validateLayout", () => {
     const unknown = { ...base, cards: [...base.cards, { id: "x", type: "nope", config: { anything: true } }] }
     expect(invalidCardConfig(unknown)).toBeNull()
+  })
+})
+
+describe("normalizeCardConfigs", () => {
+  const base = defaultLayout(ALL_ON)
+
+  it("drops unknown keys from each card's config", () => {
+    const dirty = {
+      ...base,
+      cards: base.cards.map((c) => (c.type === "reminders" ? { ...c, config: { windowDays: 14, junk: "x", nested: { a: 1 } } } : c)),
+    }
+    const out = normalizeCardConfigs(dirty)
+    expect(out.cards.find((c) => c.type === "reminders")!.config).toEqual({ windowDays: 14 })
+  })
+
+  it("leaves valid configs and everything else unchanged", () => {
+    expect(normalizeCardConfigs(base)).toEqual(base)
+    const unknown = { ...base, cards: [...base.cards, { id: "x", type: "nope", config: { anything: true } }] }
+    expect(normalizeCardConfigs(unknown)).toEqual(unknown)
+  })
+
+  it("does not mutate its input, and invalid configs are still rejected by invalidCardConfig", () => {
+    const dirty = { ...base, cards: base.cards.map((c) => (c.type === "reminders" ? { ...c, config: { windowDays: 14, junk: 1 } } : c)) }
+    normalizeCardConfigs(dirty)
+    expect(dirty.cards.find((c) => c.type === "reminders")!.config).toEqual({ windowDays: 14, junk: 1 })
+    const bad = { ...base, cards: base.cards.map((c) => (c.type === "reminders" ? { ...c, config: { windowDays: 0 } } : c)) }
+    expect(invalidCardConfig(bad)).not.toBeNull()
+  })
+})
+
+describe("phoneSizePresets", () => {
+  const area = (s: { w: number; h: number }) => s.w * s.h
+  /** A catalog type with other limits (tests the rules, not the catalog). */
+  const withLimits = (min: { w: number; h: number }, max: { w: number; h: number }, phone: { w: number; h: number }): CardTypeDef => ({
+    ...cardType("records")!,
+    min,
+    max,
+    phone,
+  })
+
+  it.each(IDS)("%s: within its limits and PHONE_COLS, ascending area, no duplicates", (id) => {
+    const d = cardType(id)!
+    const presets = phoneSizePresets(d)
+    expect(presets.length).toBeGreaterThanOrEqual(1)
+    for (const p of presets) {
+      expect(p.w).toBeLessThanOrEqual(PHONE_COLS)
+      expect(p.w).toBeGreaterThanOrEqual(Math.min(d.min.w, PHONE_COLS))
+      expect(p.w).toBeLessThanOrEqual(Math.max(Math.min(d.min.w, PHONE_COLS), Math.min(d.max.w, PHONE_COLS)))
+      expect(p.h).toBeGreaterThanOrEqual(d.min.h)
+      expect(p.h).toBeLessThanOrEqual(d.max.h)
+    }
+    for (let i = 1; i < presets.length; i++) expect(area(presets[i])).toBeGreaterThan(area(presets[i - 1]))
+    const names = presets.map((p) => p.name)
+    expect(new Set(names).size).toBe(names.length)
+    // Names keep their order: Small before Medium before Large.
+    const rank = { Small: 0, Medium: 1, Large: 2 }
+    for (let i = 1; i < names.length; i++) expect(rank[names[i]]).toBeGreaterThan(rank[names[i - 1]])
+  })
+
+  it.each(IDS)("%s: three presets; Small is its smallest readable size, Medium shows more", (id) => {
+    const d = cardType(id)!
+    const presets = phoneSizePresets(d)
+    expect(presets.map((p) => p.name)).toEqual(["Small", "Medium", "Large"])
+    expect(presets[0].h).toBe(d.min.h)
+    // Each step up shows at least as rich a tier.
+    const tiers = presets.map((p) => tierOf(d, p, "phone"))
+    expect(tiers[1]).toBeGreaterThanOrEqual(tiers[0])
+    expect(tiers[2]).toBeGreaterThanOrEqual(tiers[1])
+  })
+
+  it("Medium is the phone default size when that is larger than Small", () => {
+    for (const id of ["properties", "intake", "reminders", "spending-trend", "spending-breakdown", "people", "due-maintenance"]) {
+      const d = cardType(id)!
+      expect(phoneSizePresets(d)[1]).toMatchObject({ name: "Medium", w: d.phone.w, h: d.phone.h })
+    }
+  })
+
+  it("records: default is the smallest size, so Medium and Large are taller", () => {
+    expect(phoneSizePresets(cardType("records")!)).toEqual([
+      { name: "Small", w: 2, h: 1 },
+      { name: "Medium", w: 2, h: 2 },
+      { name: "Large", w: 2, h: 4 },
+    ])
+  })
+
+  it("properties: Small 1 row, Medium its default 4, Large 6", () => {
+    expect(phoneSizePresets(cardType("properties")!).map((p) => p.h)).toEqual([1, 4, 6])
+  })
+
+  it("Large never exceeds the type's max height", () => {
+    const presets = phoneSizePresets(withLimits({ w: 2, h: 2 }, { w: 12, h: 5 }, { w: 2, h: 4 }))
+    expect(presets).toEqual([
+      { name: "Small", w: 2, h: 2 },
+      { name: "Medium", w: 2, h: 4 },
+      { name: "Large", w: 2, h: 5 },
+    ])
+  })
+
+  it("a fixed-size type has exactly one preset", () => {
+    expect(phoneSizePresets(withLimits({ w: 2, h: 3 }, { w: 2, h: 3 }, { w: 2, h: 3 }))).toEqual([{ name: "Medium", w: 2, h: 3 }])
+  })
+
+  it("duplicates collapse when the limits leave little room", () => {
+    const presets = phoneSizePresets(withLimits({ w: 2, h: 1 }, { w: 12, h: 2 }, { w: 2, h: 1 }))
+    expect(presets).toEqual([
+      { name: "Small", w: 2, h: 1 },
+      { name: "Medium", w: 2, h: 2 },
+    ])
+  })
+
+  it("a type that may be one column wide gets a half-width Small; the others are full width", () => {
+    const presets = phoneSizePresets(withLimits({ w: 1, h: 1 }, { w: 12, h: 8 }, { w: 2, h: 2 }))
+    expect(presets[0]).toEqual({ name: "Small", w: 1, h: 1 })
+    expect(presets.slice(1).every((p) => p.w === PHONE_COLS)).toBe(true)
+  })
+
+  it("a type narrower than the phone grid stays within its max width", () => {
+    const presets = phoneSizePresets(withLimits({ w: 1, h: 1 }, { w: 1, h: 6 }, { w: 1, h: 2 }))
+    expect(presets.every((p) => p.w === 1)).toBe(true)
+    expect(presets.map((p) => p.h)).toEqual([1, 2, 4])
+  })
+
+  it("a type whose large minimum is wider than the phone grid is full width", () => {
+    const presets = phoneSizePresets(withLimits({ w: 4, h: 2 }, { w: 12, h: 8 }, { w: 2, h: 3 }))
+    expect(presets.every((p) => p.w === PHONE_COLS)).toBe(true)
+    expect(presets[0]).toMatchObject({ name: "Small", h: 2 })
   })
 })

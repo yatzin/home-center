@@ -122,7 +122,7 @@ function CardTypeOption({ def, count, onPick }: { def: CardTypeDef; count: numbe
       aria-describedby={`${id}-desc ${id}-more`}
       className={cn(
         "group flex min-h-11 w-full touch-manipulation items-start gap-3 rounded-xl border border-border/70 bg-background/40 p-3 text-left outline-none",
-        "transition-[background-color,border-color,transform] duration-150 hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99]",
+        "transition-[background-color,border-color,transform] duration-150 hover:border-primary/40 hover:bg-primary/5 motion-safe:active:scale-[0.99]",
         "focus-visible:border-primary/50 focus-visible:ring-3 focus-visible:ring-ring/50",
       )}
     >
@@ -135,7 +135,7 @@ function CardTypeOption({ def, count, onPick }: { def: CardTypeDef; count: numbe
         <p id={`${id}-desc`} className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
           {def.description}
         </p>
-        <div id={`${id}-more`} className="text-[11px] text-muted-foreground/80">
+        <div id={`${id}-more`} className="text-[11px] text-muted-foreground">
           <p className="mt-1 truncate">
             <span className="sr-only">Shows more as it grows: </span>
             {def.tiers.map((t) => tierLabel(t.name)).join(" → ")}

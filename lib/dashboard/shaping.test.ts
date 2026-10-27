@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest"
 import type { DueInput, MileageIndex } from "@/lib/maintenance-due"
 import { createFormatter, DEFAULT_REGIONAL } from "@/lib/regional"
 import {
+  candidateWindowDays,
   dueLabel,
   dueMaintenance,
-  dueMaintenanceCount,
   expiringWarranties,
   groupByMonth,
   groupByUrgency,
@@ -40,21 +40,21 @@ describe("dueMaintenance", () => {
       sched({ nextDueDate: day(31) }), // outside
       sched({ nextDueDate: null }), // no date, no mileage
     ]
-    expect(dueMaintenanceCount(list, mileage, NOW)).toBe(3)
+    expect(dueMaintenance(list, mileage, NOW).length).toBe(3)
   })
 
   it("counts a vehicle past its due mileage even with a far-off date", () => {
     const list = [sched({ assetType: "VEHICLE", assetId: "v1", nextDueDate: day(400), nextDueMileage: 49_700 })]
-    expect(dueMaintenanceCount(list, mileage, NOW)).toBe(1)
+    expect(dueMaintenance(list, mileage, NOW).length).toBe(1)
   })
 
   it("ignores mileage for a vehicle with no reading", () => {
     const list = [sched({ assetType: "VEHICLE", assetId: "unknown", nextDueMileage: 100 })]
-    expect(dueMaintenanceCount(list, mileage, NOW)).toBe(0)
+    expect(dueMaintenance(list, mileage, NOW).length).toBe(0)
   })
 
   it("is zero for no candidates", () => {
-    expect(dueMaintenanceCount([], mileage, NOW)).toBe(0)
+    expect(dueMaintenance([], mileage, NOW).length).toBe(0)
     expect(dueMaintenance([], mileage, NOW)).toEqual([])
   })
 
@@ -160,7 +160,12 @@ describe("dueLabel", () => {
   })
   it("words mileage", () => {
     expect(dueLabel(due({ reason: "mileage", milesLeft: -300, meterUnit: "MILES" }), fmt)).toBe("300 mi over")
-    expect(dueLabel(due({ reason: "mileage", milesLeft: 1200, meterUnit: "HOURS" }), fmt)).toBe("1,200 hrs")
+    expect(dueLabel(due({ reason: "mileage", milesLeft: 1200, meterUnit: "HOURS" }), fmt)).toBe(`${fmt.number(1200)} hrs`)
+  })
+  it("formats meter readings with the regional number formatter", () => {
+    const spy = { meterShort: () => "km", number: (n: number) => `<${n}>` }
+    expect(dueLabel(due({ reason: "mileage", milesLeft: 1200, meterUnit: "MILES" }), spy)).toBe("<1200> km")
+    expect(dueLabel(due({ reason: "mileage", milesLeft: -40, meterUnit: "MILES" }), spy)).toBe("<40> km over")
   })
 })
 
@@ -294,5 +299,17 @@ describe("monthKeyOf", () => {
   it("pads the month", () => {
     expect(monthKeyOf(new Date(2026, 0, 31))).toBe("2026-01")
     expect(monthKeyOf(new Date(2026, 11, 1))).toBe("2026-12")
+  })
+})
+
+describe("candidateWindowDays", () => {
+  it("fetches far enough ahead for the longest reminder lead", () => {
+    // A 7-day card still lists a schedule due in 20 days with a 30-day lead (it is due soon).
+    expect(candidateWindowDays(7, 30)).toBe(30)
+    expect(candidateWindowDays(60, 30)).toBe(60)
+  })
+  it("ignores a missing or nonsense lead", () => {
+    expect(candidateWindowDays(30, null)).toBe(30)
+    expect(candidateWindowDays(30, -5)).toBe(30)
   })
 })

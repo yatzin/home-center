@@ -49,7 +49,9 @@ export function SpendArea({
   const path = (values: number[]) =>
     values.map((v, i) => (i === 0 ? "M" : "L") + x(i).toFixed(3) + "," + y(v).toFixed(3)).join(" ")
 
-  const current = points.map((p) => p.total)
+  // A month that nets to a refund draws at the baseline, not below the plot
+  // (the domain starts at 0); its tooltip and table still give the real figure.
+  const current = points.map((p) => Math.max(0, p.total))
   const currentLine = path(current)
   const currentArea = currentLine + " L100," + y(0).toFixed(3) + " L0," + y(0).toFixed(3) + " Z"
   const hasPrior = prior.some((v) => v > 0)
@@ -87,7 +89,7 @@ export function SpendArea({
                   thinner: it is a reference the eye should be able to ignore. */}
               {hasPrior ? (
                 <path
-                  d={path(prior)}
+                  d={path(prior.map((v) => Math.max(0, v)))}
                   fill="none"
                   stroke="var(--chart-ghost)"
                   strokeWidth={1.5}
