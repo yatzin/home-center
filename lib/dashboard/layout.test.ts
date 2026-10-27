@@ -110,6 +110,23 @@ describe("repairLayout", () => {
     expect(r.large).toHaveLength(2)
     expect(validateLayout(r, known)).toBeNull()
   })
+  it("keeps intentional gaps of up to 5 rows (no compaction)", () => {
+    const l = valid()
+    l.large[1] = { id: "c2", x: 4, y: 5, w: 3, h: 2 }
+    l.phone = [
+      { id: "c1", x: 0, y: 0, w: 2, h: 2 },
+      { id: "c2", x: 0, y: 6, w: 2, h: 2 },
+    ]
+    expect(repairLayout(l, known)).toEqual(l)
+    expect(validateLayout(l, known)).toBeNull()
+  })
+  it("pulls a card with a gap over 5 rows up to the cap", () => {
+    const l = valid()
+    l.large[1] = { id: "c2", x: 0, y: 30, w: 3, h: 2 }
+    const r = repairLayout(l, known)
+    expect(r.large[1]).toEqual({ id: "c2", x: 0, y: 7, w: 3, h: 2 })
+    expect(validateLayout(r, known)).toBeNull()
+  })
   it("survives NaN, Infinity and huge values", () => {
     const l = valid()
     l.large = [
@@ -167,6 +184,13 @@ describe("validateLayout", () => {
     const missing = valid()
     missing.large.pop()
     expect(validateLayout(missing, known)).not.toBeNull()
+  })
+  it("reports a gap of more than 5 empty rows above a card", () => {
+    const l = valid()
+    l.large[1] = { id: "c2", x: 0, y: 8, w: 3, h: 2 }
+    expect(validateLayout(l, known)).toMatch(/empty rows/i)
+    l.large[1] = { id: "c2", x: 0, y: 7, w: 3, h: 2 }
+    expect(validateLayout(l, known)).toBeNull()
   })
   it("reports sizes outside card limits", () => {
     const l = valid()

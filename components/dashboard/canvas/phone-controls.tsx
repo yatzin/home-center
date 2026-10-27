@@ -31,7 +31,7 @@ import { ArrowDown, ArrowUp, GripVertical, Move, RectangleHorizontal, RectangleV
 import { isMissingData } from "@/lib/dashboard/card-data"
 import { cardType, configFieldsFor, phoneSizePresets, type PhoneSizePreset } from "@/lib/dashboard/card-types"
 import { editReducer, phonePlacements, type EditAction, type EditState } from "@/lib/dashboard/edit-state"
-import { compact, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
+import { collapseHidden, MAX_GAP_ROWS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import {
   drawnToStored,
   gridPitch,
@@ -71,7 +71,7 @@ type MoveGesture = {
   id: string
   /** Drawn cell where the drag began. */
   origin: Placement
-  /** The stored phone placement (differs from the drawn one when hidden cards were compacted out). */
+  /** The stored phone placement (differs from the drawn one when hidden cards' rows were closed). */
   stored: Placement
   /** Strip rows and the last row of the drawing the drag began on (kept steady while the preview reflows). */
   strips: number[]
@@ -80,14 +80,9 @@ type MoveGesture = {
   to: Point
 }
 
-/** The phone placements as drawn: shown cards only, floated up (as the page draws them). */
+/** The phone placements as drawn: shown cards only, hidden cards' rows closed, the admin's gaps kept (as the page draws them). */
 function displayed(state: EditState, ids: ReadonlySet<string>): Map<string, Placement> {
-  return new Map(
-    compact(
-      resolvePhoneLayout(state.layout, state.features).filter((p) => ids.has(p.id)),
-      PHONE_COLS,
-    ).map((p) => [p.id, p]),
-  )
+  return new Map(collapseHidden(resolvePhoneLayout(state.layout, state.features), ids, PHONE_COLS).map((p) => [p.id, p]))
 }
 
 const bottomOf = (ps: Iterable<Placement>): number => {
@@ -265,7 +260,8 @@ export function PhoneEditor({
       origin,
       stored,
       strips: stripRows([...base.values()]),
-      maxRow: bottomOf(others),
+      // Up to the gap cap below the others: a card can be dropped with empty rows above it.
+      maxRow: bottomOf(others) + MAX_GAP_ROWS,
       drawnTo: { x: origin.x, y: origin.y },
       to: { x: stored.x, y: stored.y },
     })

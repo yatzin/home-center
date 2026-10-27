@@ -89,6 +89,30 @@ describe("editReducer: large mode", () => {
     editReducer(s0, { type: "remove", id: "people" })
     expect(JSON.stringify(s0)).toBe(before)
   })
+
+  it("a drag preview is computed from the layout at drag start, so pushed cards go back when the card moves on", () => {
+    const s0 = start()
+    const people = placement(s0.layout.large, "people")!
+    // Hovering Records over People pushes People (and whatever it lands on) down.
+    const over = editReducer(s0, { type: "move", id: "records", to: { x: people.x, y: people.y } })
+    expect(placement(over.layout.large, "people")!.y).toBeGreaterThan(people.y)
+    // Moving on to empty rows below everything: every other card is back where it was.
+    const bottom = Math.max(...s0.layout.large.map((p) => p.y + p.h))
+    const away = editReducer(s0, { type: "move", id: "records", to: { x: 0, y: bottom + 1 } })
+    for (const p of s0.layout.large) if (p.id !== "records") expect(placement(away.layout.large, p.id)).toEqual(p)
+    // Dropping there keeps the empty row above it (no gravity).
+    expect(placement(away.layout.large, "records")!.y).toBe(bottom + 1)
+    valid(over)
+    valid(away)
+  })
+
+  it("moving a card down a row leaves the row empty in the saved layout", () => {
+    const s0 = start()
+    const records = placement(s0.layout.large, "records")!
+    const s1 = editReducer(s0, { type: "move", id: "records", to: { x: records.x, y: records.y + 1 } })
+    expect(placement(s1.layout.large, "records")!.y).toBe(records.y + 1)
+    valid(s1)
+  })
 })
 
 describe("editReducer: phone mode", () => {
@@ -178,8 +202,10 @@ describe("editReducer: phone moveOrder skips hidden cards", () => {
       id: "equipment",
       delta: -1,
     })
+    // Equipment takes Records' slot and pushes it down; the hidden People card in the way goes below them.
     expect(placement(s1.layout.phone, "equipment")!.y).toBe(0)
-    expect(placement(s1.layout.phone, "records")!.y).toBeGreaterThan(placement(s1.layout.phone, "people")!.y)
+    expect(placement(s1.layout.phone, "records")!.y).toBe(2)
+    expect(placement(s1.layout.phone, "people")!.y).toBe(3)
     expect(s1.layout.large).toEqual(layout.large)
     valid(s1)
   })

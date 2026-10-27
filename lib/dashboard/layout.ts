@@ -1,7 +1,7 @@
 // Dashboard layout model: shape parsing, validation (what may be saved) and
 // repair (what is rendered when stored data is stale or damaged). Pure TS.
 import { z } from "zod"
-import { LARGE_COLS, MAX_ROW, PHONE_COLS, resolveOverlaps, type Placement, type Size } from "./grid"
+import { clampGaps, LARGE_COLS, MAX_GAP_ROWS, MAX_ROW, PHONE_COLS, type Placement, type Size } from "./grid"
 
 export { LARGE_COLS, PHONE_COLS } from "./grid"
 export type { Placement } from "./grid"
@@ -78,7 +78,9 @@ function repairPlacements(
     kept.push({ id: c.id, x: 0, y: bottom, ...s })
     bottom += s.h
   }
-  const resolved = resolveOverlaps(kept, cols)
+  // Push overlapping cards down, then apply the gap cap. Valid layouts (gaps
+  // of up to MAX_GAP_ROWS included) come back unchanged: no compaction.
+  const resolved = clampGaps(kept, cols)
   if (resolved.every((p) => p.y <= MAX_ROW)) return resolved
   // Pathological pile-up pushed cards past the row cap: stack them in one column.
   let y = 0
@@ -89,7 +91,7 @@ function repairPlacements(
   })
 }
 
-/** Drops unknown/duplicate cards and orphan placements, adds missing ones, clamps sizes, resolves overlaps. */
+/** Drops unknown/duplicate cards and orphan placements, adds missing ones, clamps sizes, resolves overlaps, caps gaps. */
 export function repairLayout(layout: DashboardLayout, known: ReadonlyMap<string, CardLimits>): DashboardLayout {
   const ids = new Set<string>()
   const cards = layout.cards.filter((c) => {
@@ -142,6 +144,15 @@ function validatePlacements(
         return `Cards ${a.id} and ${b.id} overlap in ${name} layout`
       }
     }
+  }
+  // The gap cap (grid.ts clampGaps): no card more than MAX_GAP_ROWS empty rows
+  // below the lowest card above it in its columns, or below the top.
+  for (const p of ps) {
+    let floor = 0
+    for (const o of ps) {
+      if (o.x < p.x + p.w && p.x < o.x + o.w && o.y + o.h <= p.y) floor = Math.max(floor, o.y + o.h)
+    }
+    if (p.y - floor > MAX_GAP_ROWS) return `Placement ${p.id} in ${name} layout has more than ${MAX_GAP_ROWS} empty rows above it`
   }
   return null
 }

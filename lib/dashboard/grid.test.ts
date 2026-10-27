@@ -3,6 +3,9 @@ import {
   LARGE_COLS,
   PHONE_COLS,
   appendCard,
+  clampGaps,
+  collapseHidden,
+  MAX_GAP_ROWS,
   compact,
   deriveRowMajor,
   moveCard,
@@ -122,16 +125,16 @@ describe("moveCard", () => {
   it("wins an occupied slot and pushes the occupant down", () => {
     const out = moveCard(freeze([p("a", 0, 0, 6, 2), p("b", 6, 0, 6, 2)]), "a", { x: 6, y: 0 }, 12)
     assertValid(out, 12)
-    assertCompact(out)
+    assertGapsCapped(out)
     expect(byId(out).a).toEqual(p("a", 6, 0, 6, 2))
     expect(byId(out).b).toEqual(p("b", 6, 2, 6, 2))
   })
 
-  it("swaps with the card below when dragged down onto it", () => {
+  it("pushes the card below down when dragged down onto it (the rows it left stay empty)", () => {
     const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 2)], "a", { x: 0, y: 2 }, 12)
     assertValid(out, 12)
-    expect(byId(out).b.y).toBe(0)
     expect(byId(out).a.y).toBe(2)
+    expect(byId(out).b.y).toBe(4)
   })
 
   it("swaps with the card above when dragged up onto it", () => {
@@ -151,10 +154,10 @@ describe("moveCard", () => {
     expect(byId(out).a).toEqual(p("a", 0, 0, 4, 2))
   })
 
-  it("lets a moved card fall to the bottom of the stack, not below it", () => {
+  it("stops a card moved far below the stack 5 rows under it; the others stay put", () => {
     const out = moveCard([p("a", 0, 0, 12, 1), p("b", 0, 1, 12, 1)], "a", { x: 0, y: 50 }, 12)
-    expect(byId(out).b.y).toBe(0)
-    expect(byId(out).a.y).toBe(1)
+    expect(byId(out).b.y).toBe(1)
+    expect(byId(out).a.y).toBe(2 + MAX_GAP_ROWS)
   })
 
   it("returns an unchanged copy for an unknown id", () => {
@@ -202,9 +205,9 @@ describe("resizeCard", () => {
     expect(byId(out).a).toEqual(p("a", 6, 0, 6, 2))
   })
 
-  it("lifts the cards below when a card shrinks", () => {
+  it("leaves the cards below in place when a card shrinks", () => {
     const out = resizeCard([p("a", 0, 0, 12, 4), p("b", 0, 4, 12, 2)], "a", { w: 12, h: 1 }, { min: { w: 1, h: 1 }, max: { w: 12, h: 4 } }, 12)
-    expect(byId(out).b.y).toBe(1)
+    expect(byId(out).b.y).toBe(4)
   })
 })
 
@@ -226,9 +229,9 @@ describe("appendCard and removeCard", () => {
     expect(appendCard(input, "a", { w: 4, h: 4 }, 12)).toEqual(input)
   })
 
-  it("removes a card and closes the gap", () => {
+  it("removes a card and leaves its space empty", () => {
     const out = removeCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 3)], "a", 12)
-    expect(out).toEqual([p("b", 0, 0, 12, 3)])
+    expect(out).toEqual([p("b", 0, 2, 12, 3)])
   })
 })
 
@@ -288,10 +291,10 @@ describe("moveInOrder", () => {
     const hidden = (id: string) => id === "b"
     const out = moveInOrder(phone, "c", -1, PHONE_COLS, hidden)
     assertValid(out, PHONE_COLS)
-    // Order becomes c, b, a.
+    // C takes A's slot; A is pushed under C, and the hidden B (in the way) under A: order c, a, b.
     expect(byId(out).c.y).toBe(0)
-    expect(byId(out).b.y).toBe(3)
-    expect(byId(out).a.y).toBe(4)
+    expect(byId(out).a.y).toBe(3)
+    expect(byId(out).b.y).toBe(5)
   })
 
   it("is a no-op when only skipped cards lie in that direction", () => {
@@ -321,15 +324,15 @@ describe("hostile coordinates", () => {
       const out = moveCard(input, "a", { x: y, y }, 12)
       expect(Date.now() - started).toBeLessThan(500)
       assertValid(out, 12)
-      assertCompact(out)
+      assertGapsCapped(out)
       expect(out.map((c) => c.id)).toEqual(["a", "b", "c"])
     })
   }
 
-  it("moveCard far below the layout lands the card at the bottom", () => {
+  it("moveCard far below the layout lands the card 5 rows under the bottom", () => {
     const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 3)], "a", { x: 0, y: 1e300 }, 12)
-    expect(byId(out).b.y).toBe(0)
-    expect(byId(out).a.y).toBe(3)
+    expect(byId(out).b.y).toBe(2)
+    expect(byId(out).a.y).toBe(5 + MAX_GAP_ROWS)
   })
 
   it("moveCard with a NaN target keeps the card where it was", () => {
@@ -403,14 +406,14 @@ describe("randomized operation sequence", () => {
           const w = byId(input)[id].w
           expect(moved.x).toBe(Math.min(Math.max(to.x, 0), cols - w))
           expect(moved.y).toBeLessThanOrEqual(Math.max(to.y, 0))
-          assertCompact(out)
+          assertGapsCapped(out)
         } else if (op === 1) {
           out = resizeCard(input, id, { w: int(0, cols + 3), h: int(0, 8) }, limits, cols)
-          assertCompact(out)
+          assertGapsCapped(out)
         } else if (op === 2) {
           out = removeCard(input, id, cols)
           expect(out.length).toBe(input.length - 1)
-          assertCompact(out)
+          assertGapsCapped(out)
         } else if (op === 3) {
           out = appendCard(input, `c${next++}`, { w: int(1, cols + 2), h: int(1, 4) }, cols)
           expect(out.length).toBe(input.length + 1)
@@ -435,4 +438,220 @@ describe("randomized operation sequence", () => {
       }
     })
   }
+})
+
+// ---- No gravity: intentional gaps, the 5-row gap cap, push-down only ----
+
+// No card sits more than MAX_GAP_ROWS below the lowest card above it in its columns (or the top).
+function gapAbove(ps: Placement[], c: Placement): number {
+  const floor = ps
+    .filter((o) => o.id !== c.id && o.x < c.x + c.w && c.x < o.x + o.w && o.y + o.h <= c.y)
+    .reduce((max, o) => Math.max(max, o.y + o.h), 0)
+  return c.y - floor
+}
+function assertGapsCapped(ps: Placement[]): void {
+  for (const c of ps) expect(gapAbove(ps, c), `${c.id} gap`).toBeLessThanOrEqual(MAX_GAP_ROWS)
+}
+
+describe("clampGaps", () => {
+  it("caps gaps at 5 rows", () => {
+    expect(MAX_GAP_ROWS).toBe(5)
+  })
+
+  it("leaves gaps of up to 5 rows alone", () => {
+    const input = [p("a", 0, 0, 6, 2), p("b", 0, 7, 6, 1), p("c", 6, 5, 6, 3)]
+    expect(clampGaps(input, 12)).toEqual(input)
+  })
+
+  it("pulls a card up to 5 rows below the lowest card above it in its columns, never further", () => {
+    const out = clampGaps([p("a", 0, 0, 6, 2), p("b", 0, 20, 6, 1), p("c", 6, 3, 6, 1)], 12)
+    expect(byId(out).b.y).toBe(7)
+    expect(byId(out).c.y).toBe(3)
+    expect(byId(out).a.y).toBe(0)
+  })
+
+  it("measures from the top of the page when nothing is above in its columns", () => {
+    expect(clampGaps([p("a", 0, 0, 6, 9), p("b", 6, 9, 6, 1)], 12)).toEqual([p("a", 0, 0, 6, 9), p("b", 6, 5, 6, 1)])
+  })
+
+  it("works top to bottom, measuring each card from the cards above as already clamped", () => {
+    const out = clampGaps([p("a", 0, 0, 12, 1), p("b", 0, 10, 12, 1), p("c", 0, 12, 12, 1), p("d", 0, 30, 12, 1)], 12)
+    // b: 1 + 5 = 6. c sat 1 row under b; now 5 rows under b's new bottom (7), within the cap, so it stays.
+    expect(out.map((c) => c.y)).toEqual([0, 6, 12, 18])
+    assertValid(out, 12)
+    assertGapsCapped(out)
+  })
+
+  it("is deterministic whatever the input order, and keeps that order", () => {
+    const ps = [p("a", 0, 0, 4, 2), p("b", 4, 12, 4, 1), p("c", 0, 14, 8, 1), p("d", 8, 30, 4, 2)]
+    const out = clampGaps(ps, 12)
+    const rev = clampGaps([...ps].reverse(), 12)
+    expect(rev.map((c) => c.id)).toEqual(["d", "c", "b", "a"])
+    expect(byId(rev)).toEqual(byId(out))
+    assertValid(out, 12)
+    assertGapsCapped(out)
+  })
+
+  it("never mutates its input", () => {
+    const input = freeze([p("a", 0, 30, 6, 2)])
+    expect(clampGaps(input, 12)[0].y).toBe(5)
+    expect(input[0].y).toBe(30)
+  })
+
+  it("handles a card at a huge y instantly", () => {
+    const started = Date.now()
+    const out = clampGaps([p("a", 0, 0, 12, 2), p("b", 0, 1e300, 6, 3), p("c", 6, Infinity, 6, 2)], 12)
+    expect(Date.now() - started).toBeLessThan(500)
+    expect(byId(out).b.y).toBe(7)
+    // A non-finite y reads as row 0 (as everywhere in the engine): c is pushed under a.
+    expect(byId(out).c.y).toBe(2)
+  })
+})
+
+describe("no gravity", () => {
+  it("moveCard leaves a card where it is dropped, with the empty rows above it", () => {
+    const out = moveCard(freeze([p("a", 0, 0, 6, 2), p("b", 6, 0, 6, 2)]), "b", { x: 6, y: 3 }, 12)
+    expect(out).toEqual([p("a", 0, 0, 6, 2), p("b", 6, 3, 6, 2)])
+  })
+
+  it("moveCard does not close the gap a moved card leaves", () => {
+    const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 6, 2), p("c", 6, 2, 6, 2)], "a", { x: 0, y: 4 }, 12)
+    expect(out).toEqual([p("a", 0, 4, 12, 2), p("b", 0, 2, 6, 2), p("c", 6, 2, 6, 2)])
+  })
+
+  it("a drop far down stops 5 rows below the lowest card above it in its columns", () => {
+    const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 6, 3), p("c", 6, 2, 6, 1)], "c", { x: 6, y: 40 }, 12)
+    // Above c in columns 6-11 is only a (bottom 2): c lands at 2 + 5.
+    expect(byId(out).c).toEqual(p("c", 6, 7, 6, 1))
+    expect(byId(out).b).toEqual(p("b", 0, 2, 6, 3))
+  })
+
+  it("collisions push down only the colliding cards, cascading", () => {
+    const input = [p("a", 0, 0, 12, 2), p("b", 0, 2, 6, 2), p("c", 0, 4, 6, 2), p("d", 6, 2, 6, 2), p("f", 6, 6, 6, 1), p("e", 0, 8, 12, 1)]
+    const out = moveCard(freeze(input), "e", { x: 0, y: 2 }, 12)
+    assertValid(out, 12)
+    expect(byId(out).e).toEqual(p("e", 0, 2, 12, 1))
+    expect(byId(out).b.y).toBe(3) // hit by e
+    expect(byId(out).d.y).toBe(3) // hit by e
+    expect(byId(out).c.y).toBe(5) // hit by b
+    expect(byId(out).a.y).toBe(0) // untouched
+    expect(byId(out).f.y).toBe(6) // d's new bottom is 5: no collision, f stays
+  })
+
+  it("dragging a card onto the one below pushes that one down (no swap, no pull-up)", () => {
+    const out = moveCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 2)], "a", { x: 0, y: 2 }, 12)
+    expect(out).toEqual([p("a", 0, 2, 12, 2), p("b", 0, 4, 12, 2)])
+  })
+
+  it("a preview from the original layout restores pushed cards once the dragged card moves away", () => {
+    const original = freeze([p("a", 0, 0, 6, 2), p("b", 6, 0, 6, 2), p("c", 0, 2, 12, 2)])
+    const over = moveCard(original, "a", { x: 6, y: 0 }, 12)
+    expect(byId(over).b.y).toBe(2)
+    expect(byId(over).c.y).toBe(4)
+    const away = moveCard(original, "a", { x: 0, y: 4 }, 12)
+    expect(byId(away).b).toEqual(p("b", 6, 0, 6, 2))
+    expect(byId(away).c).toEqual(p("c", 0, 2, 12, 2))
+    expect(byId(away).a).toEqual(p("a", 0, 4, 6, 2))
+  })
+
+  it("resizeCard pushes only the cards it now covers, and shrinking leaves the space", () => {
+    const limits: Limits = { min: { w: 1, h: 1 }, max: { w: 12, h: 6 } }
+    const grown = resizeCard([p("a", 0, 0, 6, 2), p("b", 0, 2, 6, 2), p("c", 6, 0, 6, 2)], "a", { w: 6, h: 3 }, limits, 12)
+    expect(grown).toEqual([p("a", 0, 0, 6, 3), p("b", 0, 3, 6, 2), p("c", 6, 0, 6, 2)])
+    const shrunk = resizeCard([p("a", 0, 0, 12, 4), p("b", 0, 4, 12, 2)], "a", { w: 12, h: 1 }, limits, 12)
+    expect(byId(shrunk).b.y).toBe(4)
+  })
+
+  it("removeCard leaves the gap", () => {
+    expect(removeCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 3)], "a", 12)).toEqual([p("b", 0, 2, 12, 3)])
+  })
+
+  it("removeCard pulls a card up only as far as the gap cap", () => {
+    const out = removeCard([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 6), p("c", 0, 8, 12, 1)], "b", 12)
+    expect(out).toEqual([p("a", 0, 0, 12, 2), p("c", 0, 7, 12, 1)])
+  })
+
+  it("appendCard still adds below the lowest bottom edge", () => {
+    const out = appendCard([p("a", 0, 0, 6, 2), p("b", 6, 4, 6, 3)], "c", { w: 4, h: 2 }, 12)
+    expect(byId(out).c).toEqual(p("c", 0, 7, 4, 2))
+  })
+
+  it("works the same on the phone grid", () => {
+    const phone = [p("a", 0, 0, 2, 2), p("b", 0, 2, 1, 1), p("c", 1, 2, 1, 1)]
+    const down = moveCard(phone, "b", { x: 0, y: 5 }, PHONE_COLS)
+    expect(byId(down).b).toEqual(p("b", 0, 5, 1, 1))
+    expect(byId(down).c).toEqual(p("c", 1, 2, 1, 1))
+    const far = moveCard(phone, "b", { x: 0, y: 50 }, PHONE_COLS)
+    expect(byId(far).b.y).toBe(7)
+  })
+
+  it("moveInOrder keeps the gaps on the phone: the card takes its neighbour's slot and pushes it down", () => {
+    const phone = [p("a", 0, 0, 2, 2), p("b", 0, 4, 2, 1), p("c", 0, 5, 2, 3)]
+    const out = moveInOrder(phone, "c", -1, PHONE_COLS)
+    expect(out).toEqual([p("a", 0, 0, 2, 2), p("b", 0, 7, 2, 1), p("c", 0, 4, 2, 3)])
+  })
+
+  for (const cols of [LARGE_COLS, PHONE_COLS]) {
+    it(`random moves keep the layout valid and capped, and only push down (cols ${cols})`, () => {
+      const rand = mulberry32(99 + cols)
+      const int = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 1))
+      let ps: Placement[] = []
+      for (let i = 0; i < 8; i++) ps = appendCard(ps, `c${i}`, { w: int(1, cols), h: int(1, 4) }, cols)
+      for (let step = 0; step < 200; step++) {
+        const id = ps[int(0, ps.length - 1)].id
+        const before = byId(ps)
+        const out = moveCard(freeze(ps), id, { x: int(0, cols), y: int(0, 30) }, cols)
+        assertValid(out, cols)
+        assertGapsCapped(out)
+        // No other card goes up, except to honour the cap (and then exactly to it).
+        for (const c of out) {
+          if (c.id !== id && c.y < before[c.id].y) expect(gapAbove(out, c), `${c.id} pulled up past the cap`).toBe(MAX_GAP_ROWS)
+        }
+        ps = out
+      }
+    })
+  }
+})
+
+describe("collapseHidden (display only)", () => {
+  const shown = (...ids: string[]) => new Set(ids)
+
+  it("leaves a layout without hidden cards as it is, gaps included", () => {
+    const ps = [p("a", 0, 0, 12, 2), p("b", 0, 5, 12, 2)]
+    expect(collapseHidden(ps, shown("a", "b"), 12)).toEqual(ps)
+  })
+
+  it("closes the rows a hidden card took", () => {
+    const out = collapseHidden([p("a", 0, 0, 12, 2), p("h", 0, 2, 12, 3), p("b", 0, 5, 12, 2)], shown("a", "b"), 12)
+    expect(out).toEqual([p("a", 0, 0, 12, 2), p("b", 0, 2, 12, 2)])
+  })
+
+  it("keeps the intentional part of a gap that also held a hidden card", () => {
+    // Rows 2-6 are empty or hidden: rows 3-4 were the hidden card, rows 2, 5 and 6 the admin's gap.
+    const out = collapseHidden([p("a", 0, 0, 12, 2), p("h", 0, 3, 12, 2), p("b", 0, 7, 12, 1)], shown("a", "b"), 12)
+    expect(byId(out).b.y).toBe(5)
+  })
+
+  it("moves only the cards under the hidden card, and the cards resting on them", () => {
+    const out = collapseHidden(
+      [p("a", 0, 0, 12, 2), p("h", 0, 2, 6, 3), p("b", 0, 5, 6, 2), p("d", 0, 7, 6, 1), p("c", 6, 5, 6, 2)],
+      shown("a", "b", "c", "d"),
+      12,
+    )
+    expect(byId(out).b.y).toBe(2)
+    expect(byId(out).d.y).toBe(4)
+    expect(byId(out).c.y).toBe(5) // its gap beside the hidden card was the admin's
+    expect(out.map((c) => c.id)).toEqual(["a", "b", "d", "c"])
+  })
+
+  it("closes a hidden card at the top of the page", () => {
+    const out = collapseHidden([p("h", 0, 0, 12, 4), p("b", 0, 4, 12, 2)], shown("b"), 12)
+    expect(out).toEqual([p("b", 0, 0, 12, 2)])
+  })
+
+  it("never changes its input", () => {
+    const input = freeze([p("h", 0, 0, 12, 4), p("b", 0, 4, 12, 2)])
+    collapseHidden(input, shown("b"), 12)
+    expect(input[1].y).toBe(4)
+  })
 })

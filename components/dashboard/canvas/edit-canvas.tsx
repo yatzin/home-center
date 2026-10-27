@@ -9,7 +9,11 @@
 // All geometry goes through the reducer: while a card is dragged or resized,
 // the preview is `editReducer(state, <the action a drop would dispatch>)`, so
 // what you see while dragging is exactly what you get on release, and no
-// preview can overlap or leave the grid. Pointer pixels become cells with the
+// preview can overlap or leave the grid. The preview always starts from the
+// layout as it was when the gesture began (the reducer state does not change
+// mid-drag), so cards pushed out of the way slide back once the dragged card
+// moves on. Cards keep their rows (no gravity): the grid underlay shows the
+// empty cells an admin left between cards (lib/dashboard/grid.ts). Pointer pixels become cells with the
 // pure helpers in lib/dashboard/grid-pointer.ts.
 //
 // Dragging uses @dnd-kit/core only for input (mouse, long-press touch,
@@ -39,7 +43,7 @@ import {
   GripHorizontal,
   type LucideIcon,
 } from "lucide-react"
-import { compact, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
+import { collapseHidden, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import { isMissingData } from "@/lib/dashboard/card-data"
 import { configFieldsFor } from "@/lib/dashboard/card-types"
 import { editReducer, type EditAction, type EditState } from "@/lib/dashboard/edit-state"
@@ -72,7 +76,7 @@ const TOUCH_CONSTRAINT: PointerActivationConstraint = { delay: 200, tolerance: 8
 const EXTRA_ROWS = 2
 
 type Gesture =
-  /** `origin`/`drawnTo` are drawn cells; `stored`/`to` the stored layout's (they differ when hidden cards were compacted out). */
+  /** `origin`/`drawnTo` are drawn cells; `stored`/`to` the stored layout's (they differ when hidden cards' rows were closed). */
   | { kind: "move"; id: string; origin: Placement; stored: Placement; drawnTo: Point; to: Point }
   | { kind: "resize"; id: string; edge: ResizeEdge; origin: Placement; size: Size }
 
@@ -81,14 +85,9 @@ function gestureAction(g: Gesture | null): EditAction | null {
   return g.kind === "move" ? { type: "move", id: g.id, to: g.to } : { type: "resize", id: g.id, size: g.size }
 }
 
-/** The large placements as drawn: shown cards only, floated up (as the page draws them). */
+/** The large placements as drawn: shown cards only, hidden cards' rows closed, the admin's gaps kept (as the page draws them). */
 function displayed(state: EditState, ids: ReadonlySet<string>): Map<string, Placement> {
-  return new Map(
-    compact(
-      state.layout.large.filter((p) => ids.has(p.id)),
-      LARGE_COLS,
-    ).map((p) => [p.id, p]),
-  )
+  return new Map(collapseHidden(state.layout.large, ids, LARGE_COLS).map((p) => [p.id, p]))
 }
 
 const bottomOf = (ps: Iterable<Placement>): number => {

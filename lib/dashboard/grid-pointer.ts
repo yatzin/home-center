@@ -1,8 +1,8 @@
 // Pointer and keyboard geometry for dashboard edit mode: turns pixels and
 // arrow keys into grid cells. Pure TS. It only proposes positions and sizes;
 // the reducer (edit-state.ts) and grid.ts decide what actually happens
-// (limits, collisions, gravity), so a proposal can never break the layout.
-import { moveCard, type Placement, type Size } from "./grid"
+// (limits, collisions, the gap cap), so a proposal can never break the layout.
+import { MAX_GAP_ROWS, moveCard, type Placement, type Size } from "./grid"
 
 /** Pixels from one column (row) to the next, gap included. */
 export type Pitch = { x: number; y: number }
@@ -68,18 +68,19 @@ export function resizeKeyStep(edge: ResizeEdge, key: string): Size | null {
 
 /**
  * Where to move a card for one keyboard step in `dir`: the nearest target that
- * actually changes its position under the grid's rules (gravity can float a
- * one-row step down straight back up, so the step grows until the card really
- * moves, e.g. past the card below it). Null when it cannot move that way.
+ * actually changes its position under the grid's rules. Usually one cell; at
+ * the gap cap (MAX_GAP_ROWS empty rows above it) a step down is pulled straight
+ * back, so the step grows until the card really moves (past the card below).
+ * Null when it cannot move that way.
  */
 export function stepMove(ps: readonly Placement[], id: string, dir: Point, cols: number): Point | null {
   const card = ps.find((q) => q.id === id)
   if (!card || (dir.x === 0 && dir.y === 0)) return null
-  const bottom = ps.reduce((max, q) => Math.max(max, q.y + q.h), 0)
-  const limit = Math.max(cols, bottom) + 1
+  const lowest = ps.reduce((max, q) => Math.max(max, q.y + q.h), 0) + MAX_GAP_ROWS
+  const limit = Math.max(cols, lowest) + 1
   for (let k = 1; k <= limit; k++) {
     const to = { x: card.x + dir.x * k, y: card.y + dir.y * k }
-    if (to.x < 0 || to.x + card.w > cols || to.y < 0 || to.y > bottom) return null
+    if (to.x < 0 || to.x + card.w > cols || to.y < 0 || to.y > lowest) return null
     const moved = moveCard(ps, id, to, cols).find((q) => q.id === id)
     if (moved && (moved.x !== card.x || moved.y !== card.y)) return to
   }
@@ -87,8 +88,9 @@ export function stepMove(ps: readonly Placement[], id: string, dir: Point, cols:
 }
 
 /**
- * The page draws a compacted copy of the layout without hidden cards (feature
- * off), so a card's drawn cell can differ from its stored one. A target picked
+ * The page draws the layout without hidden cards (feature off), closing the
+ * rows they took (grid.ts collapseHidden), so a card's drawn cell can differ
+ * from its stored one. A target picked
  * in drawn cells is applied as the same offset from the stored origin.
  */
 export function drawnToStored(target: Point, drawnOrigin: Point, storedOrigin: Point): Point {

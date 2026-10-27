@@ -110,33 +110,47 @@ describe("stepMove", () => {
     expect(to).toEqual({ x: 1, y: 0 })
   })
 
-  it("moving down past the card below swaps them instead of floating back up", () => {
-    // A one-row step down would float back to row 0 under gravity, so the step grows until A really moves.
+  it("moving down one row leaves an empty row above and pushes the card below down", () => {
     const to = stepMove(layout, "a", { x: 0, y: 1 }, 12)!
-    expect(to).not.toBeNull()
+    expect(to).toEqual({ x: 0, y: 1 })
     const next = moveCard(layout, "a", to, 12)
+    expect(at(next, "a").y).toBe(1)
+    expect(at(next, "b").y).toBe(3)
+    expect(at(next, "c").y).toBe(0)
+  })
+
+  it("moving up one row pushes the card above down out of its way", () => {
+    const to = stepMove(layout, "b", { x: 0, y: -1 }, 12)!
+    expect(to).toEqual({ x: 0, y: 1 })
+    const next = moveCard(layout, "b", to, 12)
+    expect(at(next, "b").y).toBe(1)
     expect(at(next, "a").y).toBeGreaterThan(at(next, "b").y)
   })
 
-  it("moving up swaps with the card above", () => {
-    const to = stepMove(layout, "b", { x: 0, y: -1 }, 12)!
-    const next = moveCard(layout, "b", to, 12)
-    expect(at(next, "b").y).toBe(0)
-    expect(at(next, "a").y).toBeGreaterThan(0)
+  it("moves a lone card down into empty rows, up to the 5-row gap cap", () => {
+    expect(stepMove([p("solo", 0, 0, 3, 1)], "solo", { x: 0, y: 1 }, 12)).toEqual({ x: 0, y: 1 })
+    expect(stepMove([p("solo", 0, 4, 3, 1)], "solo", { x: 0, y: 1 }, 12)).toEqual({ x: 0, y: 5 })
+    expect(stepMove([p("solo", 0, 5, 3, 1)], "solo", { x: 0, y: 1 }, 12)).toBeNull()
+  })
+
+  it("at the gap cap, moving down jumps past the card below", () => {
+    const ps = [p("a", 0, 5, 3, 1), p("b", 0, 6, 3, 2)]
+    const to = stepMove(ps, "a", { x: 0, y: 1 }, 12)!
+    const next = moveCard(ps, "a", to, 12)
+    expect(at(next, "a").y).toBeGreaterThan(at(next, "b").y)
   })
 
   it("is null when the card cannot move that way", () => {
     expect(stepMove(layout, "a", { x: -1, y: 0 }, 12)).toBeNull()
     expect(stepMove(layout, "a", { x: 0, y: -1 }, 12)).toBeNull()
     expect(stepMove([p("w", 0, 0, 12, 1)], "w", { x: 1, y: 0 }, 12)).toBeNull()
-    expect(stepMove([p("solo", 0, 0, 3, 1)], "solo", { x: 0, y: 1 }, 12)).toBeNull()
     expect(stepMove(layout, "missing", { x: 1, y: 0 }, 12)).toBeNull()
   })
 })
 
 describe("drawnToStored", () => {
   it("applies the drawn move to the stored origin, so hidden cards above never shift the landing", () => {
-    // Drawn at row 2 (a hidden card above was compacted out), stored at row 6.
+    // Drawn at row 2 (the rows of a hidden card above were closed), stored at row 6.
     expect(drawnToStored({ x: 4, y: 3 }, { x: 1, y: 2 }, { x: 1, y: 6 })).toEqual({ x: 4, y: 7 })
   })
 

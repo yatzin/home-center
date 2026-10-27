@@ -4,7 +4,7 @@ import { useState } from "react"
 import { LayoutGrid, Loader2 } from "lucide-react"
 import { cardType } from "@/lib/dashboard/card-types"
 import type { CanvasCardData } from "@/lib/dashboard/card-data"
-import { compact, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
+import { collapseHidden, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
 import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
 import type { Features } from "@/lib/features"
@@ -219,11 +219,12 @@ export function ViewGrid({
   }
 
   // Display only: cards that are not shown (feature off, unknown type, no view
-  // yet) would leave holes, so the shown ones float up. The stored layout is
-  // untouched.
+  // yet) would leave holes, so the rows they took are closed; empty rows the
+  // admin left between cards stay (grid.ts collapseHidden). The stored layout
+  // is untouched.
   const ids = new Set(shown.map((c) => c.id))
-  const large = new Map(compact(layout.large.filter((p) => ids.has(p.id)), LARGE_COLS).map((p) => [p.id, p]))
-  const phone = new Map(compact([...phoneById.values()].filter((p) => ids.has(p.id)), PHONE_COLS).map((p) => [p.id, p]))
+  const large = new Map(collapseHidden(layout.large, ids, LARGE_COLS).map((p) => [p.id, p]))
+  const phone = new Map(collapseHidden([...phoneById.values()], ids, PHONE_COLS).map((p) => [p.id, p]))
 
   return (
     <div className="@container/dash">
