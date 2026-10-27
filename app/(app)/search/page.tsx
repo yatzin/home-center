@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { SearchX, Sparkles } from "lucide-react"
 import { globalSearch } from "@/lib/search/global-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 import type { Section, SemanticState } from "@/lib/search/types"
 import { AssetCard, DocumentCard, RecordCard } from "@/components/search/result-cards"
 import { searchHref, semanticOn } from "@/lib/search/href"
@@ -108,7 +109,8 @@ export default async function SearchPage({
     )
   }
 
-  const results = await globalSearch(q, { semantic })
+  const scope = await loadPropertyScope()
+  const results = await globalSearch(q, { semantic, scope })
   const jump = results.sections.map((s) => ({ key: s.key, title: s.title, count: `${s.items.length}${s.more ? "+" : ""}` }))
 
   return (
@@ -145,8 +147,17 @@ export default async function SearchPage({
       {results.sections.length === 0 && (
         <div className="flex flex-col items-center rounded-xl border border-dashed p-12 text-center text-muted-foreground">
           <SearchX className="h-8 w-8" strokeWidth={1.5} />
-          <p className="mt-3 font-medium text-foreground">Nothing matched &ldquo;{results.query}&rdquo;</p>
-          <p className="mt-1 text-sm">Try fewer or different words{semantic ? "" : ", or turn on semantic search"}.</p>
+          {results.terms.length === 0 ? (
+            <>
+              <p className="mt-3 font-medium text-foreground">Nothing to search for in &ldquo;{results.query}&rdquo;</p>
+              <p className="mt-1 text-sm">Try a longer or different word.</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 font-medium text-foreground">Nothing matched &ldquo;{results.query}&rdquo;</p>
+              <p className="mt-1 text-sm">Try fewer or different words{semantic ? "" : ", or turn on semantic search"}.</p>
+            </>
+          )}
         </div>
       )}
 

@@ -12,10 +12,20 @@ import { assetHref } from "@/lib/assets"
 import { scheduleDue, dueCandidateFilter, type Due } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import { loadCostRecords } from "@/lib/costs-server"
-import { bucketed, priorPeriod, sum, yearToDate } from "@/lib/costs"
+import { bucketed, monthsBack, priorPeriod, sum, yearToDate } from "@/lib/costs"
+import { localDay } from "@/lib/equipment-life"
+import { warrantyToday } from "@/lib/llm/warranty-status"
 import { SpendArea } from "@/components/charts/spend-area"
 import { ownedWhere } from "@/lib/features"
 import { loadFeatures } from "@/lib/features-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
+import {
+  equipmentScopeWhere,
+  ownedScopeWhere,
+  personScopeWhere,
+  propertyScopeWhere,
+  vehicleScopeWhere,
+} from "@/lib/property-filter"
 import { listInboxItems } from "@/lib/inbox-server"
 import { IntakeCard } from "@/components/dashboard/intake-card"
 import { FreshStartCard } from "@/components/dashboard/fresh-start-card"
@@ -84,9 +94,11 @@ async function LegacyDashboard({ firstName, isAdmin }: { firstName: string | nul
   const fmt = await getFormat()
 
   const now = new Date()
-  const in60 = new Date(now.getTime() + 60 * 86400000)
-  const features = await loadFeatures()
+  const today = warrantyToday(now)
+  const in60 = new Date(today.getTime() + 60 * 86400000)
+  const [features, scope] = await Promise.all([loadFeatures(), loadPropertyScope()])
   const owned = ownedWhere(features)
+  const ownedScope = ownedScopeWhere(scope)
 
   const [
     propertyCount, vehicleCount, equipmentCount, personCount, recordCount,
@@ -94,35 +106,36 @@ async function LegacyDashboard({ firstName, isAdmin }: { firstName: string | nul
     maintenanceCandidates, mileage, expiringWarranties,
     properties, vehicles, equipment, people, assets, activity, costRows, intake,
   ] = await Promise.all([
-    prisma.property.count(),
-    prisma.vehicle.count(),
-    prisma.equipment.count(),
-    features.health ? prisma.person.count() : 0,
-    prisma.serviceRecord.count({ where: owned }),
-    prisma.warranty.count({ where: { ...owned, expirationDate: { gt: now } } }),
-    // Unfiltered, so a household whose only data is hidden by a feature toggle is not called empty.
+    prisma.property.count({ where: propertyScopeWhere(scope) }),
+    prisma.vehicle.count({ where: vehicleScopeWhere(scope) }),
+    prisma.equipment.count({ where: equipmentScopeWhere(scope) }),
+    features.health ? prisma.person.count({ where: personScopeWhere(scope) }) : 0,
+    prisma.serviceRecord.count({ where: { ...owned, ...ownedScope } }),
+    prisma.warranty.count({ where: { ...owned, ...ownedScope, expirationDate: { gte: today } } }),
+    // Unfiltered, so a household whose only data is hidden by a feature toggle
+    // or the property filter is not called empty.
     prisma.person.count(),
     prisma.serviceRecord.count(),
     // Everything that could be due either way; narrowed to what actually is,
     // and counted, below — mileage can't be filtered in SQL.
     prisma.maintenanceSchedule.findMany({
-      where: { AND: [dueCandidateFilter(30, now), owned] },
+      where: { AND: [dueCandidateFilter(30, now), owned, ownedScope] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
     prisma.warranty.findMany({
-      where: { ...owned, expirationDate: { gte: now, lte: in60 } },
+      where: { ...owned, ...ownedScope, expirationDate: { gte: today, lte: in60 } },
       orderBy: { expirationDate: "asc" },
       take: 6,
     }),
-    prisma.property.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
-    prisma.vehicle.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
-    prisma.equipment.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
-    features.health ? prisma.person.findMany({ select: { id: true, name: true, imageFilename: true, updatedAt: true } }) : [],
+    prisma.property.findMany({ where: propertyScopeWhere(scope), select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
+    prisma.vehicle.findMany({ where: vehicleScopeWhere(scope), select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
+    prisma.equipment.findMany({ where: equipmentScopeWhere(scope), select: { id: true, name: true, imageFilename: true, updatedAt: true } }),
+    features.health ? prisma.person.findMany({ where: personScopeWhere(scope), select: { id: true, name: true, imageFilename: true, updatedAt: true } }) : [],
     loadAssetIndex(),
     loadActivityIndex(),
-    loadCostRecords(),
-    listInboxItems(now),
+    loadCostRecords({ scope }),
+    listInboxItems(now, { scope }),
   ])
 
   // A schedule counts as due when its own date window says so (the card's "30d"
@@ -141,8 +154,8 @@ async function LegacyDashboard({ firstName, isAdmin }: { firstName: string | nul
   const spendLastYear = sum(yearToDate(costRows, now, now.getFullYear() - 1))
   const spendDelta = spendLastYear > 0 ? (spendThisYear - spendLastYear) / spendLastYear : null
   const monthSpend = bucketed(costRows, "month", {
-    start: new Date(now.getFullYear(), now.getMonth() - (SPEND_MONTHS - 1), 1),
-    end: now,
+    start: monthsBack(now, SPEND_MONTHS),
+    end: localDay(now),
   })
   const monthSpendPrior = priorPeriod(costRows, monthSpend, "month")
 
@@ -248,7 +261,7 @@ async function LegacyDashboard({ firstName, isAdmin }: { firstName: string | nul
             ) : expiringWarranties.map((w) => {
               const assetName = assets.assetName(w.assetType, w.assetId)
               const href = assetHref(w.assetType, w.assetId)
-              const daysLeft = w.expirationDate ? Math.ceil((new Date(w.expirationDate).getTime() - now.getTime()) / 86400000) : null
+              const daysLeft = w.expirationDate ? Math.round((new Date(w.expirationDate).getTime() - today.getTime()) / 86400000) : null
               return (
                 <Link
                   key={w.id}

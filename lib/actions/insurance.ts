@@ -6,7 +6,11 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { loadFeatures } from "@/lib/features-server"
 import { insuranceSchema, premiumSchema, type PolicyInput } from "@/lib/health-schemas"
-import { isHealthInsuranceKind, linkWrites } from "@/lib/insurance"
+import { isHealthInsuranceKind, linkWrites, type LinkIds } from "@/lib/insurance"
+import { loadPolicyLinkChoices } from "@/lib/insurance-server"
+import { keepHiddenLinks, type PropertyScope } from "@/lib/property-filter"
+import { loadPropertyScope } from "@/lib/property-filter-server"
+import { orGone } from "@/lib/gone"
 import { removeUploadDir } from "@/lib/upload-fs"
 import type { ActionResult, FormValues } from "@/lib/form-types"
 
@@ -22,6 +26,22 @@ function revalidateInsurance() {
 /// A health-kind policy doesn't exist as far as callers go while Health is off.
 function hidden(kind: string, health: boolean) {
   return !health && isHealthInsuranceKind(kind)
+}
+
+/// The form only offered in-scope people, properties and vehicles, so links it couldn't show are
+/// added back before the `set` writes. With Health off members aren't written, so they're left as chosen.
+async function withHiddenLinks(id: string, health: boolean, scope: PropertyScope, chosen: LinkIds): Promise<LinkIds> {
+  const linked = { select: { id: true } }
+  const [current, visible] = await Promise.all([
+    prisma.insurancePolicy.findUnique({ where: { id }, select: { members: linked, properties: linked, vehicles: linked } }),
+    loadPolicyLinkChoices(health, scope),
+  ])
+  const ids = (rows: { id: string }[] | undefined) => (rows ?? []).map((r) => r.id)
+  return {
+    memberIds: health ? keepHiddenLinks(ids(current?.members), chosen.memberIds, ids(visible.people)) : chosen.memberIds,
+    propertyIds: keepHiddenLinks(ids(current?.properties), chosen.propertyIds, ids(visible.properties)),
+    vehicleIds: keepHiddenLinks(ids(current?.vehicles), chosen.vehicleIds, ids(visible.vehicles)),
+  }
 }
 
 export async function createInsurancePolicy(values: PolicyInput): Promise<ActionResult> {
@@ -55,6 +75,7 @@ export async function createInsurancePolicy(values: PolicyInput): Promise<Action
 export async function updateInsurancePolicy(id: string, values: PolicyInput): Promise<ActionResult> {
   const session = await auth()
   if (!session) redirect("/login")
+  const scope = await loadPropertyScope()
   const features = await loadFeatures()
 
   const parsed = insuranceSchema.safeParse(values)
@@ -63,11 +84,13 @@ export async function updateInsurancePolicy(id: string, values: PolicyInput): Pr
   if (!existing || hidden(existing.kind, features.health)) return { error: "Not found" }
   const { memberIds, propertyIds, vehicleIds, coverages, ...data } = parsed.data
 
-  const links = linkWrites(data.kind, features.health, { memberIds, propertyIds, vehicleIds })
+  const chosen = { memberIds, propertyIds, vehicleIds }
+  const ids = scope ? await withHiddenLinks(id, features.health, scope, chosen) : chosen
+  const links = linkWrites(data.kind, features.health, ids)
   if (!links.ok) return { error: { [links.field]: [links.error] } }
   const healthKind = isHealthInsuranceKind(data.kind)
 
-  await prisma.$transaction([
+  const saved = await orGone(() => prisma.$transaction([
     prisma.insuranceCoverage.deleteMany({ where: { policyId: id } }),
     prisma.insurancePolicy.update({
       where: { id },
@@ -81,7 +104,8 @@ export async function updateInsurancePolicy(id: string, values: PolicyInput): Pr
       },
     }),
     prisma.insuranceCoverage.createMany({ data: coverages.map((c) => ({ ...c, policyId: id })) }),
-  ])
+  ]))
+  if (saved) return { error: saved.error }
   revalidateInsurance()
   return { success: true }
 }

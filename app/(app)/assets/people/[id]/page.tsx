@@ -26,6 +26,9 @@ import { getFormat } from "@/lib/regional-server"
 import { ageFrom, labelFor, RELATIONSHIPS } from "@/lib/health"
 import { AssetInsurance } from "@/components/insurance/asset-insurance"
 import { MEDICATION_VIEW_COOKIE, parseMedicationView } from "@/lib/medication-timeline"
+import { loadPropertyScope, loadPropertyFilterChoices } from "@/lib/property-filter-server"
+import { assetInScope } from "@/lib/property-filter"
+import { HiddenByFilter } from "@/components/hidden-by-filter"
 
 export default async function PersonDetailPage({
   params,
@@ -35,9 +38,16 @@ export default async function PersonDetailPage({
   searchParams: Promise<{ tab?: string; open?: string }>
 }) {
   await requireHealth()
+  const scope = await loadPropertyScope()
   const fmt = await getFormat()
   const { id } = await params
   const { tab, open } = await searchParams
+  // Checked before the full load below; hidden ids all exist, so a missing person still gets notFound().
+  if (!assetInScope(scope, "PERSON", id)) {
+    const hidden = await prisma.person.findUnique({ where: { id }, select: { property: { select: { name: true } } } })
+    if (!hidden) notFound()
+    return <HiddenByFilter propertyName={scope!.propertyName} ownerName={hidden.property?.name} />
+  }
   const medicationView = parseMedicationView((await cookies()).get(MEDICATION_VIEW_COOKIE)?.value)
   const person = await prisma.person.findUnique({
     where: { id },
@@ -64,14 +74,15 @@ export default async function PersonDetailPage({
   if (!person) notFound()
 
   const where = { assetId: id, assetType: "PERSON" as const }
-  const [visits, schedules, providers, documents, manualOptions, policyChoices] = await Promise.all([
+  const [visits, schedules, providers, documents, manualOptions, policyChoices, propertyChoices] = await Promise.all([
     prisma.serviceRecord.findMany({ where, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.maintenanceSchedule.findMany({ where, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
     prisma.provider.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.attachment.findMany({ where: { recordType: "DOCUMENT", assetType: "PERSON", assetId: id }, orderBy: { uploadedAt: "asc" } }),
     loadManualOptions([{ assetType: "PERSON", assetId: id }]),
     // The page is behind requireHealth(), so health and life policies are fair game here.
-    loadPolicyChoices("members", true),
+    loadPolicyChoices("members", true, scope),
+    loadPropertyFilterChoices(scope),
   ])
 
   const age = person.dateOfBirth ? ageFrom(person.dateOfBirth, new Date()) : null
@@ -114,11 +125,11 @@ export default async function PersonDetailPage({
       </aside>
 
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="font-heading text-2xl font-semibold">{person.name}</h1>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{person.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">
             <LogObservationButton personId={id} typeOptions={observationTypes} conditions={conditionOptions} />
-            <PersonEditButton person={person} providers={providers} policyChoices={policyChoices} policyIds={person.insurancePolicies.map((p) => p.id)} />
+            <PersonEditButton person={person} providers={providers} policyChoices={policyChoices} policyIds={person.insurancePolicies.map((p) => p.id)} propertyChoices={propertyChoices ?? undefined} />
             <Link
               href={`/reports/people/${id}`}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
@@ -182,7 +193,7 @@ function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: st
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className="font-semibold text-sm text-right">{value}</div>
+      <div className="min-w-0 break-words font-semibold text-sm text-right">{value}</div>
     </div>
   )
 }

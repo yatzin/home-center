@@ -18,6 +18,8 @@ import { useDropTarget } from "@/components/drop/drop-provider"
 import { createRoom, updateRoom, deleteRoom } from "@/lib/actions/rooms"
 import { FLOORING_SUGGESTIONS, PAINT_SURFACES, type RoomInput } from "@/lib/rooms"
 import { uploadAll } from "@/lib/upload-client"
+import { DATE_MESSAGE, MAX_NAME_LENGTH, NAME_MESSAGE, parseDateOnly } from "@/lib/input-limits"
+import { showServerError } from "@/components/forms/server-errors"
 import { Plus, Trash2 } from "lucide-react"
 import { RoomEquipment, RoomFiles, RoomReminders, RoomServiceRecords, StagedFiles } from "./room-panels"
 import { ServiceRecordFormDialog } from "@/components/service-records/service-record-form-dialog"
@@ -35,13 +37,13 @@ const paintSchema = z
 
 const schema = z.object({
   propertyId: z.string(),
-  name: z.string().trim().min(1, "Name is required"),
+  name: z.string().trim().min(1, "Name is required").max(MAX_NAME_LENGTH, NAME_MESSAGE),
   level: z.string(),
   area: z.string(),
   dimensions: z.string(),
   flooringType: z.string(),
   flooringProduct: z.string(),
-  flooringInstalled: z.string(),
+  flooringInstalled: z.string().refine((v) => !v.trim() || parseDateOnly(v) !== null, DATE_MESSAGE),
   notes: z.string(),
   paints: z.array(paintSchema),
 })
@@ -99,7 +101,7 @@ export function RoomFormDialog({ open, onClose, propertyId, room, serviceRecords
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()} disablePointerDismissal={filePickerOpen}>
       {/* An existing room has tabs of different lengths: a fixed height keeps the dialog from resizing as you switch. */}
-      <DialogContent className={room ? "h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-5xl" : "sm:max-w-5xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={room ? "h-[85vh] grid-rows-[auto_minmax(0,1fr)] max-sm:grid-cols-[minmax(0,1fr)] sm:max-w-5xl" : "sm:max-w-5xl max-h-[90vh] max-sm:grid-cols-[minmax(0,1fr)] overflow-y-auto"}>
         {/* Keyed so the form, tab and staged files start fresh for each room. */}
         <RoomDialogBody
           key={room?.id ?? "new"}
@@ -169,12 +171,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
     const result = existingId ? await updateRoom(existingId, payload) : await createRoom(payload)
 
     if (result.error) {
-      if (typeof result.error === "string") { toast.error(result.error); return }
-      for (const field of FIELDS) {
-        const message = result.error[field]?.[0]
-        if (message) form.setError(field, { message })
-      }
-      toast.error("Please fix the errors and try again.")
+      showServerError(form, result.error, FIELDS)
       return
     }
 
@@ -344,7 +341,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
       </DialogHeader>
       {room ? (
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-0 flex-col">
-          <TabsList variant="line" className="w-full justify-start border-b">
+          <TabsList variant="line" className="w-full justify-start border-b max-sm:h-10! max-sm:overflow-x-auto max-sm:pb-2 max-sm:[scrollbar-width:none]">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="service">Service records</TabsTrigger>
             {showEquipment && <TabsTrigger value="equipment">Equipment ({room.equipment.length})</TabsTrigger>}
@@ -352,7 +349,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
             <TabsTrigger value="files">Files ({room.attachments.length})</TabsTrigger>
           </TabsList>
           {/* keepMounted so unsaved Details edits survive a look at another tab. */}
-          <TabsContent value="details" keepMounted className="mt-4 min-h-0 overflow-y-auto">{details}</TabsContent>
+          <TabsContent value="details" keepMounted className="mt-4 min-h-0 overflow-y-auto max-sm:-mx-4 max-sm:px-4">{details}</TabsContent>
           <TabsContent value="service" className="mt-4 min-h-0 overflow-y-auto">
             <RoomServiceRecords
               room={room}

@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { deleteAssetWithRecords } from "@/lib/asset-delete-server"
 import { assetPolicyLinks } from "@/lib/insurance-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
+import { ignoreGone, orGone } from "@/lib/gone"
 import { propertySchema as schema, propertyData as clean, type PropertyInput } from "@/lib/asset-input"
 
 export async function createProperty(data: PropertyInput) {
@@ -24,19 +26,21 @@ export async function createProperty(data: PropertyInput) {
 export async function updateProperty(id: string, data: PropertyInput, policyIds?: string[]) {
   const session = await auth()
   if (!session) redirect("/login")
+  const scope = await loadPropertyScope()
 
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
   // A property's policies never depend on Health, so this always looks them up as if it were off.
-  const links = policyIds ? await assetPolicyLinks("properties", id, policyIds, false) : null
-  await prisma.property.update({
+  const links = policyIds ? await assetPolicyLinks("properties", id, policyIds, false, scope) : null
+  const saved = await orGone(() => prisma.property.update({
     where: { id },
     data: {
       ...clean(parsed.data),
       ...(links ? { insurancePolicies: { connect: links.connect.map((p) => ({ id: p })), disconnect: links.disconnect.map((p) => ({ id: p })) } } : {}),
     },
-  })
+  }))
+  if (saved) return { error: saved.error }
   revalidatePath("/assets/properties")
   revalidatePath(`/assets/properties/${id}`)
   if (links) revalidatePath("/insurance")
@@ -47,7 +51,7 @@ export async function deleteProperty(id: string) {
   const session = await auth()
   if (!session) redirect("/login")
 
-  await deleteAssetWithRecords("PROPERTY", id)
+  await ignoreGone(() => deleteAssetWithRecords("PROPERTY", id))
 
   revalidatePath("/assets/properties")
   revalidatePath("/assets/equipment")

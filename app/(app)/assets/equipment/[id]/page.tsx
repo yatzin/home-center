@@ -18,6 +18,9 @@ import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 import { getFormat } from "@/lib/regional-server"
 import { propertiesWithRooms, roomOptionsFor } from "@/lib/rooms-server"
 import { locationLabel } from "@/lib/rooms"
+import { HiddenByFilter } from "@/components/hidden-by-filter"
+import { assetInScope } from "@/lib/property-filter"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 
 export default async function EquipmentDetailPage({
   params,
@@ -35,11 +38,14 @@ export default async function EquipmentDetailPage({
   })
   if (!equipment) notFound()
 
+  const scope = await loadPropertyScope()
+  if (!assetInScope(scope, "EQUIPMENT", id)) return <HiddenByFilter propertyName={scope!.propertyName} ownerName={equipment.property?.name} />
+
   const [serviceRecords, warranties, maintenanceSchedules, properties, documents, roomOptions, manualOptions] = await Promise.all([
     prisma.serviceRecord.findMany({ where: { assetId: id, assetType: "EQUIPMENT" }, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.warranty.findMany({ where: { assetId: id, assetType: "EQUIPMENT" }, include: { attachments: true }, orderBy: { expirationDate: "asc" } }),
     prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "EQUIPMENT" }, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
-    propertiesWithRooms(),
+    propertiesWithRooms(scope),
     prisma.attachment.findMany({ where: { recordType: "DOCUMENT", assetType: "EQUIPMENT", assetId: id }, orderBy: { uploadedAt: "asc" } }),
     // Rooms of its property, for the room selects and badges; empty with Rooms off or no property.
     roomOptionsFor("EQUIPMENT", id),
@@ -72,8 +78,8 @@ export default async function EquipmentDetailPage({
               }
             />
           )}
-          {equipment.installDate && <Stat icon={Calendar} label="Installed" value={fmt.date(equipment.installDate)} />}
-          {equipment.purchaseDate && <Stat icon={Calendar} label="Purchased" value={fmt.date(equipment.purchaseDate)} />}
+          {equipment.installDate && <Stat icon={Calendar} label="Installed" value={fmt.date(equipment.installDate, { utc: true })} />}
+          {equipment.purchaseDate && <Stat icon={Calendar} label="Purchased" value={fmt.date(equipment.purchaseDate, { utc: true })} />}
           {age && (
             <Stat
               icon={Hourglass}
@@ -96,9 +102,9 @@ export default async function EquipmentDetailPage({
       </aside>
 
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="font-heading text-2xl font-semibold">{equipment.name}</h1>
-          <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{equipment.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
             <EquipmentEditButton equipment={equipment} properties={properties} />
             <PlanReplacementButton equipment={equipment} roomOptions={roomOptions} />
             <Link
@@ -118,7 +124,7 @@ export default async function EquipmentDetailPage({
         </div>
 
         <Tabs defaultValue={tab ?? "service"}>
-          <TabsList variant="line" className="w-full justify-start border-b">
+          <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
             <TabsTrigger value="service">Service ({serviceRecords.length})</TabsTrigger>
             <TabsTrigger value="warranties">Warranties ({warranties.length})</TabsTrigger>
             <TabsTrigger value="maintenance">Maintenance Reminders ({maintenanceSchedules.length})</TabsTrigger>
@@ -148,7 +154,7 @@ function Stat({ icon: Icon, label, value, mono }: { icon: React.ElementType; lab
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className={mono ? "font-mono text-xs break-all text-right" : "font-semibold text-sm text-right"}>{value}</div>
+      <div className={mono ? "min-w-0 font-mono text-xs break-all text-right" : "min-w-0 break-words font-semibold text-sm text-right"}>{value}</div>
     </div>
   )
 }
