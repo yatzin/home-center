@@ -12,6 +12,7 @@ import {
   roomGroups,
   urgencyOf,
   urgentMaintenance,
+  warrantyDaysLeft,
 } from "./shaping"
 
 const NOW = new Date("2026-06-15T12:00:00Z")
@@ -249,32 +250,48 @@ describe("urgency grouping", () => {
 
 describe("expiringWarranties", () => {
   const w = (id: string, exp: Date | null) => ({ id, expirationDate: exp })
-  it("keeps warranties from now through the window (inclusive), soonest first, ties by id", () => {
+  // Expiry dates are stored as UTC midnight of their day. NOW is midday on 15 June
+  // UTC, which is 15 June on the server's clock in any zone from UTC-11 to UTC+11.
+  const stored = (n: number) => new Date(Date.UTC(2026, 5, 15 + n))
+  it("keeps warranties from today through the window (inclusive), soonest first, ties by id", () => {
     const rows = [
-      w("late", day(60)),
-      w("b", day(10)),
-      w("a", day(10)),
-      w("past", day(-1)),
-      w("beyond", new Date(day(60).getTime() + 1)),
+      w("late", stored(60)),
+      w("b", stored(10)),
+      w("a", stored(10)),
+      w("past", stored(-1)),
+      w("beyond", stored(61)),
       w("none", null),
-      w("now", NOW),
+      w("today", stored(0)),
     ]
     const r = expiringWarranties(rows, NOW, 60, 10)
-    expect(r.items.map((i) => i.id)).toEqual(["now", "a", "b", "late"])
+    expect(r.items.map((i) => i.id)).toEqual(["today", "a", "b", "late"])
     expect(r.items.map((i) => i.daysLeft)).toEqual([0, 10, 10, 60])
     expect(r.total).toBe(4)
   })
+  it("still lists a warranty ending today, though that midnight is before now", () => {
+    expect(stored(0).getTime()).toBeLessThan(NOW.getTime())
+    expect(expiringWarranties([w("x", stored(0))], NOW, 30, 5).items.map((i) => i.daysLeft)).toEqual([0])
+  })
   it("limits the items but not the total", () => {
-    const rows = [w("1", day(1)), w("2", day(2)), w("3", day(3))]
+    const rows = [w("1", stored(1)), w("2", stored(2)), w("3", stored(3))]
     const r = expiringWarranties(rows, NOW, 30, 2)
     expect(r.items).toHaveLength(2)
     expect(r.total).toBe(3)
   })
-  it("rounds days left up like the legacy card", () => {
-    expect(expiringWarranties([w("x", new Date(NOW.getTime() + 36 * 3600000))], NOW, 30, 5).items[0].daysLeft).toBe(2)
-  })
   it("is empty for nothing", () => {
     expect(expiringWarranties([], NOW, 60, 6)).toEqual({ total: 0, items: [] })
+  })
+})
+
+describe("warrantyDaysLeft", () => {
+  const today = new Date(Date.UTC(2026, 5, 15))
+  it("counts whole calendar days from today to the stored expiry", () => {
+    expect(warrantyDaysLeft(new Date(Date.UTC(2026, 5, 15)), today)).toBe(0)
+    expect(warrantyDaysLeft(new Date(Date.UTC(2026, 5, 16)), today)).toBe(1)
+    expect(warrantyDaysLeft(new Date(Date.UTC(2026, 6, 15)), today)).toBe(30)
+  })
+  it("is negative once expired", () => {
+    expect(warrantyDaysLeft(new Date(Date.UTC(2026, 5, 14)), today)).toBe(-1)
   })
 })
 
@@ -297,8 +314,12 @@ describe("groupByMonth", () => {
 
 describe("monthKeyOf", () => {
   it("pads the month", () => {
-    expect(monthKeyOf(new Date(2026, 0, 31))).toBe("2026-01")
-    expect(monthKeyOf(new Date(2026, 11, 1))).toBe("2026-12")
+    expect(monthKeyOf(new Date(Date.UTC(2026, 0, 31)))).toBe("2026-01")
+    expect(monthKeyOf(new Date(Date.UTC(2026, 11, 1)))).toBe("2026-12")
+  })
+  it("reads a stored UTC-midnight date by its UTC day, whatever the server's zone", () => {
+    // 1 July UTC midnight is still 30 June west of UTC; it belongs to July.
+    expect(monthKeyOf(new Date(Date.UTC(2026, 6, 1)))).toBe("2026-07")
   })
 })
 

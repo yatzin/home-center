@@ -5,6 +5,16 @@
 import { cache } from "react"
 import { prisma } from "@/lib/prisma"
 import { ownedWhere, type Features } from "@/lib/features"
+import {
+  equipmentScopeWhere,
+  ownedScopeWhere,
+  personScopeWhere,
+  propertyScopeWhere,
+  roomScopeWhere,
+  vehicleScopeWhere,
+  type PropertyScope,
+} from "@/lib/property-filter"
+import { warrantyToday } from "@/lib/llm/warranty-status"
 import type { Formatter } from "@/lib/regional"
 import { loadActivityIndex, mostRecentlyActive } from "@/lib/asset-activity"
 import { loadAssetIndex } from "@/lib/assets-server"
@@ -36,12 +46,17 @@ import {
   roomGroups,
   urgencyOf,
   urgentMaintenance,
+  warrantyDaysLeft,
   type PropertyRooms,
   type Urgency,
 } from "./shaping"
 import { configItemId, configLimit, hiddenByHealth, upcomingConfig } from "./gating"
 
-export type LoaderContext = { now: Date; features: Features; fmt: Formatter }
+/**
+ * `scope`: this device's property filter (loadPropertyScope), or null for All
+ * properties. Lists and counts follow it, as the legacy dashboard does.
+ */
+export type LoaderContext = { now: Date; features: Features; fmt: Formatter; scope: PropertyScope | null }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
 
 export type CardResult =
@@ -51,8 +66,9 @@ export type CardResult =
 // Several cards (and several instances of one) share these per request.
 const activityIndex = cache(loadActivityIndex)
 const assetIndex = cache(loadAssetIndex)
-// Every Spending card (any number of either type) reads the same rows once.
-const costRecords = cache(() => loadCostRecords())
+// Every Spending card (any number of either type) reads the same rows once
+// (the scope is one object per request, so it keys the cache).
+const costRecords = cache((scope: PropertyScope | null) => loadCostRecords({ scope }))
 
 const LIST_LENGTH = 8
 
@@ -81,17 +97,18 @@ export type AssetCardData =
 type AssetRow = { id: string; name: string; imageFilename: string | null; updatedAt: Date }
 
 /**
- * Builds the loader for one asset type. `fetch` returns every row (or just the
- * one for config.itemId); `describe` gives the lines under each name.
+ * Builds the loader for one asset type. `fetch` returns every row the property
+ * filter shows (or just the one for config.itemId); `describe` gives the lines
+ * under each name.
  */
 function assetLoader<R extends AssetRow>(
   assetType: AssetType,
-  fetch: (itemId: string | null) => Promise<R[]>,
+  fetch: (itemId: string | null, scope: PropertyScope | null) => Promise<R[]>,
   describe: (row: R, fmt: Formatter) => { detail: string; facts: string },
 ): CardLoader {
-  return async (config, { fmt }): Promise<AssetCardData> => {
+  return async (config, { fmt, scope }): Promise<AssetCardData> => {
     const itemId = configItemId(config)
-    const [rows, activity] = await Promise.all([fetch(itemId), activityIndex()])
+    const [rows, activity] = await Promise.all([fetch(itemId, scope), activityIndex()])
     if (itemId && rows.length === 0) return { missing: true }
 
     const byId = new Map(rows.map((r) => [r.id, r]))
@@ -103,7 +120,9 @@ function assetLoader<R extends AssetRow>(
   }
 }
 
-const idFilter = (itemId: string | null) => (itemId ? { id: itemId } : undefined)
+// A card set to one item shows that item whatever the filter (as loadCostRecords
+// ignores the scope when given one asset); otherwise the rows the filter shows.
+const idFilter = <W extends object>(itemId: string | null, scoped: W): W | { id: string } => (itemId ? { id: itemId } : scoped)
 
 const humanize = (v: string) => v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, " ")
 
@@ -117,9 +136,9 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
 
 const loadProperties = assetLoader(
   "PROPERTY",
-  (itemId) =>
+  (itemId, scope) =>
     prisma.property.findMany({
-      where: idFilter(itemId),
+      where: idFilter(itemId, propertyScopeWhere(scope)),
       select: { id: true, name: true, address: true, type: true, yearBuilt: true, sqFt: true, imageFilename: true, updatedAt: true },
     }),
   (r, fmt) => ({
@@ -132,9 +151,9 @@ const loadProperties = assetLoader(
 
 const loadVehicles = assetLoader(
   "VEHICLE",
-  (itemId) =>
+  (itemId, scope) =>
     prisma.vehicle.findMany({
-      where: idFilter(itemId),
+      where: idFilter(itemId, vehicleScopeWhere(scope)),
       select: { id: true, name: true, year: true, make: true, model: true, currentMileage: true, meterUnit: true, imageFilename: true, updatedAt: true },
     }),
   (r, fmt) => ({
@@ -145,9 +164,9 @@ const loadVehicles = assetLoader(
 
 const loadEquipment = assetLoader(
   "EQUIPMENT",
-  (itemId) =>
+  (itemId, scope) =>
     prisma.equipment.findMany({
-      where: idFilter(itemId),
+      where: idFilter(itemId, equipmentScopeWhere(scope)),
       select: { id: true, name: true, category: true, manufacturer: true, modelNumber: true, location: true, imageFilename: true, updatedAt: true },
     }),
   (r) => ({
@@ -169,9 +188,9 @@ const RELATIONSHIP_LABELS: Record<string, string> = {
 // whatever the caller does.
 const loadPeopleRows = assetLoader(
   "PERSON",
-  (itemId) =>
+  (itemId, scope) =>
     prisma.person.findMany({
-      where: idFilter(itemId),
+      where: idFilter(itemId, personScopeWhere(scope)),
       select: { id: true, name: true, relationship: true, imageFilename: true, updatedAt: true },
     }),
   (r) => ({ detail: RELATIONSHIP_LABELS[r.relationship] ?? "", facts: "" }),
@@ -191,11 +210,12 @@ export type RoomsCardData =
   | { missing: true }
   | { missing: false; total: number; single: boolean; propertyCount: number; properties: PropertyRooms[] }
 
-const loadRooms: CardLoader = async (config, { features }): Promise<RoomsCardData> => {
+const loadRooms: CardLoader = async (config, { features, scope }): Promise<RoomsCardData> => {
   const none: RoomsCardData = { missing: false, total: 0, single: false, propertyCount: 0, properties: [] }
   if (!features.rooms) return none
   const itemId = configItemId(config)
-  const where = itemId ? { propertyId: itemId } : undefined
+  // One configured property's rooms whatever the filter; otherwise the filtered property's.
+  const where = itemId ? { propertyId: itemId } : roomScopeWhere(scope)
   // Counts per property (every property keeps its true count); only the chips
   // shown at the large tier are bounded by config.limit.
   const [grouped, chips] = await Promise.all([
@@ -241,8 +261,8 @@ export type CardLine = {
 
 export type RecordsCardData = { total: number; recent: CardLine[] }
 
-const loadRecords: CardLoader = async (_config, { features, fmt }): Promise<RecordsCardData> => {
-  const owned = ownedWhere(features)
+const loadRecords: CardLoader = async (_config, { features, fmt, scope }): Promise<RecordsCardData> => {
+  const owned = { ...ownedWhere(features), ...ownedScopeWhere(scope) }
   const [total, rows, index] = await Promise.all([
     prisma.serviceRecord.count({ where: owned }),
     prisma.serviceRecord.findMany({
@@ -260,7 +280,8 @@ const loadRecords: CardLoader = async (_config, { features, fmt }): Promise<Reco
       title: r.title,
       assetName: index.assetName(r.assetType, r.assetId) ?? null,
       href: `${assetHref(r.assetType, r.assetId)}?tab=service&open=${r.id}`,
-      meta: fmt.date(r.date),
+      // Stored as UTC midnight: show the stored day, as the Records page does.
+      meta: fmt.date(r.date, { utc: true }),
     })),
   }
 }
@@ -281,8 +302,10 @@ export type WarrantiesCardData = {
   soonest: CardLine[]
 }
 
-const loadWarranties: CardLoader = async (_config, { now, features }): Promise<WarrantiesCardData> => {
-  const where = { ...ownedWhere(features), expirationDate: { gt: now } }
+const loadWarranties: CardLoader = async (_config, { now, features, scope }): Promise<WarrantiesCardData> => {
+  // Active through the end of its expiry day, as the legacy card counts them.
+  const today = warrantyToday(now)
+  const where = { ...ownedWhere(features), ...ownedScopeWhere(scope), expirationDate: { gte: today } }
   const [groups, rows, index] = await Promise.all([
     prisma.warranty.groupBy({ by: ["assetType"], where, _count: { _all: true } }),
     prisma.warranty.findMany({
@@ -299,7 +322,7 @@ const loadWarranties: CardLoader = async (_config, { now, features }): Promise<W
       .map((g) => ({ label: WARRANTY_TYPE_LABELS[g.assetType][g._count._all === 1 ? 0 : 1], count: g._count._all }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     soonest: rows.map((w) => {
-      const daysLeft = Math.ceil((w.expirationDate!.getTime() - now.getTime()) / 86400000)
+      const daysLeft = warrantyDaysLeft(w.expirationDate!, today)
       return {
         id: w.id,
         title: w.productName,
@@ -313,10 +336,10 @@ const loadWarranties: CardLoader = async (_config, { now, features }): Promise<W
 
 export type DueCardData = { count: number; items: (CardLine & { overdue: boolean })[] }
 
-const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt }): Promise<DueCardData> => {
+const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt, scope }): Promise<DueCardData> => {
   const [candidates, mileage, index] = await Promise.all([
     prisma.maintenanceSchedule.findMany({
-      where: { AND: [dueCandidateFilter(30, now), ownedWhere(features)] },
+      where: { AND: [dueCandidateFilter(30, now), ownedWhere(features), ownedScopeWhere(scope)] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
@@ -358,17 +381,17 @@ export type RemindersCardData = {
   items: ReminderItem[]
 }
 
-const loadReminders: CardLoader = async (config, { now, features, fmt }): Promise<RemindersCardData> => {
+const loadReminders: CardLoader = async (config, { now, features, fmt, scope }): Promise<RemindersCardData> => {
   const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 30, limit: 6 })
   if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
-  const scope = { ...ownedWhere(features), ...(assetType ? { assetType } : {}) }
+  const where = { ...ownedWhere(features), ...ownedScopeWhere(scope), ...(assetType ? { assetType } : {}) }
   // Fetch through the longest reminder lead too: an item due soon by its own
   // lead counts even when that is past the card's window.
-  const lead = await prisma.maintenanceSchedule.aggregate({ where: scope, _max: { reminderDaysBefore: true } })
+  const lead = await prisma.maintenanceSchedule.aggregate({ where, _max: { reminderDaysBefore: true } })
   const fetchDays = candidateWindowDays(windowDays, lead._max.reminderDaysBefore)
   const [candidates, mileage, index] = await Promise.all([
     prisma.maintenanceSchedule.findMany({
-      where: { AND: [dueCandidateFilter(fetchDays, now), scope] },
+      where: { AND: [dueCandidateFilter(fetchDays, now), where] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
@@ -415,15 +438,18 @@ export type ExpiringWarrantiesCardData = {
   items: ExpiringItem[]
 }
 
-const loadExpiringWarranties: CardLoader = async (config, { now, features, fmt }): Promise<ExpiringWarrantiesCardData> => {
+const loadExpiringWarranties: CardLoader = async (config, { now, features, fmt, scope }): Promise<ExpiringWarrantiesCardData> => {
   const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 60, limit: 6 })
   if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
+  // By calendar day from today (UTC midnight, like the stored dates), as the legacy card.
+  const today = warrantyToday(now)
   const [rows, index] = await Promise.all([
     prisma.warranty.findMany({
       where: {
         ...ownedWhere(features),
+        ...ownedScopeWhere(scope),
         ...(assetType ? { assetType } : {}),
-        expirationDate: { gte: now, lte: new Date(now.getTime() + windowDays * 86400000) },
+        expirationDate: { gte: today, lte: new Date(today.getTime() + windowDays * 86400000) },
       },
       orderBy: [{ expirationDate: "asc" }, { id: "asc" }],
       select: { id: true, productName: true, expirationDate: true, assetType: true, assetId: true },
@@ -441,9 +467,9 @@ const loadExpiringWarranties: CardLoader = async (config, { now, features, fmt }
       assetName: index.assetName(w.assetType, w.assetId) ?? null,
       href: assetHref(w.assetType, w.assetId),
       daysLeft: w.daysLeft,
-      expires: fmt.date(w.expirationDate),
+      expires: fmt.date(w.expirationDate, { utc: true }),
       monthKey: monthKeyOf(w.expirationDate),
-      monthLabel: fmt.monthYear(w.expirationDate),
+      monthLabel: fmt.monthYear(w.expirationDate, { utc: true }),
     })),
   }
 }
@@ -456,10 +482,11 @@ export type IntakeCardData = {
 }
 
 // Shared by every Intake card on the page (and their loaders) per request.
-const inboxItems = cache((now: Date) => listInboxItems(now))
+// Under a scope every item still counts; a suggestion outside it reads as none.
+const inboxItems = cache((now: Date, scope: PropertyScope | null) => listInboxItems(now, { scope }))
 
-const loadIntake: CardLoader = async (_config, { now, fmt }): Promise<IntakeCardData> => {
-  const { items, householdNames } = await inboxItems(now)
+const loadIntake: CardLoader = async (_config, { now, fmt, scope }): Promise<IntakeCardData> => {
+  const { items, householdNames } = await inboxItems(now, scope)
   const { count, newest } = intakeSummary(items, LIST_LENGTH)
   return {
     count,
@@ -497,9 +524,9 @@ export type SpendingTrendData = {
   average: number
 }
 
-const loadSpendingTrend: CardLoader = async (config, { now, fmt }): Promise<SpendingTrendData> => {
+const loadSpendingTrend: CardLoader = async (config, { now, fmt, scope }): Promise<SpendingTrendData> => {
   const range = spendRangeOf(config)
-  const rows = await costRecords()
+  const rows = await costRecords(scope)
   const { total, priorTotal, delta } = spendingSummary(rows, range, now)
   const { points, prior } = spendTrend(rows, now)
   const lastYear = now.getFullYear() - 1
@@ -551,9 +578,9 @@ export type SpendingBreakdownData = {
   categories: SpendingCategory[]
 }
 
-const loadSpendingBreakdown: CardLoader = async (config, { now, fmt }): Promise<SpendingBreakdownData> => {
+const loadSpendingBreakdown: CardLoader = async (config, { now, fmt, scope }): Promise<SpendingBreakdownData> => {
   const range = spendRangeOf(config)
-  const rows = await costRecords()
+  const rows = await costRecords(scope)
   const totals = spendingByCategory(rows, range, now)
   const counts = categoryCounts(rows, range, now)
   const max = totals[0]?.total ?? 0

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { requireAdmin } from "@/lib/auth-guard"
 import { loadFeatures } from "@/lib/features-server"
 import { getFormat } from "@/lib/regional-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 import { DASHBOARD_LAYOUT_ID, loadDashboardLayout } from "@/lib/dashboard/layout-server"
 import { loadCard } from "@/lib/dashboard/load-cards-server"
 import { LOADERS, type CardResult, type LoaderContext } from "@/lib/dashboard/loaders"
@@ -68,8 +69,10 @@ export async function loadDashboardCards(ids: string[]): Promise<{ revision: num
   const wanted = new Set(ids.slice(0, 100).filter((id): id is string => typeof id === "string"))
   const features = await loadFeatures()
   if (!features.customizedDashboards) return { revision: 0, cards: [] }
-  const [{ layout, revision }, fmt] = await Promise.all([loadDashboardLayout(features), getFormat()])
-  const ctx: LoaderContext = { now: new Date(), features, fmt }
+  // The scope comes from this request's cookie, so the editor's reloaded cards
+  // follow the same device's property filter as the page did.
+  const [{ layout, revision }, fmt, scope] = await Promise.all([loadDashboardLayout(features), getFormat(), loadPropertyScope()])
+  const ctx: LoaderContext = { now: new Date(), features, fmt, scope }
   const cards = layout.cards.filter((c) => {
     const def = cardType(c.type)
     return wanted.has(c.id) && def !== undefined && (!def.requires || features[def.requires]) && Object.hasOwn(LOADERS, c.type)

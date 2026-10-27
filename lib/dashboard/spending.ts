@@ -3,6 +3,7 @@ import {
   bucketed,
   byCategory,
   cents,
+  monthsBack,
   priorPeriod,
   sum,
   yearToDate,
@@ -11,6 +12,7 @@ import {
   type CostRow,
   type DateRange,
 } from "@/lib/costs"
+import { localDay } from "@/lib/equipment-life"
 
 export type SpendRange = "ytd" | "12m"
 
@@ -28,9 +30,12 @@ export function spendRangeOf(config: Record<string, unknown>): SpendRange {
  * headline and the chart describe the same months.
  */
 export function spendWindow(range: SpendRange, now: Date, yearsBack = 0): DateRange {
-  const y = now.getFullYear() - yearsBack
-  const end = new Date(y, now.getMonth(), now.getDate(), 23, 59, 59, 999)
-  const start = range === "ytd" ? new Date(y, 0, 1) : new Date(y, now.getMonth() - (TREND_MONTHS - 1), 1)
+  // Record dates are UTC midnight (see lib/costs.ts), so the window is built in UTC from the viewer's local day.
+  const today = localDay(now)
+  const y = today.getUTCFullYear() - yearsBack
+  const end = new Date(Date.UTC(y, today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999))
+  const start =
+    range === "ytd" ? new Date(Date.UTC(y, 0, 1)) : new Date(Date.UTC(y, today.getUTCMonth() - (TREND_MONTHS - 1), 1))
   return { start, end }
 }
 
@@ -78,10 +83,7 @@ export function spendingSummary(rows: CostRow[], range: SpendRange, now: Date) {
 
 /** Twelve months ending with the current one, and the same months a year earlier. */
 export function spendTrend(rows: CostRow[], now: Date): { points: BucketPoint[]; prior: number[] } {
-  const points = bucketed(rows, "month", {
-    start: new Date(now.getFullYear(), now.getMonth() - (TREND_MONTHS - 1), 1),
-    end: now,
-  })
+  const points = bucketed(rows, "month", { start: monthsBack(now, TREND_MONTHS), end: localDay(now) })
   return { points, prior: priorPeriod(rows, points, "month") }
 }
 
@@ -111,7 +113,7 @@ export function spendDelta(delta: number): { direction: "up" | "down" | "flat"; 
 export function monthlyAverage(points: BucketPoint[], rows: CostRow[], now: Date): number {
   if (rows.length === 0 || points.length === 0) return 0
   const earliest = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0].date)
-  const elapsed = (now.getFullYear() - earliest.getFullYear()) * 12 + (now.getMonth() - earliest.getMonth()) + 1
+  const elapsed = (now.getFullYear() - earliest.getUTCFullYear()) * 12 + (now.getMonth() - earliest.getUTCMonth()) + 1
   const months = Math.max(1, Math.min(points.length, elapsed))
   return cents(points.slice(points.length - months).reduce((s, p) => s + p.total, 0) / months)
 }

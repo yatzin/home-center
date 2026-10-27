@@ -1,6 +1,7 @@
 // Pure data shaping for dashboard cards (no Prisma, no React), so it is tested
 // on fixed fixtures. The loaders in loaders.ts fetch; this decides.
 import { scheduleDue, type Due, type DueInput, type MileageIndex } from "@/lib/maintenance-due"
+import { warrantyToday } from "@/lib/llm/warranty-status"
 
 /** The window the Due card's headline counts, in days (the legacy "Due (30d)"). */
 export const DUE_WINDOW_DAYS = 30
@@ -117,10 +118,20 @@ export function groupByUrgency<T extends { urgency: Urgency }>(items: readonly T
 const DAY_MS = 86400000
 
 /**
- * Warranties expiring from now through `windowDays` (both ends inclusive),
- * soonest first (ties by id), cut to `limit`; `total` is the count before the
- * cut. Rows without an expiration date never expire, so they are not listed.
- * `daysLeft` rounds up, as the legacy card does.
+ * Whole days from `today` (warrantyToday: UTC midnight of the server's calendar
+ * day) to an expiry stored as UTC midnight of its day: 0 on the last day. The
+ * legacy dashboard's count.
+ */
+export function warrantyDaysLeft(expiration: Date, today: Date): number {
+  return Math.round((expiration.getTime() - today.getTime()) / DAY_MS)
+}
+
+/**
+ * Warranties expiring from today through `windowDays` days later (both ends
+ * inclusive, by calendar day as the legacy card counts them), soonest first
+ * (ties by id), cut to `limit`; `total` is the count before the cut. Rows
+ * without an expiration date never expire, so they are not listed. A warranty
+ * ending today is still listed, with 0 days left.
  */
 export function expiringWarranties<T extends { id: string; expirationDate: Date | null }>(
   rows: readonly T[],
@@ -128,20 +139,19 @@ export function expiringWarranties<T extends { id: string; expirationDate: Date 
   windowDays: number,
   limit: number,
 ): { total: number; items: (T & { expirationDate: Date; daysLeft: number })[] } {
-  const end = now.getTime() + windowDays * DAY_MS
+  const today = warrantyToday(now)
+  const end = today.getTime() + windowDays * DAY_MS
   const inWindow = rows
-    .filter((r): r is T & { expirationDate: Date } => r.expirationDate != null && r.expirationDate.getTime() >= now.getTime() && r.expirationDate.getTime() <= end)
+    .filter((r): r is T & { expirationDate: Date } => r.expirationDate != null && r.expirationDate.getTime() >= today.getTime() && r.expirationDate.getTime() <= end)
     .sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime() || a.id.localeCompare(b.id))
   return {
     total: inWindow.length,
-    items: inWindow
-      .slice(0, Math.max(0, limit))
-      .map((r) => ({ ...r, daysLeft: Math.ceil((r.expirationDate.getTime() - now.getTime()) / DAY_MS) })),
+    items: inWindow.slice(0, Math.max(0, limit)).map((r) => ({ ...r, daysLeft: warrantyDaysLeft(r.expirationDate, today) })),
   }
 }
 
-/** "2026-07" from the date's local fields, the same day the formatter shows. */
-export const monthKeyOf = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+/** "2026-07" from a stored (UTC midnight) date's UTC fields, the day the formatter shows with { utc: true }. */
+export const monthKeyOf = (d: Date): string => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
 
 /** Consecutive items sharing a monthKey, grouped; the label is the first item's. */
 export function groupByMonth<T extends { monthKey: string; monthLabel: string }>(

@@ -6,10 +6,11 @@ CREATE TABLE "new_FeatureSettings" (
     "healthEnabled" BOOLEAN NOT NULL DEFAULT true,
     "roomsEnabled" BOOLEAN NOT NULL DEFAULT true,
     "equipmentTabEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "customizedDashboardsEnabled" BOOLEAN NOT NULL DEFAULT false,
     "propertyFilterEnabled" BOOLEAN NOT NULL DEFAULT false,
     "updatedAt" DATETIME NOT NULL
 );
-INSERT INTO "new_FeatureSettings" ("equipmentTabEnabled", "healthEnabled", "id", "roomsEnabled", "updatedAt") SELECT "equipmentTabEnabled", "healthEnabled", "id", "roomsEnabled", "updatedAt" FROM "FeatureSettings";
+INSERT INTO "new_FeatureSettings" ("customizedDashboardsEnabled", "equipmentTabEnabled", "healthEnabled", "id", "roomsEnabled", "updatedAt") SELECT "customizedDashboardsEnabled", "equipmentTabEnabled", "healthEnabled", "id", "roomsEnabled", "updatedAt" FROM "FeatureSettings";
 DROP TABLE "FeatureSettings";
 ALTER TABLE "new_FeatureSettings" RENAME TO "FeatureSettings";
 CREATE TABLE "new_Person" (

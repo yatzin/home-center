@@ -1,5 +1,6 @@
 import { loadFeatures } from "@/lib/features-server"
 import { getFormat } from "@/lib/regional-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 import { cardType } from "@/lib/dashboard/card-types"
 import { loadConfigItemOptions } from "@/lib/dashboard/config-options-server"
 import { loadDashboardLayout } from "@/lib/dashboard/layout-server"
@@ -15,8 +16,9 @@ import { DashboardCanvas } from "./canvas/dashboard-canvas"
  */
 export async function CustomizedDashboard({ isAdmin }: { isAdmin: boolean }) {
   const features = await loadFeatures()
-  const [{ layout, revision }, fmt] = await Promise.all([loadDashboardLayout(features), getFormat()])
-  const ctx: LoaderContext = { now: new Date(), features, fmt }
+  const [{ layout, revision }, fmt, scope] = await Promise.all([loadDashboardLayout(features), getFormat(), loadPropertyScope()])
+  // The layout is shared; the property filter is this device's (its cookie), so cards follow it.
+  const ctx: LoaderContext = { now: new Date(), features, fmt, scope }
 
   const placed = layout.cards.filter((c) => {
     const def = cardType(c.type)
