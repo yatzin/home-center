@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense } from "react"
-import { unstable_catchError as catchError } from "next/error"
+import { catchError } from "next/error"
 import { CloudOff } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
