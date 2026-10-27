@@ -56,7 +56,7 @@ const OPS_BY_TYPE: Record<FieldType, Op[]> = {
   money: ["eq", "ne", "gt", "gte", "lt", "lte", "isNull"],
   date: ["eq", "ne", "gt", "gte", "lt", "lte", "isNull"],
   boolean: ["eq"],
-  enum: ["eq", "ne", "in"],
+  enum: ["eq", "ne", "in", "isNull"],
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "")
@@ -75,6 +75,20 @@ function fieldDef(entity: EntityKey, name: string): FieldDef {
     throw new ToolInputError(`Unknown field "${name}" on ${entity}. Valid fields: ${Object.keys(ENTITIES[entity].fields).join(", ")}.`)
   }
   return f
+}
+
+/**
+ * What Health off adds to every query of an entity: nothing a person owns, no health
+ * notifications, no health-kind policies (or their premiums and coverage lines).
+ */
+export function healthOffWhere(entity: EntityKey, ctx?: Pick<ToolContext, "health">): Row[] {
+  if (healthOn(ctx)) return []
+  const def = ENTITIES[entity]
+  return [
+    ...(def.polymorphic ? [{ assetType: { not: "PERSON" } }] : []),
+    ...(entity === "notification" ? [{ type: { notIn: [...HEALTH_NOTIFICATION_TYPES] } }] : []),
+    ...(def.healthOff ? [def.healthOff] : []),
+  ]
 }
 
 /** Whether a relation leads somewhere the assistant may go (not into a feature that's off). */
@@ -281,11 +295,7 @@ export function compileWhere(
 
   // Scope goes last and is ANDed, so nothing the model sends can widen it.
   if (def.scope) and.push(def.scope(ctx))
-  if (!healthOn(ctx)) {
-    // Health off: nothing a person owns, and no health notifications.
-    if (def.polymorphic) and.push({ assetType: { not: "PERSON" } })
-    if (entity === "notification") and.push({ type: { notIn: [...HEALTH_NOTIFICATION_TYPES] } })
-  }
+  and.push(...healthOffWhere(entity, ctx))
   return { where: and.length ? { AND: and } : {}, assetName, related }
 }
 

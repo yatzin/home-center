@@ -6,6 +6,33 @@ import { compileInclude, compileWhere, entityDef, relationNames, withLocationSel
 const FORBIDDEN = ["passwordHash", "passwordEnc", "apiKeyEnc", "imageFilename", "createdById", "createdBy", "uploadedBy", "attachments", "user", "userId"]
 
 describe("ontology", () => {
+  it("links premiums and coverage lines to their policy", () => {
+    expect(ENTITIES.insurancePremium.keys).toEqual(["policyId"])
+    expect(ENTITIES.insurancePremium.fields.period.values).toEqual(["MONTHLY", "SEMIANNUAL", "ANNUAL"])
+    expect(ENTITIES.insurancePremium.fields.amount.description).toMatch(/yearly/)
+    expect(ENTITIES.insurancePolicy.relations.vehicles).toEqual({ kind: "many", entity: "vehicle" })
+    expect(ENTITIES.insurancePolicy.href?.({ id: "i1" })).toBe("/insurance")
+  })
+
+  it("lets the assistant open a reminder's manual page", () => {
+    const def = ENTITIES.maintenanceSchedule
+    expect(def.keys).toContain("referenceAttachmentId")
+    expect(def.fields.referencePage.type).toBe("int")
+    expect(def.fields.referencePage.description).toMatch(/read_document/)
+  })
+
+  it("lets the assistant see a reminder's cost and set months", () => {
+    const fields = ENTITIES.maintenanceSchedule.fields
+    expect(Object.keys(fields)).toEqual(expect.arrayContaining(["estimatedCost", "dueMonths", "dueDay"]))
+  })
+
+  it("lets the assistant see equipment value and lifespan", () => {
+    const fields = ENTITIES.equipment.fields
+    expect(Object.keys(fields)).toEqual(expect.arrayContaining(["valueClass", "expectedLifeYears", "replacementCost"]))
+    expect(fields.valueClass.values).toEqual(["FIXTURE", "CONTENTS"])
+    expect(fields.valueClass.description).toMatch(/category/i)
+  })
+
   it("defines every key", () => {
     expect(Object.keys(ENTITIES).sort()).toEqual([...ENTITY_KEYS].sort())
   })

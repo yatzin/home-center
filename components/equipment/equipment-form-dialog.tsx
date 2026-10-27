@@ -17,10 +17,13 @@ import { EQUIPMENT_CATEGORIES, categoryLabel } from "./categories"
 import type { Equipment, EquipmentCategory } from "@/app/generated/prisma/client"
 import { AddRemindersSubmit, remindersHref } from "@/components/maintenance/add-reminders-submit"
 import { locationLabel, resolveRoomId } from "@/lib/rooms"
+import { VALUE_CLASSES, defaultValueClass, valueClassLabel, type ValueClass } from "@/lib/equipment-value"
 import type { PropertyWithRooms } from "@/lib/rooms-server"
 
 // Base UI Select has no empty-string option, so "unassigned" needs a sentinel.
 const NO_PROPERTY = "__none__"
+// Same for "Counts as": Default means the category decides, and is saved as no value.
+const DEFAULT_CLASS = "__default__"
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -33,6 +36,9 @@ const schema = z.object({
   purchaseDate: z.string().optional(),
   purchasePrice: z.string().optional(),
   installDate: z.string().optional(),
+  valueClass: z.string().optional(),
+  expectedLifeYears: z.string().optional(),
+  replacementCost: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -57,7 +63,7 @@ function fmt(d: Date | null | undefined) {
 
 const EMPTY: FormValues = {
   name: "", category: "APPLIANCE", manufacturer: "", modelNumber: "", serialNumber: "",
-  location: "", propertyId: NO_PROPERTY, purchaseDate: "", purchasePrice: "", installDate: "", notes: "",
+  location: "", propertyId: NO_PROPERTY, purchaseDate: "", purchasePrice: "", installDate: "", valueClass: DEFAULT_CLASS, expectedLifeYears: "", replacementCost: "", notes: "",
 }
 
 export function EquipmentFormDialog({ open, onClose, equipment, properties, defaultPropertyId, defaultLocation }: Props) {
@@ -82,6 +88,9 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
             purchaseDate: fmt(equipment.purchaseDate),
             purchasePrice: equipment.purchasePrice?.toString() ?? "",
             installDate: fmt(equipment.installDate),
+            valueClass: equipment.valueClass ?? DEFAULT_CLASS,
+            expectedLifeYears: equipment.expectedLifeYears?.toString() ?? "",
+            replacementCost: equipment.replacementCost?.toString() ?? "",
             notes: equipment.notes ?? "",
           }
         : { ...EMPTY, propertyId: defaultPropertyId ?? EMPTY.propertyId, location: defaultLocation ?? EMPTY.location }
@@ -89,6 +98,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
   }, [equipment, open, form, defaultPropertyId, defaultLocation])
 
   const selectedPropertyId = useWatch({ control: form.control, name: "propertyId" })
+  const selectedCategory = useWatch({ control: form.control, name: "category" })
   const selectedRooms = properties.find((p) => p.id === selectedPropertyId)?.rooms ?? []
 
   async function onSubmit(values: FormValues, then: "close" | "reminders" = "close") {
@@ -98,6 +108,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
       ...values,
       propertyId,
       roomId,
+      valueClass: values.valueClass === DEFAULT_CLASS ? "" : values.valueClass,
     } as unknown as Parameters<typeof createEquipment>[0]
 
     const result = equipment
@@ -127,7 +138,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Name *</FormLabel>
+                  <FormLabel help="equipment.name">Name *</FormLabel>
                   <FormControl><Input placeholder="Kitchen Refrigerator" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -135,7 +146,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category *</FormLabel>
+                  <FormLabel help="equipment.category">Category *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: EquipmentCategory) => categoryLabel(v)}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
@@ -150,7 +161,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="propertyId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Property</FormLabel>
+                  <FormLabel help="equipment.property">Property</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => properties.find((p) => p.id === v)?.name ?? "Not assigned"}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
@@ -166,7 +177,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="manufacturer" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Manufacturer</FormLabel>
+                  <FormLabel help="equipment.manufacturer">Manufacturer</FormLabel>
                   <FormControl><Input placeholder="LG" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -174,7 +185,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="modelNumber" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Model Number</FormLabel>
+                  <FormLabel help="equipment.model-number">Model Number</FormLabel>
                   <FormControl><Input placeholder="LRFVS3006S" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -182,7 +193,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="serialNumber" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Serial Number</FormLabel>
+                  <FormLabel help="equipment.serial-number">Serial Number</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -190,7 +201,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="location" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Location</FormLabel>
+                  <FormLabel help="equipment.location">Location</FormLabel>
                   <FormControl><Input placeholder="Kitchen" list={selectedRooms.length ? roomListId : undefined} autoComplete="off" {...field} /></FormControl>
                   {selectedRooms.length > 0 && (
                     <datalist id={roomListId}>
@@ -203,7 +214,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="purchaseDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Date</FormLabel>
+                  <FormLabel help="equipment.purchase-date">Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -211,7 +222,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="installDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Install Date</FormLabel>
+                  <FormLabel help="equipment.install-date">Install Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -219,15 +230,53 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Price</FormLabel>
+                  <FormLabel help="equipment.purchase-price">Purchase Price</FormLabel>
                   <FormControl><Input type="number" step="0.01" placeholder="2499" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="replacementCost" render={({ field }) => (
+                <FormItem>
+                  <FormLabel help="equipment.replacement-cost">Replacement Cost</FormLabel>
+                  <FormControl><Input type="number" step="0.01" min="0" placeholder="2800" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="expectedLifeYears" render={({ field }) => (
+                <FormItem>
+                  <FormLabel help="equipment.expected-life">Expected Life (years)</FormLabel>
+                  <FormControl><Input type="number" step="1" min="1" max="100" placeholder="15" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="valueClass" render={({ field }) => (
+                <FormItem>
+                  <FormLabel help="equipment.counts-as">Counts As</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {(v: string) => (v === DEFAULT_CLASS ? `Default (${valueClassLabel(defaultValueClass(selectedCategory))})` : valueClassLabel(v as ValueClass))}
+                        </SelectValue>
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_CLASS}>{`Default (${valueClassLabel(defaultValueClass(selectedCategory))})`}</SelectItem>
+                      {VALUE_CLASSES.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )} />
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="equipment.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

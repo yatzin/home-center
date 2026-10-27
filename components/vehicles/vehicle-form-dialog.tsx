@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect } from "react"
+import { CheckList } from "@/components/forms/check-list"
 import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
@@ -29,6 +30,7 @@ const schema = z.object({
   currentMileage: z.string().optional(),
   meterUnit: z.enum(["MILES", "HOURS"]),
   notes: z.string().optional(),
+  policyIds: z.array(z.string()),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -37,9 +39,16 @@ interface Props {
   open: boolean
   onClose: () => void
   vehicle?: Vehicle | null
+  /** Policies that may cover a vehicle, for the Insurance list. Edit only: empty hides the list. */
+  policyChoices?: { id: string; name: string }[]
+  /** The policies linked to this vehicle now. */
+  policyIds?: string[]
 }
 
-export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
+const NO_CHOICES: { id: string; name: string }[] = []
+const NO_IDS: string[] = []
+
+export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_CHOICES, policyIds = NO_IDS }: Props) {
   const router = useRouter()
   const fmt = useFormat()
   const milesLabel = fmt.distanceWords.charAt(0).toUpperCase() + fmt.distanceWords.slice(1)
@@ -48,9 +57,13 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-      vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
+      vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "", policyIds: [],
     },
   })
+  const ticked = useWatch({ control: form.control, name: "policyIds" })
+  // Shown only when editing and there is at least one policy that could cover a vehicle.
+  const showInsurance = !!vehicle && policyChoices.length > 0
+  const linkedKey = policyIds.join(",")
 
   useEffect(() => {
     if (vehicle) {
@@ -66,19 +79,21 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
         currentMileage: vehicle.currentMileage?.toString() ?? "",
         meterUnit: vehicle.meterUnit,
         notes: vehicle.notes ?? "",
+        policyIds: linkedKey ? linkedKey.split(",") : [],
       })
     } else {
       form.reset({
         name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-        vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
+        vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "", policyIds: [],
       })
     }
-  }, [vehicle, open, form])
+  }, [vehicle, open, form, linkedKey])
 
   async function onSubmit(values: FormValues, then: "close" | "reminders" = "close") {
+    const { policyIds: chosen, ...fields } = values
     const result = vehicle
-      ? await updateVehicle(vehicle.id, values as unknown as Parameters<typeof updateVehicle>[1])
-      : await createVehicle(values as unknown as Parameters<typeof createVehicle>[0])
+      ? await updateVehicle(vehicle.id, fields as unknown as Parameters<typeof updateVehicle>[1], showInsurance ? chosen : undefined)
+      : await createVehicle(fields as unknown as Parameters<typeof createVehicle>[0])
 
     if (result?.error) {
       toast.error("Please fix the errors and try again.")
@@ -101,7 +116,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Nickname *</FormLabel>
+                  <FormLabel help="vehicle.name">Nickname *</FormLabel>
                   <FormControl><Input placeholder="Family SUV" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -109,7 +124,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="year" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Year *</FormLabel>
+                  <FormLabel help="vehicle.year">Year *</FormLabel>
                   <FormControl><Input type="number" placeholder="2022" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -117,7 +132,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="make" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Make *</FormLabel>
+                  <FormLabel help="vehicle.make">Make *</FormLabel>
                   <FormControl><Input placeholder="Toyota" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -125,7 +140,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="model" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Model *</FormLabel>
+                  <FormLabel help="vehicle.model">Model *</FormLabel>
                   <FormControl><Input placeholder="RAV4" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -133,7 +148,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="color" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Color</FormLabel>
+                  <FormLabel help="vehicle.color">Color</FormLabel>
                   <FormControl><Input placeholder="Silver" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -141,7 +156,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="purchaseDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Date</FormLabel>
+                  <FormLabel help="vehicle.purchase-date">Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +164,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{`Purchase Price (${fmt.currencySymbol})`}</FormLabel>
+                  <FormLabel help="vehicle.purchase-price">{`Purchase Price (${fmt.currencySymbol})`}</FormLabel>
                   <FormControl><Input type="number" step="0.01" placeholder="28500" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -157,7 +172,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="currentMileage" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Current {fmt.meterNoun(form.watch("meterUnit"))}</FormLabel>
+                  <FormLabel help="vehicle.current-mileage">Current {fmt.meterNoun(form.watch("meterUnit"))}</FormLabel>
                   <FormControl><Input type="number" placeholder={form.watch("meterUnit") === "HOURS" ? "1250" : "45000"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -165,7 +180,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="meterUnit" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tracked In</FormLabel>
+                  <FormLabel help="vehicle.tracked-in">Tracked In</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => meterUnitLabels[v] ?? v}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
@@ -179,7 +194,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="vin" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>VIN</FormLabel>
+                  <FormLabel help="vehicle.vin">VIN</FormLabel>
                   <FormControl><Input placeholder="1HGCM82633A123456" className="font-mono text-sm" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -187,11 +202,21 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="vehicle.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {showInsurance && (
+                <CheckList
+                  label="Insurance"
+                  help="vehicle.insurance"
+                  options={policyChoices}
+                  value={ticked}
+                  onChange={(next) => form.setValue("policyIds", next, { shouldDirty: true })}
+                />
+              )}
             </div>
 
             <DialogFooter>

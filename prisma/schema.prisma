@@ -77,6 +77,13 @@ enum EquipmentCategory {
   OTHER
 }
 
+enum EquipmentValueClass {
+  /// Part of the home: insured with the dwelling.
+  FIXTURE
+  /// Belongings: insured as personal property.
+  CONTENTS
+}
+
 enum Relationship {
   SELF
   SPOUSE
@@ -102,7 +109,14 @@ enum InsuranceKind {
   MEDICAL
   DENTAL
   VISION
+  /// Health-gated (every policy before step 5 was made under Health). PROPERTY_OTHER shows as Other.
   OTHER
+  HOME
+  RENTERS
+  AUTO
+  UMBRELLA
+  LIFE
+  PROPERTY_OTHER
 }
 
 enum AttachmentRecordType {
@@ -151,6 +165,8 @@ enum NotificationType {
   MEDICATION_REFILL
   IMMUNIZATION_DUE
   INSURANCE_EXPIRING
+  /// Non-health policy renewals; raised whether or not Health is on.
+  POLICY_RENEWAL
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -215,6 +231,8 @@ model Property {
 
   equipment Equipment[]
   rooms     Room[]
+
+  insurancePolicies InsurancePolicy[]
 }
 
 /// A room inside a property: finishes, photos, and the equipment and records tagged to it.
@@ -279,23 +297,31 @@ model Vehicle {
   imageFilename  String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  insurancePolicies InsurancePolicy[]
 }
 
 model Equipment {
-  id            String            @id @default(cuid())
-  name          String
-  category      EquipmentCategory @default(APPLIANCE)
-  manufacturer  String?
-  modelNumber   String?
-  serialNumber  String?
-  location      String?
-  purchaseDate  DateTime?
-  purchasePrice Float?
-  installDate   DateTime?
-  notes         String?
-  imageFilename String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                String               @id @default(cuid())
+  name              String
+  category          EquipmentCategory    @default(APPLIANCE)
+  manufacturer      String?
+  modelNumber       String?
+  serialNumber      String?
+  location          String?
+  purchaseDate      DateTime?
+  purchasePrice     Float?
+  installDate       DateTime?
+  /// Part of the home or belongings. Null means the category's default (lib/equipment-value.ts).
+  valueClass        EquipmentValueClass?
+  /// How many years it should last, counted from installDate, else purchaseDate.
+  expectedLifeYears Int?
+  /// What replacing it would cost today.
+  replacementCost   Float?
+  notes             String?
+  imageFilename     String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
 
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
@@ -477,7 +503,42 @@ model InsurancePolicy {
   updatedAt      DateTime      @updatedAt
 
   members     Person[]
+  properties  Property[]
+  vehicles    Vehicle[]
+  premiums    InsurancePremium[]
+  coverages   InsuranceCoverage[]
   attachments Attachment[]
+}
+
+model InsurancePremium {
+  id            String          @id @default(cuid())
+  policyId      String
+  policy        InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  effectiveDate DateTime
+  amount        Float
+  period        PremiumPeriod   @default(ANNUAL)
+  notes         String?
+  createdAt     DateTime        @default(now())
+
+  @@index([policyId])
+}
+
+enum PremiumPeriod {
+  MONTHLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+model InsuranceCoverage {
+  id         String          @id @default(cuid())
+  policyId   String
+  policy     InsurancePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  label      String
+  limit      Float?
+  deductible Float?
+  sortOrder  Int             @default(0)
+
+  @@index([policyId])
 }
 
 // ─── Service Records ──────────────────────────────────────────────────────────
@@ -536,33 +597,45 @@ model Warranty {
 // ─── Maintenance ──────────────────────────────────────────────────────────────
 
 model MaintenanceSchedule {
-  id                   String    @id @default(cuid())
-  assetId              String
-  assetType            AssetType
-  title                String
-  description          String?
-  intervalDays         Int?
-  intervalMiles        Int?
-  lastCompletedDate    DateTime?
-  lastCompletedMileage Int?
-  nextDueDate          DateTime?
-  nextDueMileage       Int?
-  reminderDaysBefore   Int       @default(14)
-  reminderMilesBefore  Int       @default(500)
+  id                    String      @id @default(cuid())
+  assetId               String
+  assetType             AssetType
+  title                 String
+  description           String?
+  intervalDays          Int?
+  intervalMiles         Int?
+  lastCompletedDate     DateTime?
+  lastCompletedMileage  Int?
+  nextDueDate           DateTime?
+  nextDueMileage        Int?
+  reminderDaysBefore    Int         @default(14)
+  reminderMilesBefore   Int         @default(500)
   /// False while paused: kept on the asset page, left out of due counts and notifications.
-  isActive             Boolean   @default(true)
+  isActive              Boolean     @default(true)
   /// Hidden from the dashboard and notifications until then. The due date doesn't move.
-  snoozedUntil         DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  snoozedUntil          DateTime?
+  /// What one occurrence is expected to cost.
+  estimatedCost         Float?
+  /// Calendar schedule: months 1–12, comma-separated and sorted. Can't be combined with an interval.
+  dueMonths             String?
+  /// Day of month (1–28) for a calendar schedule.
+  dueDay                Int?
+  /// A manual (or any file) to open when doing this: a DOCUMENT on the same asset or a file on this reminder. Cleared when the file is deleted.
+  referenceAttachmentId String?
+  referenceAttachment   Attachment? @relation("ScheduleManual", fields: [referenceAttachmentId], references: [id], onDelete: SetNull)
+  /// Page of that file, from 1. Ignored without a file.
+  referencePage         Int?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   /// The room the task is for, if any. Copied to the service record on completion.
   roomId String?
   room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
-  attachments Attachment[]
+  attachments Attachment[] @relation("ScheduleAttachments")
 
   @@index([roomId])
+  @@index([referenceAttachmentId])
 }
 
 // ─── Attachments ──────────────────────────────────────────────────────────────
@@ -586,7 +659,7 @@ model Attachment {
   warranty   Warranty? @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
 
   maintenanceScheduleId String?
-  maintenanceSchedule   MaintenanceSchedule? @relation(fields: [maintenanceScheduleId], references: [id], onDelete: Cascade)
+  maintenanceSchedule   MaintenanceSchedule? @relation("ScheduleAttachments", fields: [maintenanceScheduleId], references: [id], onDelete: Cascade)
 
   healthConditionId String?
   healthCondition   HealthCondition? @relation(fields: [healthConditionId], references: [id], onDelete: Cascade)
@@ -619,6 +692,8 @@ model Attachment {
   room   Room?   @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   text AttachmentText?
+
+  referencedBySchedules MaintenanceSchedule[] @relation("ScheduleManual")
 
   @@index([roomId])
   @@index([assetType, assetId])
@@ -773,7 +848,7 @@ model DocumentSettings {
 /// touching its data, so switching it back on brings everything back.
 model FeatureSettings {
   id                  String   @id @default("singleton")
-  /// People, providers, insurance and everything owned by a person.
+  /// People, providers, health insurance and everything owned by a person.
   healthEnabled       Boolean  @default(true)
   /// Rooms inside properties: paint, flooring, photos, and what is tagged to them.
   roomsEnabled        Boolean  @default(true)

@@ -5,9 +5,11 @@ import { notFound } from "next/navigation"
 import { cookies } from "next/headers"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Cake, Download, Droplet, FileText, ShieldPlus, Stethoscope, Users, User } from "lucide-react"
+import { Cake, Download, Droplet, FileText, Stethoscope, Users, User } from "lucide-react"
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
+import { loadManualOptions } from "@/lib/manual-reference-server"
+import { loadPolicyChoices } from "@/lib/insurance-server"
 import { AssetDocuments } from "@/components/attachments/asset-documents"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
@@ -21,7 +23,8 @@ import { ObservationsSection } from "@/components/health/observations-section"
 import { LogObservationButton } from "@/components/health/observation-form"
 import { byNewest, typeSuggestions } from "@/lib/observations"
 import { getFormat } from "@/lib/regional-server"
-import { ageFrom, INSURANCE_KINDS, labelFor, RELATIONSHIPS } from "@/lib/health"
+import { ageFrom, labelFor, RELATIONSHIPS } from "@/lib/health"
+import { AssetInsurance } from "@/components/insurance/asset-insurance"
 import { MEDICATION_VIEW_COOKIE, parseMedicationView } from "@/lib/medication-timeline"
 
 export default async function PersonDetailPage({
@@ -61,11 +64,14 @@ export default async function PersonDetailPage({
   if (!person) notFound()
 
   const where = { assetId: id, assetType: "PERSON" as const }
-  const [visits, schedules, providers, documents] = await Promise.all([
+  const [visits, schedules, providers, documents, manualOptions, policyChoices] = await Promise.all([
     prisma.serviceRecord.findMany({ where, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.maintenanceSchedule.findMany({ where, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
     prisma.provider.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.attachment.findMany({ where: { recordType: "DOCUMENT", assetType: "PERSON", assetId: id }, orderBy: { uploadedAt: "asc" } }),
+    loadManualOptions([{ assetType: "PERSON", assetId: id }]),
+    // The page is behind requireHealth(), so health and life policies are fair game here.
+    loadPolicyChoices("members", true),
   ])
 
   const age = person.dateOfBirth ? ageFrom(person.dateOfBirth, new Date()) : null
@@ -98,23 +104,7 @@ export default async function PersonDetailPage({
           )}
         </div>
 
-        {person.insurancePolicies.length > 0 && (
-          <div className="rounded-lg border bg-card p-3 text-sm">
-            <div className="flex items-center gap-1.5 font-semibold">
-              <ShieldPlus className="h-4 w-4" aria-hidden="true" /> Insurance
-            </div>
-            <ul className="mt-1.5 space-y-1">
-              {person.insurancePolicies.map((p) => (
-                <li key={p.id} className="flex items-baseline justify-between gap-2">
-                  <Link href="/insurance" className="hover:underline">{p.carrier}{p.planName ? ` · ${p.planName}` : ""}</Link>
-                  <span className="text-right text-xs text-muted-foreground">
-                    {labelFor(INSURANCE_KINDS, p.kind)}{p.memberId ? ` · ${p.memberId}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <AssetInsurance policies={person.insurancePolicies.map((p) => ({ ...p, detail: p.memberId }))} />
 
         <AssetCostPanel assetType="PERSON" assetId={id} purchasePrice={null} />
 
@@ -128,7 +118,7 @@ export default async function PersonDetailPage({
           <h1 className="font-heading text-2xl font-semibold">{person.name}</h1>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <LogObservationButton personId={id} typeOptions={observationTypes} conditions={conditionOptions} />
-            <PersonEditButton person={person} providers={providers} />
+            <PersonEditButton person={person} providers={providers} policyChoices={policyChoices} policyIds={person.insurancePolicies.map((p) => p.id)} />
             <Link
               href={`/reports/people/${id}`}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
@@ -175,7 +165,7 @@ export default async function PersonDetailPage({
             <AllergiesSection personId={id} allergies={person.allergies} />
           </TabsContent>
           <TabsContent value="reminders" className="mt-4">
-            <MaintenanceList schedules={schedules} assetId={id} assetType="PERSON" currentMileage={null} openId={tab === "reminders" ? open : undefined} />
+            <MaintenanceList schedules={schedules} assetId={id} assetType="PERSON" currentMileage={null} manualOptions={manualOptions} openId={tab === "reminders" ? open : undefined} />
           </TabsContent>
           <TabsContent value="documents" className="mt-4">
             <AssetDocuments assetId={id} documents={documents} hint="Birth certificate, passport scan, advance directive: files for this person, not one visit." />

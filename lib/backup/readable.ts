@@ -1,6 +1,10 @@
 // Engine file: relative imports and npm packages only.
 // The public, documented shape of an export (docs/export-format.md). Read with
 // plain SQL from a snapshot so it never depends on the Prisma client's shape.
+import { repeatsLabel } from "../maintenance-schedule"
+import { effectiveValueClass, valueClassLabel, type ValueClass } from "../equipment-value"
+import { manualText } from "../manual-reference"
+import { annualPremium, currentAndPrevious, isHealthInsuranceKind } from "../insurance"
 import path from "node:path"
 import type { Client, Row } from "@libsql/client"
 import { attachmentDir, type AttachmentLocation } from "../attachment-location"
@@ -14,11 +18,18 @@ export type PublicAsset = { id: string; type: AssetType; name: string; details: 
 type Owned = { assetId: string; assetType: AssetType }
 export type PublicRecord = Owned & { id: string; date: string | null; title: string; vendor: string | null; cost: number | null; category: string | null; mileage: number | null; notes: string | null; files: FileRef[] }
 export type PublicWarranty = Owned & { id: string; product: string; purchased: string | null; expires: string | null; vendor: string | null; phone: string | null; email: string | null; notes: string | null; files: FileRef[] }
-export type PublicReminder = Owned & { id: string; title: string; everyDays: number | null; everyMiles: number | null; lastDone: string | null; nextDue: string | null; nextDueMileage: number | null; active: boolean; files: FileRef[] }
+export type PublicReminder = Owned & { id: string; title: string; repeats: string; estimatedCost: number | null; manual: string | null; everyDays: number | null; everyMiles: number | null; lastDone: string | null; nextDue: string | null; nextDueMileage: number | null; active: boolean; files: FileRef[] }
 export type PublicRoomPaint = { surface: string; brand: string | null; colorName: string | null; colorCode: string | null; finish: string | null }
 export type PublicRoom = Owned & { id: string; name: string; level: string | null; area: number | null; dimensions: string | null; flooringType: string | null; flooringProduct: string | null; flooringInstalled: string | null; notes: string | null; paints: PublicRoomPaint[]; files: FileRef[] }
 export type PublicDocument = Owned & FileRef & { id: string; uploaded: string | null }
 type PersonOwned = { id: string; personId: string; files: FileRef[] }
+export type PublicPremium = { id: string; policyId: string; effective: string | null; amount: number; period: string; annual: number; notes: string | null }
+export type PublicCoverage = { id: string; policyId: string; label: string; limit: number | null; deductible: number | null }
+export type PublicPolicy = {
+  id: string; kind: string; carrier: string; plan: string | null; policyNumber: string | null; groupNumber: string | null; memberId: string | null; phone: string | null
+  start: string | null; end: string | null; deductible: number | null; outOfPocketMax: number | null; notes: string | null
+  personIds: string[]; propertyIds: string[]; vehicleIds: string[]; annualPremium: number | null; premiums: PublicPremium[]; coverages: PublicCoverage[]; files: FileRef[]
+}
 export type PublicHealth = {
   providers: { id: string; name: string; specialty: string | null; practice: string | null; phone: string | null; email: string | null; address: string | null; notes: string | null }[]
   conditions: (PersonOwned & { name: string; status: string; diagnosed: string | null; resolved: string | null; notes: string | null })[]
@@ -26,11 +37,13 @@ export type PublicHealth = {
   allergies: (PersonOwned & { substance: string; reaction: string | null; severity: string; notes: string | null })[]
   immunizations: (PersonOwned & { vaccine: string; given: string | null; dose: string | null; givenBy: string | null; nextDue: string | null; notes: string | null })[]
   observations: (PersonOwned & { date: string | null; time: string | null; type: string; severity: number | null; minutes: number | null; tags: string | null; notes: string | null })[]
-  insurance: { id: string; personIds: string[]; carrier: string; plan: string | null; kind: string; policyNumber: string | null; groupNumber: string | null; memberId: string | null; phone: string | null; start: string | null; end: string | null; notes: string | null; files: FileRef[] }[]
+  insurance: PublicPolicy[]
 }
 export type ReadableData = {
   formatVersion: 1; generatedAt: string; scope: ExportScope
   assets: PublicAsset[]; serviceRecords: PublicRecord[]; warranties: PublicWarranty[]; reminders: PublicReminder[]; documents: PublicDocument[]; rooms: PublicRoom[]
+  /** Home, renters, auto, umbrella, life and other non-health policies: exported with or without health records. */
+  insurance: PublicPolicy[]
   health: PublicHealth | null
 }
 /** Household labels read from the snapshot itself (this engine file cannot import app code). */
@@ -133,7 +146,9 @@ export async function loadReadable(snapshot: string, scope: ExportScope, place: 
       ...vehicles.map((r) => ({ id: String(r.id), type: "vehicle" as const, name: String(r.name), propertyId: null, photo: str(r.imageFilename),
         details: { Make: str(r.make), Model: str(r.model), Year: num(r.year), VIN: str(r.vin), Color: str(r.color), "Current reading": num(r.currentMileage), Unit: str(r.meterUnit), Purchased: iso(r.purchaseDate), "Purchase price": num(r.purchasePrice), Notes: str(r.notes) } })),
       ...equipment.map((r) => ({ id: String(r.id), type: "equipment" as const, name: String(r.name), propertyId: str(r.propertyId), photo: str(r.imageFilename),
-        details: { Category: str(r.category), Manufacturer: str(r.manufacturer), Model: str(r.modelNumber), Serial: str(r.serialNumber), Location: roomName.get(String(r.roomId)) ?? str(r.location), Installed: iso(r.installDate), Purchased: iso(r.purchaseDate), "Purchase price": num(r.purchasePrice), Notes: str(r.notes) } })),
+        details: { Category: str(r.category), Manufacturer: str(r.manufacturer), Model: str(r.modelNumber), Serial: str(r.serialNumber), Location: roomName.get(String(r.roomId)) ?? str(r.location), Installed: iso(r.installDate), Purchased: iso(r.purchaseDate), "Purchase price": num(r.purchasePrice),
+          "Counts as": valueClassLabel(effectiveValueClass({ category: String(r.category), valueClass: str(r.valueClass) as ValueClass | null })),
+          "Expected life (years)": num(r.expectedLifeYears), "Replacement cost": num(r.replacementCost), Notes: str(r.notes) } })),
       ...people.map((r) => ({ id: String(r.id), type: "person" as const, name: String(r.name), propertyId: null, photo: str(r.imageFilename),
         details: { Relationship: str(r.relationship), Born: iso(r.dateOfBirth), Sex: str(r.sex), "Blood type": str(r.bloodType), Notes: str(r.notes) } })),
     ]
@@ -182,8 +197,14 @@ export async function loadReadable(snapshot: string, scope: ExportScope, place: 
       ...owner(r), id: String(r.id), product: String(r.productName), purchased: iso(r.purchaseDate), expires: iso(r.expirationDate), vendor: str(r.vendor),
       phone: str(r.vendorPhone), email: str(r.vendorEmail), notes: str(r.notes), files: attachedTo("warrantyId", r.id, byId.get(String(r.assetId)) ?? null, "warranties"),
     }))
+    const manualOf = (r: Row) => {
+      const ref = attachments.find((a) => a.id === r.referenceAttachmentId)
+      return ref ? manualText(String(ref.originalName), num(r.referencePage)) : null
+    }
     const reminders = (await all(c, `SELECT * FROM "MaintenanceSchedule"`)).filter(ownedOk).map((r) => ({
-      ...owner(r), id: String(r.id), title: String(r.title), everyDays: num(r.intervalDays), everyMiles: num(r.intervalMiles), lastDone: iso(r.lastCompletedDate),
+      ...owner(r), id: String(r.id), title: String(r.title),
+      repeats: repeatsLabel({ intervalDays: num(r.intervalDays), intervalMiles: num(r.intervalMiles), dueMonths: str(r.dueMonths), dueDay: num(r.dueDay) }, byId.get(String(r.assetId))?.details?.Unit === "HOURS" ? "hr" : "mi"),
+      estimatedCost: num(r.estimatedCost), manual: manualOf(r), everyDays: num(r.intervalDays), everyMiles: num(r.intervalMiles), lastDone: iso(r.lastCompletedDate),
       nextDue: iso(r.nextDueDate), nextDueMileage: num(r.nextDueMileage), active: Boolean(Number(r.isActive)),
       files: attachedTo("maintenanceScheduleId", r.id, byId.get(String(r.assetId)) ?? null, "reminders"),
     }))
@@ -201,12 +222,47 @@ export async function loadReadable(snapshot: string, scope: ExportScope, place: 
       return f ? { ...owner(a), id: String(a.id), uploaded: iso(a.uploadedAt), ...f } : null
     }).filter((d): d is PublicDocument => d !== null)
 
+    // Policies: built once; health kinds go under `health`, the rest into the top-level `insurance`.
+    const policyRows = await all(c, `SELECT * FROM "InsurancePolicy" ORDER BY carrier`)
+    const links = {
+      person: await all(c, `SELECT * FROM "_InsurancePolicyToPerson"`),
+      property: await all(c, `SELECT * FROM "_InsurancePolicyToProperty"`),
+      vehicle: await all(c, `SELECT * FROM "_InsurancePolicyToVehicle"`),
+    }
+    const premiumRows = await all(c, `SELECT * FROM "InsurancePremium"`)
+    const coverageRows = await all(c, `SELECT * FROM "InsuranceCoverage" ORDER BY sortOrder`)
+    const linked = (kind: keyof typeof links, policyId: unknown) => links[kind].filter((m) => m.A === policyId).map((m) => String(m.B)).filter((id) => byId.has(id))
+    const policyRow = (r: Row): PublicPolicy => {
+      const personIds = linked("person", r.id)
+      const propertyIds = linked("property", r.id)
+      const vehicleIds = linked("vehicle", r.id)
+      const premiums = premiumRows
+        .filter((x) => x.policyId === r.id)
+        .map((x) => ({ x, effectiveDate: new Date(iso(x.effectiveDate) ?? 0), amount: Number(x.amount), period: String(x.period), createdAt: new Date(iso(x.createdAt) ?? 0) }))
+        .sort((a, b) => b.effectiveDate.getTime() - a.effectiveDate.getTime() || b.createdAt.getTime() - a.createdAt.getTime())
+      const current = currentAndPrevious(premiums, new Date()).current
+      const firstAsset = byId.get(personIds[0] ?? propertyIds[0] ?? vehicleIds[0] ?? "") ?? null
+      return {
+        id: String(r.id), kind: String(r.kind), carrier: String(r.carrier), plan: str(r.planName), policyNumber: str(r.policyNumber), groupNumber: str(r.groupNumber),
+        memberId: str(r.memberId), phone: str(r.phone), start: iso(r.startDate), end: iso(r.endDate), deductible: num(r.deductible), outOfPocketMax: num(r.outOfPocketMax),
+        notes: str(r.notes), personIds, propertyIds, vehicleIds,
+        annualPremium: current ? annualPremium(current) : null,
+        premiums: premiums.map((p) => ({ id: String(p.x.id), policyId: String(r.id), effective: iso(p.x.effectiveDate), amount: p.amount, period: p.period, annual: annualPremium(p), notes: str(p.x.notes) })),
+        coverages: coverageRows.filter((x) => x.policyId === r.id).map((x) => ({ id: String(x.id), policyId: String(r.id), label: String(x.label), limit: num(x.limit), deductible: num(x.deductible) })),
+        files: attachedTo("insurancePolicyId", r.id, firstAsset, "insurance"),
+      }
+    }
+    // Filtered before built: building plans each policy's files, and a policy left out must not bring them.
+    const insurance = policyRows
+      .filter((r) => !isHealthInsuranceKind(String(r.kind)))
+      .filter((r) => scope.kind === "all" || (["person", "property", "vehicle"] as const).some((k) => linked(k, r.id).length > 0))
+      .map(policyRow)
+
     let health: PublicHealth | null = null
     if (includeHealth) {
       const personIds = new Set(assets.filter((a) => a.type === "person").map((a) => a.id))
       const mine = (r: Row) => personIds.has(String(r.personId))
       const person = (r: Row) => byId.get(String(r.personId)) ?? null
-      const members = await all(c, `SELECT * FROM "_InsurancePolicyToPerson"`)
       const providers = scope.kind === "all" ? await all(c, `SELECT * FROM "Provider"`) : []
       health = {
         providers: providers.map((r) => ({ id: String(r.id), name: String(r.name), specialty: str(r.specialty), practice: str(r.practice), phone: str(r.phone), email: str(r.email), address: str(r.address), notes: str(r.notes) })),
@@ -215,15 +271,15 @@ export async function loadReadable(snapshot: string, scope: ExportScope, place: 
         allergies: (await all(c, `SELECT * FROM "Allergy"`)).filter(mine).map((r) => ({ id: String(r.id), personId: String(r.personId), substance: String(r.substance), reaction: str(r.reaction), severity: String(r.severity), notes: str(r.notes), files: attachedTo("allergyId", r.id, person(r), "allergies") })),
         immunizations: (await all(c, `SELECT * FROM "Immunization"`)).filter(mine).map((r) => ({ id: String(r.id), personId: String(r.personId), vaccine: String(r.vaccine), given: iso(r.dateGiven), dose: str(r.dose), givenBy: str(r.givenBy), nextDue: iso(r.nextDueDate), notes: str(r.notes), files: attachedTo("immunizationId", r.id, person(r), "immunizations") })),
         observations: (await all(c, `SELECT * FROM "Observation"`)).filter(mine).map((r) => ({ id: String(r.id), personId: String(r.personId), date: iso(r.date), time: str(r.time), type: String(r.type), severity: num(r.severity), minutes: num(r.durationMinutes), tags: str(r.tags), notes: str(r.notes), files: attachedTo("observationId", r.id, person(r), "observations") })),
-        insurance: (await all(c, `SELECT * FROM "InsurancePolicy"`))
-          .map((r) => ({ r, ids: members.filter((m) => m.A === r.id).map((m) => String(m.B)).filter((id) => personIds.has(id)) }))
-          .filter(({ ids }) => ids.length > 0 || scope.kind === "all")
-          .map(({ r, ids }) => ({ id: String(r.id), personIds: ids, carrier: String(r.carrier), plan: str(r.planName), kind: String(r.kind), policyNumber: str(r.policyNumber), groupNumber: str(r.groupNumber), memberId: str(r.memberId), phone: str(r.phone), start: iso(r.startDate), end: iso(r.endDate), notes: str(r.notes), files: attachedTo("insurancePolicyId", r.id, byId.get(ids[0]) ?? null, "insurance") })),
+        insurance: policyRows
+          .filter((r) => isHealthInsuranceKind(String(r.kind)))
+          .filter((r) => scope.kind === "all" || linked("person", r.id).length > 0)
+          .map(policyRow),
       }
     }
 
     return {
-      data: { formatVersion: 1, generatedAt: new Date().toISOString(), scope, assets, serviceRecords, warranties, reminders, documents, rooms, health },
+      data: { formatVersion: 1, generatedAt: new Date().toISOString(), scope, assets, serviceRecords, warranties, reminders, documents, rooms, insurance, health },
       files,
       regional,
     }
@@ -250,14 +306,22 @@ export function csvTables(d: ReadableData): Record<string, string> {
   const name = new Map(d.assets.map((a) => [a.id, a.name]))
   const withAsset = <T extends { assetId: string }>(rows: T[]) => rows.map((r) => ({ ...r, asset: name.get(r.assetId) ?? r.assetId }))
   const withPerson = <T extends { personId: string }>(rows: T[]) => rows.map((r) => ({ ...r, person: name.get(r.personId) ?? r.personId }))
+  const policies = [...d.insurance, ...(d.health?.insurance ?? [])]
+  const nameOf = (id: string) => name.get(id) ?? id
   const out: Record<string, string> = {
     "assets.csv": toCsv(d.assets.map((a) => ({ id: a.id, type: a.type, name: a.name, ...a.details })), ["id", "type", "name", ...new Set(d.assets.flatMap((a) => Object.keys(a.details)))]),
     "service-records.csv": toCsv(withAsset(d.serviceRecords), ["date", "asset", "assetType", "title", "vendor", "cost", "category", "mileage", "notes", "id"]),
     "warranties.csv": toCsv(withAsset(d.warranties), ["asset", "product", "purchased", "expires", "vendor", "phone", "email", "notes", "id"]),
-    "reminders.csv": toCsv(withAsset(d.reminders), ["asset", "title", "everyDays", "everyMiles", "lastDone", "nextDue", "nextDueMileage", "active", "id"]),
+    "reminders.csv": toCsv(withAsset(d.reminders), ["asset", "title", "repeats", "estimatedCost", "manual", "everyDays", "everyMiles", "lastDone", "nextDue", "nextDueMileage", "active", "id"]),
     "rooms.csv": toCsv(withAsset(d.rooms), ["asset", "name", "level", "area", "dimensions", "flooringType", "flooringProduct", "flooringInstalled", "notes", "id"]),
     "room-paints.csv": toCsv(d.rooms.flatMap((r) => r.paints.map((p) => ({ ...p, asset: name.get(r.assetId) ?? r.assetId, room: r.name, roomId: r.id }))), ["asset", "room", "surface", "brand", "colorName", "colorCode", "finish", "roomId"]),
     "documents.csv": toCsv(withAsset(d.documents), ["asset", "name", "uploaded", "size", "mimeType", "path", "id"]),
+    "insurance.csv": toCsv(
+      policies.map((p) => ({ ...p, people: p.personIds.map(nameOf).join("; "), covers: [...p.propertyIds, ...p.vehicleIds].map(nameOf).join("; ") })),
+      ["people", "covers", "carrier", "plan", "kind", "policyNumber", "groupNumber", "memberId", "phone", "start", "end", "deductible", "annualPremium", "notes", "id"],
+    ),
+    "insurance-premiums.csv": toCsv(policies.flatMap((p) => p.premiums.map((x) => ({ ...x, carrier: p.carrier }))), ["carrier", "effective", "amount", "period", "annual", "notes", "policyId", "id"]),
+    "insurance-coverages.csv": toCsv(policies.flatMap((p) => p.coverages.map((x) => ({ ...x, carrier: p.carrier }))), ["carrier", "label", "limit", "deductible", "policyId", "id"]),
   }
   if (d.health) {
     out["providers.csv"] = toCsv(d.health.providers, ["name", "specialty", "practice", "phone", "email", "address", "notes", "id"])
@@ -266,7 +330,6 @@ export function csvTables(d: ReadableData): Record<string, string> {
     out["allergies.csv"] = toCsv(withPerson(d.health.allergies), ["person", "substance", "reaction", "severity", "notes", "id"])
     out["immunizations.csv"] = toCsv(withPerson(d.health.immunizations), ["person", "vaccine", "given", "dose", "givenBy", "nextDue", "notes", "id"])
     out["observations.csv"] = toCsv(withPerson(d.health.observations), ["person", "date", "time", "type", "severity", "minutes", "tags", "notes", "id"])
-    out["insurance.csv"] = toCsv(d.health.insurance.map((p) => ({ ...p, people: p.personIds.map((id) => name.get(id) ?? id).join("; ") })), ["people", "carrier", "plan", "kind", "policyNumber", "groupNumber", "memberId", "phone", "start", "end", "notes", "id"])
   }
   return out
 }
