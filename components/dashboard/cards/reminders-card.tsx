@@ -4,17 +4,34 @@ import Link from "next/link"
 import { AlertTriangle, Clock, EyeOff } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { cardType } from "@/lib/dashboard/card-types"
 import type { RemindersCardData, ReminderItem } from "@/lib/dashboard/loaders"
-import { groupByUrgency } from "@/lib/dashboard/shaping"
+import { groupByUrgency, type Urgency } from "@/lib/dashboard/shaping"
 import { ReminderRow } from "@/components/dashboard/reminder-row"
-import { CardMessage, CardShell, GroupHeading, MoreLink } from "./card-shell"
+import { CardMessage, CardShell, GroupHeading } from "./card-shell"
 import { useViewerIsAdmin } from "./card-configure"
+import { DatedListLook, datedLookOf, type DatedItem, type Tone } from "./dated-list"
 import type { CardViewProps } from "./types"
 
-// Reminders: the next item, then a short list, then (wide) grouped by urgency.
+// Reminders: below the rich size the dated-list looks (dated-list.tsx: one row
+// a carousel, two the most urgent item with compact rows, then slim /
+// condensed / full rows); from 6 columns and 3 rows the list as before, and
+// with 4+ rows grouped by urgency. Most urgent first.
 
-const TIER_NEXT = 0
-const TIER_LIST = 1
+const TONES: Record<Urgency, Tone> = { overdue: "overdue", dueSoon: "soon", upcoming: "neutral" }
+
+function toDatedItem(item: ReminderItem): DatedItem {
+  return {
+    id: item.schedule.id,
+    title: item.schedule.title,
+    detail: item.assetName,
+    href: item.href,
+    meta: item.dueLabel,
+    short: item.dueLabel,
+    cost: item.cost ?? null,
+    tone: TONES[item.urgency] ?? (item.overdue ? "overdue" : "soon"),
+  }
+}
 
 const GROUP_COLUMNS: Record<number, string> = { 1: "@3xl:grid-cols-1", 2: "@3xl:grid-cols-2", 3: "@3xl:grid-cols-3" }
 
@@ -46,9 +63,9 @@ function Row({ item }: { item: ReminderItem }) {
 }
 
 /**
- * Two lines, no actions (the row is a link into the asset): the smallest
- * tier's headline item, and the list tier's rows, where a narrow card has no
- * room for the full row's actions. Those come with the grouped tier.
+ * Two lines, no actions (the row is a link into the asset): the list tier's
+ * rows, where the card has no room for the full row's actions. Those come
+ * with the grouped tier.
  */
 function NextRow({ item }: { item: ReminderItem }) {
   return (
@@ -75,11 +92,33 @@ function NextRow({ item }: { item: ReminderItem }) {
   )
 }
 
-export function RemindersCard({ data, tier }: CardViewProps) {
+export function RemindersCard({ data, tier, editing }: CardViewProps) {
   const isAdmin = useViewerIsAdmin()
   if (!isRemindersData(data)) throw new Error("Unexpected Reminders card data")
   const title = "Reminders"
   const href = "/maintenance"
+
+  const look = datedLookOf("reminders", tier)
+  if (look) {
+    const hiddenNote = isAdmin ? "Turn on Health in Settings to see them." : undefined
+    return (
+      <DatedListLook
+        look={look}
+        editing={editing}
+        spec={{
+          title,
+          href,
+          icon: Clock,
+          total: data.total,
+          items: data.items.map(toDatedItem),
+          forceEmpty: data.hidden,
+          empty: data.hidden
+            ? { icon: EyeOff, message: "Reminders for people are hidden.", note: hiddenNote }
+            : { icon: Clock, message: `Nothing due in the next ${data.windowDays} days.` },
+        }}
+      />
+    )
+  }
 
   if (data.hidden) {
     return (
@@ -96,18 +135,6 @@ export function RemindersCard({ data, tier }: CardViewProps) {
     )
   }
 
-  if (tier === TIER_NEXT) {
-    return (
-      // Too narrow for the header link beside the title: "+N more" links to the list.
-      <CardShell title={title}>
-        <div className="px-3">
-          <NextRow item={data.items[0]} />
-          {data.total > 1 && <MoreLink href={href} text={`+${data.total - 1} more due`} />}
-        </div>
-      </CardShell>
-    )
-  }
-
   const footer =
     data.total > data.items.length ? (
       <p className="px-4 pb-3 pt-1 text-xs text-muted-foreground">
@@ -115,7 +142,7 @@ export function RemindersCard({ data, tier }: CardViewProps) {
       </p>
     ) : null
 
-  if (tier === TIER_LIST) {
+  if (cardType("reminders")?.tiers[tier]?.name !== "grouped") {
     return (
       <CardShell title={title} href={href} scroll>
         <ul className="space-y-0.5 px-3 pb-2">

@@ -15,6 +15,9 @@ const ConfigureContext = createContext<(() => void) | null>(null)
 /** Gives the cards inside it a way to open their settings (edit mode, admins). */
 export const CardConfigureProvider = ConfigureContext.Provider
 
+/** Opens this card's settings; null outside edit mode or for non-admins. */
+export const useCardConfigure = () => useContext(ConfigureContext)
+
 const ViewerIsAdminContext = createContext(false)
 
 /** Whether the person looking at the dashboard is an admin (for hints only admins can act on). */

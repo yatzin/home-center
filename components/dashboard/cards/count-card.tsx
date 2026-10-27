@@ -1,18 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { AlertTriangle, Calendar, ChevronRight, Clock, ShieldCheck, Wrench, type LucideIcon } from "lucide-react"
+import { Calendar, ChevronRight, ShieldCheck, Wrench, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CardLine, DueCardData, RecordsCardData, WarrantiesCardData } from "@/lib/dashboard/loaders"
 import { CardMessage, CardShell } from "./card-shell"
+import { DatedListLook, datedLookOf, type DatedItem, type Tone } from "./dated-list"
 import type { CardViewProps } from "./types"
 
-// Count cards: Records, Active Warranties and Due Maintenance. A big number at
-// the smallest size; under it, at 2+ rows, a line or two of what is behind the
-// number; at the largest tier, the list itself.
-
-const TIER_COUNT = 0
-const TIER_PEEK = 1
+// Records, Active Warranties and Due Maintenance: dated lists. Below their
+// rich size (6+ columns, 3+ rows) they show the dated-list looks (one row a
+// carousel, two a headline item, then slim / condensed / full rows:
+// dated-list.tsx); at it, the list itself. CountTile and CountWithList are
+// Rooms' (rooms-card.tsx).
 
 type CountSpec = {
   label: string
@@ -79,16 +79,8 @@ export function CountWithList({
   )
 }
 
-const specTile = (spec: CountSpec, count: number, urgent?: boolean, className?: string) => ({
-  label: spec.label,
-  icon: spec.icon,
-  href: spec.listHref,
-  count,
-  urgent,
-  className,
-})
-
-function LineRow({ line, overdue, compact }: { line: CardLine; overdue?: boolean; compact?: boolean }) {
+/** A row of the rich list (6+ columns, 3+ rows). */
+function LineRow({ line, overdue }: { line: CardLine; overdue?: boolean }) {
   return (
     <Link
       href={line.href}
@@ -96,35 +88,59 @@ function LineRow({ line, overdue, compact }: { line: CardLine; overdue?: boolean
       className="group flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors duration-150 hover:bg-muted/60"
     >
       <span className="min-w-0 flex-1 truncate font-medium">{line.title}</span>
-      {line.assetName && !compact && <span className="min-w-0 max-w-[40%] shrink truncate text-xs text-muted-foreground">{line.assetName}</span>}
+      {line.assetName && <span className="min-w-0 max-w-[40%] shrink truncate text-xs text-muted-foreground">{line.assetName}</span>}
       <span className={cn("shrink-0 text-xs tabular-nums", overdue ? "font-medium text-destructive" : "text-muted-foreground")}>{line.meta}</span>
-      {/* Compact rows (a narrow peek) give the chevron's room to the title. */}
-      {!compact && (
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
-      )}
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" aria-hidden />
     </Link>
   )
 }
 
+/** The card at a dated-list look, or (rich sizes) the list as before. */
 function ListCard({
+  typeId,
   spec,
   count,
-  urgent,
   tier,
   lines,
-  peek,
-  overdueOf,
+  toneOf,
+  editing,
 }: {
+  typeId: string
   spec: CountSpec
   count: number
-  urgent?: boolean
   tier: number
   lines: CardLine[]
-  /** What the middle tier shows under the count. */
-  peek: React.ReactNode
-  overdueOf?: (line: CardLine) => boolean
+  /** How pressing a line is (overdue lines are also red in the rich list). */
+  toneOf: (line: CardLine) => Tone
+  editing: boolean
 }) {
-  if (tier === TIER_COUNT) return <CountTile {...specTile(spec, count, urgent, "h-full")} />
+  const look = datedLookOf(typeId, tier)
+  if (look) {
+    const items: DatedItem[] = lines.map((l) => ({
+      id: l.id,
+      title: l.title,
+      detail: l.assetName,
+      href: l.href,
+      meta: l.meta,
+      short: l.short ?? l.meta,
+      cost: l.cost ?? null,
+      tone: toneOf(l),
+    }))
+    return (
+      <DatedListLook
+        look={look}
+        editing={editing}
+        spec={{
+          title: spec.label,
+          href: spec.listHref,
+          icon: spec.icon,
+          total: count,
+          items,
+          empty: { icon: spec.icon, message: spec.emptyMessage },
+        }}
+      />
+    )
+  }
 
   if (lines.length === 0) {
     return (
@@ -134,20 +150,12 @@ function ListCard({
     )
   }
 
-  if (tier === TIER_PEEK) {
-    return (
-      <CountWithList tile={specTile(spec, count, urgent, "flex-1")}>
-        <div className="px-3 py-1.5">{peek}</div>
-      </CountWithList>
-    )
-  }
-
   return (
     <CardShell title={spec.label} href={spec.listHref} scroll>
       <ul className="space-y-0.5 px-3 pb-3">
         {lines.map((line) => (
           <li key={line.id}>
-            <LineRow line={line} overdue={overdueOf?.(line)} />
+            <LineRow line={line} overdue={toneOf(line) === "overdue"} />
           </li>
         ))}
       </ul>
@@ -167,17 +175,10 @@ function isRecordsData(data: unknown): data is RecordsCardData {
   return isObject(data) && typeof data.total === "number" && Array.isArray(data.recent)
 }
 
-export function RecordsCard({ data, tier }: CardViewProps) {
+export function RecordsCard({ data, tier, editing }: CardViewProps) {
   if (!isRecordsData(data)) throw new Error("Unexpected Records card data")
-  return (
-    <ListCard
-      spec={RECORDS_SPEC}
-      count={data.total}
-      tier={tier}
-      lines={data.recent}
-      peek={<LineRow line={data.recent[0]} compact />}
-    />
-  )
+  // Newest first; history, so nothing is urgent.
+  return <ListCard typeId="records" spec={RECORDS_SPEC} count={data.total} tier={tier} lines={data.recent} toneOf={() => "neutral"} editing={editing} />
 }
 
 // ---- Active warranties ----------------------------------------------------------
@@ -193,23 +194,22 @@ function isWarrantiesData(data: unknown): data is WarrantiesCardData {
   return isObject(data) && typeof data.total === "number" && Array.isArray(data.breakdown) && Array.isArray(data.soonest)
 }
 
-export function ActiveWarrantiesCard({ data, tier }: CardViewProps) {
+/** A warranty this close to its end is marked "soon" (amber) in the smaller looks. */
+export const WARRANTY_SOON_DAYS = 30
+
+export function ActiveWarrantiesCard({ data, tier, editing }: CardViewProps) {
   if (!isWarrantiesData(data)) throw new Error("Unexpected Active Warranties card data")
+  const soon = new Set(data.soonest.filter((w) => typeof w.daysLeft === "number" && w.daysLeft <= WARRANTY_SOON_DAYS).map((w) => w.id))
+  // Soonest to expire first.
   return (
     <ListCard
+      typeId="active-warranties"
       spec={WARRANTIES_SPEC}
       count={data.total}
       tier={tier}
       lines={data.soonest}
-      peek={
-        <ul className="flex flex-wrap gap-x-3 gap-y-0.5 px-2 py-1 text-xs text-muted-foreground">
-          {data.breakdown.map((b) => (
-            <li key={b.label}>
-              <span className="font-medium tabular-nums text-foreground">{b.count}</span> {b.label}
-            </li>
-          ))}
-        </ul>
-      }
+      toneOf={(l) => (soon.has(l.id) ? "soon" : "neutral")}
+      editing={editing}
     />
   )
 }
@@ -227,32 +227,19 @@ function isDueData(data: unknown): data is DueCardData {
   return isObject(data) && typeof data.count === "number" && Array.isArray(data.items)
 }
 
-export function DueMaintenanceCard({ data, tier }: CardViewProps) {
+export function DueMaintenanceCard({ data, tier, editing }: CardViewProps) {
   if (!isDueData(data)) throw new Error("Unexpected Due Maintenance card data")
   const overdue = new Set(data.items.filter((i) => i.overdue).map((i) => i.id))
-  const next = data.items[0]
+  // Most urgent first; everything here is due within 30 days, so at least soon.
   return (
     <ListCard
+      typeId="due-maintenance"
       spec={DUE_SPEC}
       count={data.count}
-      urgent={data.count > 0}
       tier={tier}
       lines={data.items}
-      overdueOf={(l) => overdue.has(l.id)}
-      peek={
-        next && (
-          <div className="flex items-center gap-1">
-            {next.overdue ? (
-              <AlertTriangle className="ml-2 h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
-            ) : (
-              <Clock className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            )}
-            <div className="min-w-0 flex-1">
-              <LineRow line={next} overdue={next.overdue} compact />
-            </div>
-          </div>
-        )
-      }
+      toneOf={(l) => (overdue.has(l.id) ? "overdue" : "soon")}
+      editing={editing}
     />
   )
 }

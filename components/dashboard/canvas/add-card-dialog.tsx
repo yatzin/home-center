@@ -11,12 +11,17 @@ import { useId, useRef } from "react"
 import { Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { availableCardTypes, groupCardTypes, tierOf, type CardTypeDef } from "@/lib/dashboard/card-types"
+import { availableCardTypes, groupCardTypes, tierOf, type CardTier, type CardTypeDef } from "@/lib/dashboard/card-types"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
 import { CARD_ICONS } from "./card-icons"
 
 const TIER_LABELS: Record<string, string> = {
+  // An asset card's avatar looks (one per shape) read as one step.
+  single: "Avatars",
+  "column-circles": "Avatars",
+  row: "Avatars",
+  "column-pills": "Avatars",
   count: "Count",
   thumbnails: "Photos",
   list: "List",
@@ -32,9 +37,25 @@ const TIER_LABELS: Record<string, string> = {
   ranked: "Ranked",
   composition: "Composition",
 }
-const tierLabel = (name: string) => TIER_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1)
+// A dated list's looks (by look, not tier name: Spending Trend has a "headline" tier too).
+const LOOK_LABELS: Record<string, string> = {
+  carousel: "Carousel",
+  headline: "Next up",
+  slim: "List",
+  condensed: "List",
+  full: "List",
+}
+const tierLabel = (t: CardTier) =>
+  (t.look && LOOK_LABELS[t.look]) || TIER_LABELS[t.name] || t.name.charAt(0).toUpperCase() + t.name.slice(1)
 
-type Schematic = "number" | "photos" | "list" | "chart" | "bars" | "columns"
+/** "Avatars → Photos → List": the tiers' labels in order, a repeated label once. */
+const growthLabel = (def: CardTypeDef) =>
+  def.tiers
+    .map((t) => tierLabel(t))
+    .filter((label, i, all) => i === 0 || all[i - 1] !== label)
+    .join(" → ")
+
+type Schematic = "number" | "photos" | "list" | "chart" | "bars" | "columns" | "carousel"
 
 const SCHEMATICS: Record<string, Schematic> = {
   count: "number",
@@ -52,7 +73,7 @@ const SCHEMATICS: Record<string, Schematic> = {
 /** A tiny, token-coloured sketch of what the card shows when added. */
 function Preview({ def }: { def: CardTypeDef }) {
   const tier = def.tiers[tierOf(def, def.large)]
-  const kind = SCHEMATICS[tier.name] ?? "list"
+  const kind: Schematic = tier.look === "carousel" ? "carousel" : tier.look ? "list" : (SCHEMATICS[tier.name] ?? "list")
   const ink = "bg-muted-foreground/30"
   return (
     <div
@@ -81,6 +102,20 @@ function Preview({ def }: { def: CardTypeDef }) {
               <div className={cn("h-1 rounded-full", ink)} style={{ width: `${w * 4}px` }} />
             </div>
           ))}
+        </div>
+      )}
+      {kind === "carousel" && (
+        <div className="flex flex-1 flex-col justify-center gap-1">
+          <div className="flex items-center gap-1">
+            <div className="size-1.5 rounded-full bg-primary/50" />
+            <div className="h-1.5 w-9 rounded-full bg-foreground/50" />
+          </div>
+          <div className={cn("h-1 w-7 rounded-full", ink)} />
+          <div className="mt-0.5 flex justify-center gap-0.5">
+            <div className="h-1 w-2 rounded-full bg-primary/60" />
+            <div className={cn("size-1 rounded-full", ink)} />
+            <div className={cn("size-1 rounded-full", ink)} />
+          </div>
         </div>
       )}
       {kind === "chart" && (
@@ -138,7 +173,7 @@ function CardTypeOption({ def, count, onPick }: { def: CardTypeDef; count: numbe
         <div id={`${id}-more`} className="text-[11px] text-muted-foreground">
           <p className="mt-1 truncate">
             <span className="sr-only">Shows more as it grows: </span>
-            {def.tiers.map((t) => tierLabel(t.name)).join(" → ")}
+            {growthLabel(def)}
           </p>
           {count > 0 && (
             <p className="mt-1.5 inline-flex rounded-full bg-muted px-1.5 py-0.5 leading-none text-muted-foreground">

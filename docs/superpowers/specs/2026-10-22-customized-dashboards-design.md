@@ -42,8 +42,21 @@ Properties, Vehicles, People (only when health is enabled), Equipment, Rooms (on
 
 Per-card size tiers (below are the designer's guesses; refine during planning):
 - Properties: small = count; wider = thumbnails and status; large = per-property list.
+- Asset cards (Properties, Vehicles, Equipment, People; not Rooms), as built (owner's decision, 2026-10-27): minimum size 1x1 (maximum 12x8 unchanged). The look follows the card's raw grid cells in the layout shown (w columns x h rows; no phone-width scaling, so a full-width phone card is 2 wide), chosen by `assetLook` in `lib/dashboard/avatar-layout.ts`:
+  - 1x1: a single avatar (the item's round photo, or its initials).
+  - 1 row, 2+ columns: a row of avatars; they become pills (avatar + name) when each slot has at least twice the room a circle needs (container width / slots in use >= 2 x (circle + gap)).
+  - 1 column, 2+ rows: a column of avatars.
+  - 2 columns, 2+ rows: a column of pills.
+  - 3+ columns and 2+ rows: the sized tiers as before (photo mosaic from 3x2, per-item list from 6x4).
+  No title, counts or footer in the avatar looks. Every avatar and pill links to its item; what does not fit (or is beyond the card's "Show up to N") becomes a final "+N" chip linking to the list. Circles are 40px (44px on touch) with 8px gaps, sized to the measured card.
 - Spending: small = year-to-date number with trend; wider = category breakdown; large = month-by-month bars.
 - Reminders: small = next item; larger = dated list grouped by urgency.
+- Dated-item lists (Records, Active Warranties, Due Maintenance, Reminders, Expiring Warranties), as built (owner's decision, 2026-10-27): no bare count at small sizes; the total is a small badge (linking to the full list). The look is chosen by `datedLook` in `lib/dashboard/dated-list-layout.ts`, by height first, then width, in large-grid columns (a phone card's width is scaled by `PHONE_WIDTH_SCALE` like any sized tier, so a full-width phone card reads as 4 wide):
+  - 1 row, any width: a hero carousel. One item at a time (title, asset, date or days left, urgency marker, cost when there is room), rotating every 6s; paused on hover, keyboard focus within, while pressed, while the tab is hidden, in edit mode and with reduced motion; prev/next arrows at the edges (small overlay buttons under 200px wide), page dots along the bottom (at most 7, a window around the current one), swipe (40px, vertical scrolling untouched) and Left/Right keys. The slide links to its item. Slides are the card's own items in its list order (Reminders/Expiring Warranties up to their "List up to" setting; the others up to 8). One item: no arrows, dots or rotation.
+  - 2 rows, any width: the headline item (next due, latest record, soonest to expire) with its urgency, and up to two compact rows under it, as many as the measured room fits.
+  - 3+ rows: a list: slim (name, short date under it) at 2 columns, condensed (one line: name and a short date chip; the rest in the tooltip) at 3, full rows (name, asset, cost, date) at 4-5.
+  - 6+ columns and 3+ rows: the rich tiers, unchanged (the list; Reminders by urgency and Expiring Warranties by month from 6x4).
+  Minimums: 2x1 for all five (Reminders and Expiring Warranties were 2x2), so each has a one-row phone preset. Default sizes are unchanged. Order: Records newest first, Active Warranties and Expiring Warranties soonest to expire first, Due Maintenance and Reminders most urgent first. A warranty within 30 days of its end is marked "soon" (amber).
 
 ## Behavior (decided)
 

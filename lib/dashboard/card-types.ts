@@ -6,12 +6,33 @@
 // the phone grid is PHONE_COLS (2) wide, and phones use one full-width column.
 // Tiers say what a card reveals as it grows ("size is a lens"); each tier's
 // minimums are in large-grid units, and the first tier is the card's minimum.
+// Asset cards also have avatar looks for long, thin sizes (lib/dashboard/
+// avatar-layout.ts), picked by shape rather than by size order; the dated-item
+// lists have looks for their smaller sizes (lib/dashboard/dated-list-layout.ts).
 import { z } from "zod"
 import type { Features } from "@/lib/features"
+import { assetLook, type AssetLook } from "./avatar-layout"
+import { datedLook, type DatedLook } from "./dated-list-layout"
 import { LAYOUT_FORMAT, type CardInstance, type CardLimits, type DashboardLayout, type Placement } from "./layout"
 import { PHONE_COLS, type Size } from "./grid"
 
-export type CardTier = Readonly<{ name: string; minW: number; minH: number }>
+export type CardTier = Readonly<{
+  name: string
+  minW: number
+  minH: number
+  /**
+   * A look picked by shape rather than by size order: an avatar look (asset
+   * cards: assetLook of the raw size) or a dated-list look (datedLook of the
+   * size, phone width scaled). This tier is picked when the card's look
+   * function gives this look, whatever its minimums; minW/minH are then just
+   * the smallest size that has the look. Look tiers come first, and a type's
+   * looks all come from one of the two functions.
+   */
+  look?: TierLook
+}>
+export type TierLook = Exclude<AssetLook, "rich"> | Exclude<DatedLook, "rich">
+
+const DATED_LOOKS: ReadonlySet<string> = new Set<Exclude<DatedLook, "rich">>(["carousel", "headline", "slim", "condensed", "full"])
 type FrozenSize = Readonly<Size>
 
 /** The lucide-react icons card types may use (the client maps each name to its component). */
@@ -170,7 +191,8 @@ function size(w: number, h: number): FrozenSize {
   return Object.freeze({ w, h })
 }
 
-function freezeTiers(tiers: CardTier[]): readonly CardTier[] {
+/** Keeps the tiers' literal looks (ASSET_TIERS[i].look is an avatar look, not any look). */
+function freezeTiers<T extends CardTier>(tiers: T[]): readonly T[] {
   return Object.freeze(tiers.map((t) => Object.freeze({ ...t })))
 }
 
@@ -188,24 +210,55 @@ function freezeDef(d: CardTypeDef): CardTypeDef {
   })
 }
 
-// Count alone fits a short tile; a photo strip needs ~a quarter of the page and
-// two rows; a per-item list needs half the page and enough rows for 3+ items.
+// Asset cards (Properties, Vehicles, Equipment, People). Long, thin sizes show
+// avatars only (assetLook): one cell a single avatar, one row a row of them
+// (pills with names when there is room), one column a column of them, two
+// columns a column of name pills. From 3 columns and 2 rows: a photo mosaic,
+// then (half the page, enough rows for 3+ items) a per-item list.
 // Shared between card types, so frozen: an in-place clamp must not corrupt the catalog.
-const ASSET_TIERS = freezeTiers([
+export const ASSET_TIERS = freezeTiers([
+  { name: "single", minW: 1, minH: 1, look: "single" },
+  { name: "column-circles", minW: 1, minH: 2, look: "column-circles" },
+  { name: "row", minW: 2, minH: 1, look: "row" },
+  { name: "column-pills", minW: 2, minH: 2, look: "column-pills" },
+  { name: "thumbnails", minW: 3, minH: 2 },
+  { name: "list", minW: 6, minH: 4 },
+])
+const ASSET_LIMITS = Object.freeze({ min: size(1, 1), max: size(12, 8) })
+
+// Rooms: count alone fits a short tile; property thumbnails need ~a quarter of
+// the page and two rows; the room names need half the page and 4 rows.
+const ROOM_TIERS = freezeTiers([
   { name: "count", minW: 2, minH: 1 },
   { name: "thumbnails", minW: 3, minH: 2 },
   { name: "list", minW: 6, minH: 4 },
 ])
-const ASSET_LIMITS = Object.freeze({ min: size(2, 1), max: size(12, 8) })
 
-// Reminder-like lists: one headline item, a dated list, then (wide) grouped by
-// urgency into overdue / soon / later columns.
-const UPCOMING_TIERS = freezeTiers([
-  { name: "next", minW: 2, minH: 2 },
+// Dated-item lists (Records, Active Warranties, Due Maintenance, Reminders,
+// Expiring Warranties) below their rich sizes (datedLook): one row a rotating
+// carousel of the items, two rows a headline item with compact rows under it,
+// and from three rows a list whose density follows the width (slim at 2
+// columns, condensed at 3, full rows at 4-5). From 6 columns and 3 rows, the
+// card's own sized tiers, as before.
+function datedTiers(sized: CardTier[]): readonly CardTier[] {
+  return freezeTiers([
+    { name: "carousel", minW: 2, minH: 1, look: "carousel" },
+    { name: "headline", minW: 2, minH: 2, look: "headline" },
+    { name: "slim", minW: 2, minH: 3, look: "slim" },
+    { name: "condensed", minW: 3, minH: 3, look: "condensed" },
+    { name: "full", minW: 4, minH: 3, look: "full" },
+    ...sized,
+  ])
+}
+
+// Reminder-like lists, at their rich sizes: the dated list, then (wide and
+// tall) grouped (Reminders by urgency, Expiring Warranties by month). One row
+// is their minimum: the carousel.
+const UPCOMING_TIERS = datedTiers([
   { name: "list", minW: 3, minH: 3 },
   { name: "grouped", minW: 6, minH: 4 },
 ])
-const UPCOMING_LIMITS = Object.freeze({ min: size(2, 2), max: size(12, 8), large: size(3, 4), phone: size(2, 4) })
+const UPCOMING_LIMITS = Object.freeze({ min: size(2, 1), max: size(12, 8), large: size(3, 4), phone: size(2, 4) })
 
 function asset(
   id: string,
@@ -285,6 +338,9 @@ const DEFS: CardTypeDef[] = [
       { itemType: "PROPERTY", label: "Property", allLabel: "All properties", noun: "property", plural: "rooms" },
       "rooms",
     ),
+    // Not an avatar card: a count is its smallest useful size.
+    min: size(2, 1),
+    tiers: ROOM_TIERS,
     configFields: [
       {
         key: "itemId",
@@ -307,11 +363,7 @@ const DEFS: CardTypeDef[] = [
     max: { w: 12, h: 6 },
     large: { w: 2, h: 1 },
     phone: { w: 2, h: 1 },
-    tiers: [
-      { name: "count", minW: 2, minH: 1 },
-      { name: "recent", minW: 3, minH: 2 },
-      { name: "list", minW: 6, minH: 3 },
-    ],
+    tiers: datedTiers([{ name: "list", minW: 6, minH: 3 }]),
     configSchema: noConfig,
     defaultConfig: {},
     configFields: [],
@@ -325,11 +377,7 @@ const DEFS: CardTypeDef[] = [
     max: { w: 12, h: 6 },
     large: { w: 2, h: 1 },
     phone: { w: 2, h: 1 },
-    tiers: [
-      { name: "count", minW: 2, minH: 1 },
-      { name: "breakdown", minW: 3, minH: 2 },
-      { name: "list", minW: 6, minH: 3 },
-    ],
+    tiers: datedTiers([{ name: "list", minW: 6, minH: 3 }]),
     configSchema: noConfig,
     defaultConfig: {},
     configFields: [],
@@ -341,14 +389,12 @@ const DEFS: CardTypeDef[] = [
     icon: "Calendar",
     min: { w: 2, h: 1 },
     max: { w: 12, h: 8 },
-    // Two rows by default: the count plus the most urgent item under it.
+    // Two rows by default: the most urgent item, with compact rows under it.
     large: { w: 2, h: 2 },
     phone: { w: 2, h: 2 },
-    tiers: [
-      { name: "count", minW: 2, minH: 1 },
-      { name: "next", minW: 2, minH: 2 },
-      { name: "list", minW: 4, minH: 3 },
-    ],
+    // Its list showed from 4 columns before the looks; datedLook keeps full
+    // rows up to 5, so the list tier itself is reached from 6.
+    tiers: datedTiers([{ name: "list", minW: 4, minH: 3 }]),
     configSchema: noConfig,
     defaultConfig: {},
     configFields: [],
@@ -521,17 +567,33 @@ export function limitsMap(): ReadonlyMap<string, CardLimits> {
 export const PHONE_WIDTH_SCALE = 2
 
 /**
- * Index of the richest tier the size allows (0 when below the first). Tier
- * minimums are in large-grid units; in phone mode the width is scaled by
- * PHONE_WIDTH_SCALE first (height is unchanged: rows are the same height).
+ * Index of the tier a card shows at `size` in the given layout.
+ *
+ * A type with looks first asks its look function: assetLook (asset cards)
+ * with the raw size (no phone scaling: a 2-wide phone card is 2 wide, and its
+ * avatars are sized in cells), datedLook (the dated lists) with the width
+ * scaled like any sized tier (their looks are text densities, which follow the
+ * card's real width: a full-width phone card has room for full rows). A look
+ * other than "rich" picks that look's tier.
+ *
+ * Otherwise, the richest sized tier the size allows (the first sized tier
+ * when below it). Tier minimums are in large-grid units; in phone mode the
+ * width is scaled by PHONE_WIDTH_SCALE first (height is unchanged: rows are
+ * the same height).
  */
 export function tierOf(def: CardTypeDef, size: Size, mode: "large" | "phone" = "large"): number {
   const w = mode === "phone" ? size.w * PHONE_WIDTH_SCALE : size.w
-  let tier = 0
+  const first = def.tiers.find((t) => t.look)?.look
+  if (first) {
+    const look = DATED_LOOKS.has(first) ? datedLook({ w, h: size.h }) : assetLook(size)
+    const i = look === "rich" ? -1 : def.tiers.findIndex((t) => t.look === look)
+    if (i >= 0) return i
+  }
+  let tier = -1
   def.tiers.forEach((t, i) => {
-    if (t.minW <= w && t.minH <= size.h) tier = i
+    if (!t.look && (tier < 0 || (t.minW <= w && t.minH <= size.h))) tier = i
   })
-  return tier
+  return Math.max(0, tier)
 }
 
 export type PhoneSizePreset = { name: "Small" | "Medium" | "Large"; w: number; h: number }

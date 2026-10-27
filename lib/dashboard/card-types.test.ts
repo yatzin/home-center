@@ -17,7 +17,9 @@ import {
   tierOf,
   type CardTypeDef,
 } from "./card-types"
-import { LARGE_COLS, LAYOUT_FORMAT, PHONE_COLS, validateLayout } from "./layout"
+import { LARGE_COLS, LAYOUT_FORMAT, PHONE_COLS, repairLayout, validateLayout } from "./layout"
+import { assetLook } from "./avatar-layout"
+import { datedLook } from "./dated-list-layout"
 
 const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true, customizedDashboards: true }
 
@@ -64,9 +66,15 @@ describe("CARD_TYPES", () => {
   it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s has ascending tiers starting at its minimum", (_id, d) => {
     expect(d.tiers.length).toBeGreaterThanOrEqual(2)
     expect(d.tiers[0]).toMatchObject({ minW: d.min.w, minH: d.min.h })
-    for (let i = 1; i < d.tiers.length; i++) {
-      const a = d.tiers[i - 1]
-      const b = d.tiers[i]
+    // Avatar looks (asset cards) are picked by shape, not by size order: they
+    // come first, and the sized tiers after them ascend as everywhere else.
+    const looks = d.tiers.filter((t) => t.look)
+    const sized = d.tiers.filter((t) => !t.look)
+    expect(d.tiers.slice(0, looks.length)).toEqual(looks)
+    expect(sized.length).toBeGreaterThanOrEqual(looks.length > 0 ? 1 : 2)
+    for (let i = 1; i < sized.length; i++) {
+      const a = sized[i - 1]
+      const b = sized[i]
       expect(b.minW >= a.minW && b.minH >= a.minH && (b.minW > a.minW || b.minH > a.minH)).toBe(true)
     }
     // Every tier is reachable within the card's maximum.
@@ -92,7 +100,7 @@ describe("CARD_TYPES", () => {
     expect(() => {
       ;(props.min as { w: number }).w = 9
     }).toThrow()
-    expect(cardType("vehicles")!.min.w).toBe(2)
+    expect(cardType("vehicles")!.min.w).toBe(1)
   })
 
   it("has a lucide icon name, label and description for every card", () => {
@@ -195,8 +203,9 @@ describe("tierOf", () => {
     expect(tierName("properties")).toBe("thumbnails")
     expect(tierName("vehicles")).toBe("thumbnails")
     expect(tierName("spending-trend")).toBe("chart")
-    expect(tierName("reminders")).toBe("list")
-    expect(tierName("records")).toBe("count")
+    // The dated lists' default sizes now show their new looks (see "dated list looks").
+    expect(tierName("reminders")).toBe("condensed")
+    expect(tierName("records")).toBe("carousel")
   })
 
   it("keeps the spending chart and ranked bars to sizes that fit them", () => {
@@ -221,38 +230,267 @@ describe("tierOf in phone mode", () => {
 
   it("scales phone width by PHONE_WIDTH_SCALE and leaves height alone", () => {
     expect(PHONE_WIDTH_SCALE).toBe(2)
-    const d = cardType("properties")!
+    // Records' looks scale the phone width (asset cards' avatar looks read the raw size).
+    const d = cardType("records")!
     expect(tierOf(d, { w: 2, h: 2 }, "phone")).toBe(tierOf(d, { w: 4, h: 2 }))
+    expect(tierOf(d, { w: 2, h: 4 }, "phone")).toBe(tierOf(d, { w: 4, h: 4 }))
     expect(tierOf(d, { w: 2, h: 1 }, "phone")).toBe(0)
-    // Large mode is the default and unchanged.
-    expect(tierOf(d, { w: 2, h: 4 })).toBe(0)
-    expect(tierOf(d, { w: 2, h: 4 }, "large")).toBe(0)
+    // Large mode is the default and unscaled.
+    expect(d.tiers[tierOf(d, { w: 2, h: 4 })].name).toBe("slim")
+    expect(tierOf(d, { w: 2, h: 4 }, "large")).toBe(tierOf(d, { w: 2, h: 4 }))
+    // Spending Trend has no looks: its sized tiers scale the same way.
+    const t = cardType("spending-trend")!
+    expect(tierOf(t, { w: 2, h: 4 }, "phone")).toBe(tierOf(t, { w: 4, h: 4 }))
   })
 
+  // Asset cards on the phone grid are at most 2 columns wide, so they always
+  // show an avatar look there (raw cells, not scaled): pills at full width.
   it.each([
-    ["properties", "thumbnails"],
-    ["vehicles", "thumbnails"],
-    ["people", "thumbnails"],
-    ["equipment", "thumbnails"],
+    ["properties", "column-pills"],
+    ["vehicles", "column-pills"],
+    ["people", "column-pills"],
+    ["equipment", "column-pills"],
     ["rooms", "thumbnails"],
-    ["records", "count"],
-    ["active-warranties", "count"],
-    ["due-maintenance", "next"],
+    ["records", "carousel"],
+    ["active-warranties", "carousel"],
+    ["due-maintenance", "headline"],
     ["intake", "list"],
-    ["reminders", "list"],
-    ["expiring-warranties", "list"],
+    ["reminders", "full"],
+    ["expiring-warranties", "full"],
     ["spending-trend", "chart"],
     ["spending-breakdown", "ranked"],
   ])("%s's phone default size shows its %s tier", (id, tier) => {
     expect(name(id, cardType(id)!.phone)).toBe(tier)
   })
 
-  it.each(["properties", "vehicles", "reminders", "expiring-warranties", "intake", "spending-trend"])(
+  it.each(["reminders", "expiring-warranties", "intake", "spending-trend"])(
     "a full-width phone %s reaches its middle tier given the height",
     (id) => {
       expect(tierOf(cardType(id)!, { w: PHONE_COLS, h: 8 }, "phone")).toBeGreaterThanOrEqual(1)
     },
   )
+})
+
+describe("asset card avatar looks", () => {
+  const ASSETS = ["properties", "vehicles", "people", "equipment"]
+  const name = (id: string, size: { w: number; h: number }, mode: "large" | "phone" = "large") => {
+    const d = cardType(id)!
+    return d.tiers[tierOf(d, size, mode)].name
+  }
+
+  it.each(ASSETS)("%s may be one cell; its maximum is unchanged", (id) => {
+    const d = cardType(id)!
+    expect(d.min).toEqual({ w: 1, h: 1 })
+    expect(d.max).toEqual({ w: 12, h: 8 })
+    expect(limitsMap().get(id)!.min).toEqual({ w: 1, h: 1 })
+  })
+
+  it("Rooms is not an avatar card: its minimum and tiers are as before", () => {
+    const d = cardType("rooms")!
+    expect(d.min).toEqual({ w: 2, h: 1 })
+    expect(d.tiers.map((t) => t.name)).toEqual(["count", "thumbnails", "list"])
+    expect(d.tiers.some((t) => t.look)).toBe(false)
+  })
+
+  it.each(ASSETS)("%s: each corner size shows its look, in either layout", (id) => {
+    const cases: [number, number, string][] = [
+      [1, 1, "single"],
+      [1, 4, "column-circles"],
+      [1, 6, "column-circles"],
+      [2, 1, "row"],
+      [2, 2, "column-pills"],
+      [2, 6, "column-pills"],
+      [3, 1, "row"],
+      [12, 1, "row"],
+      [3, 2, "thumbnails"],
+      [12, 8, "list"],
+    ]
+    for (const [w, h, look] of cases) {
+      expect(name(id, { w, h }), `${w}x${h}`).toBe(look)
+      // assetLook names the look; "rich" sizes keep the sized tiers.
+      expect(assetLook({ w, h })).toBe(["thumbnails", "list"].includes(look) ? "rich" : look)
+    }
+    // The phone grid uses the raw cells: a 2x2 phone card is not scaled to 4x2.
+    for (const [w, h, look] of cases.filter(([w]) => w <= PHONE_COLS)) {
+      expect(name(id, { w, h }, "phone"), `phone ${w}x${h}`).toBe(look)
+    }
+  })
+
+  it.each(ASSETS)("%s: every size of 3+ columns and 2+ rows picks exactly today's tier", (id) => {
+    // Today's rule: count 2x1, thumbnails 3x2, list 6x4, the richest that fits.
+    const old = (w: number, h: number) => (w >= 6 && h >= 4 ? "list" : w >= 3 && h >= 2 ? "thumbnails" : "count")
+    for (let w = 3; w <= 12; w++) {
+      for (let h = 2; h <= 8; h++) expect(name(id, { w, h }), `${w}x${h}`).toBe(old(w, h))
+    }
+  })
+
+  it("asset phone presets start at one cell (half the phone width)", () => {
+    for (const id of ASSETS) {
+      const presets = phoneSizePresets(cardType(id)!)
+      expect(presets[0]).toEqual({ name: "Small", w: 1, h: 1 })
+      expect(presets.slice(1).every((p) => p.w === PHONE_COLS)).toBe(true)
+    }
+  })
+
+  it("a layout with one-cell and one-column asset cards is valid on both grids", () => {
+    const l = {
+      format: LAYOUT_FORMAT,
+      cards: ASSETS.map((t) => ({ id: t, type: t, config: {} })),
+      large: [
+        { id: "properties", x: 0, y: 0, w: 1, h: 1 },
+        { id: "vehicles", x: 1, y: 0, w: 1, h: 4 },
+        { id: "people", x: 2, y: 0, w: 12 - 2, h: 1 },
+        { id: "equipment", x: 2, y: 1, w: 2, h: 4 },
+      ],
+      phone: [
+        { id: "properties", x: 0, y: 0, w: 1, h: 1 },
+        { id: "vehicles", x: 1, y: 0, w: 1, h: 4 },
+        { id: "people", x: 0, y: 4, w: 2, h: 1 },
+        { id: "equipment", x: 0, y: 5, w: 2, h: 4 },
+      ],
+    }
+    expect(validateLayout(l, limitsMap())).toBeNull()
+    expect(repairLayout(l, limitsMap())).toEqual(l)
+  })
+
+  it("a one-column Rooms card is still outside its limits (and repair widens it)", () => {
+    const l = {
+      format: LAYOUT_FORMAT,
+      cards: [{ id: "r", type: "rooms", config: {} }],
+      large: [{ id: "r", x: 0, y: 0, w: 1, h: 2 }],
+      phone: null,
+    }
+    expect(validateLayout(l, limitsMap())).toMatch(/outside its card size limits/)
+    expect(repairLayout(l, limitsMap()).large[0]).toMatchObject({ w: 2, h: 2 })
+  })
+
+  it("existing saved layouts (asset cards 2+ wide) load unchanged", () => {
+    const saved = defaultLayout(ALL_ON)
+    const withPhone = {
+      ...saved,
+      phone: saved.large.map((p, i) => ({ id: p.id, x: 0, y: i * 4, w: 2, h: 4 })),
+    }
+    for (const l of [saved, withPhone]) {
+      expect(validateLayout(l, limitsMap())).toBeNull()
+      expect(repairLayout(l, limitsMap())).toEqual(l)
+    }
+  })
+})
+
+describe("dated list looks", () => {
+  const DATED = ["records", "active-warranties", "due-maintenance", "reminders", "expiring-warranties"]
+  const name = (id: string, w: number, h: number, mode: "large" | "phone" = "large") => {
+    const d = cardType(id)!
+    return d.tiers[tierOf(d, { w, h }, mode)].name
+  }
+  /** Each card's tier before the looks, for the sizes that keep it (6+ wide, 3+ tall). */
+  const OLD: Record<string, (w: number, h: number) => string> = {
+    records: (w, h) => (w >= 6 && h >= 3 ? "list" : w >= 3 && h >= 2 ? "recent" : "count"),
+    "active-warranties": (w, h) => (w >= 6 && h >= 3 ? "list" : w >= 3 && h >= 2 ? "breakdown" : "count"),
+    "due-maintenance": (w, h) => (w >= 4 && h >= 3 ? "list" : h >= 2 ? "next" : "count"),
+    reminders: (w, h) => (w >= 6 && h >= 4 ? "grouped" : w >= 3 && h >= 3 ? "list" : "next"),
+    "expiring-warranties": (w, h) => (w >= 6 && h >= 4 ? "grouped" : w >= 3 && h >= 3 ? "list" : "next"),
+  }
+
+  it.each(DATED)("%s: each corner size shows its look", (id) => {
+    const rich6x3 = "list"
+    const rich6x4 = id === "reminders" || id === "expiring-warranties" ? "grouped" : "list"
+    const cases: [number, number, string][] = [
+      [2, 1, "carousel"],
+      [4, 1, "carousel"],
+      [12, 1, "carousel"],
+      [2, 2, "headline"],
+      [3, 2, "headline"],
+      [12, 2, "headline"],
+      [2, 3, "slim"],
+      [3, 3, "condensed"],
+      [4, 3, "full"],
+      [5, 3, "full"],
+      [6, 3, rich6x3],
+      [6, 4, rich6x4],
+      [12, 8, rich6x4],
+    ]
+    for (const [w, h, look] of cases) {
+      expect(name(id, w, h), `${w}x${h}`).toBe(look)
+      // datedLook names the look; "rich" sizes keep the sized tiers.
+      const dl = datedLook({ w, h })
+      expect(dl === "rich" ? look === rich6x3 || look === rich6x4 : dl === look, `${w}x${h} ${dl}`).toBe(true)
+    }
+  })
+
+  it.each(DATED)("%s: every rich size (6+ wide, 3+ tall) picks exactly today's tier", (id) => {
+    for (let w = 6; w <= 12; w++) {
+      for (let h = 3; h <= 8; h++) expect(name(id, w, h), `${w}x${h}`).toBe(OLD[id](w, h))
+    }
+  })
+
+  it.each(DATED)("%s: on the phone the width is scaled (a full-width card reads as 4 wide), never rich", (id) => {
+    expect(name(id, 2, 1, "phone")).toBe("carousel")
+    expect(name(id, 2, 2, "phone")).toBe("headline")
+    for (let h = 3; h <= 8; h++) expect(name(id, 2, h, "phone"), `2x${h}`).toBe("full")
+    expect(name(id, 1, 4, "phone")).toBe("slim")
+  })
+
+  it.each(DATED)("%s: one row is its minimum; its defaults are as before", (id) => {
+    const d = cardType(id)!
+    expect(d.min).toEqual({ w: 2, h: 1 })
+    expect(d.tiers[0]).toMatchObject({ name: "carousel", minW: 2, minH: 1, look: "carousel" })
+    const before: Record<string, [{ w: number; h: number }, { w: number; h: number }]> = {
+      records: [{ w: 2, h: 1 }, { w: 2, h: 1 }],
+      "active-warranties": [{ w: 2, h: 1 }, { w: 2, h: 1 }],
+      "due-maintenance": [{ w: 2, h: 2 }, { w: 2, h: 2 }],
+      reminders: [{ w: 3, h: 4 }, { w: 2, h: 4 }],
+      "expiring-warranties": [{ w: 3, h: 4 }, { w: 2, h: 4 }],
+    }
+    expect([d.large, d.phone]).toEqual(before[id])
+  })
+
+  it.each(DATED)("%s: phone presets start with a one-row Small", (id) => {
+    const presets = phoneSizePresets(cardType(id)!)
+    expect(presets[0]).toEqual({ name: "Small", w: 2, h: 1 })
+    expect(presets.map((p) => name(id, p.w, p.h, "phone"))[0]).toBe("carousel")
+  })
+
+  it("saved layouts with these cards at their old sizes load unchanged", () => {
+    const l = {
+      format: LAYOUT_FORMAT,
+      cards: DATED.map((t) => ({ id: t, type: t, config: {} })),
+      large: [
+        { id: "records", x: 0, y: 0, w: 2, h: 1 },
+        { id: "active-warranties", x: 2, y: 0, w: 3, h: 2 },
+        { id: "due-maintenance", x: 5, y: 0, w: 4, h: 3 },
+        { id: "reminders", x: 0, y: 3, w: 2, h: 2 },
+        { id: "expiring-warranties", x: 2, y: 3, w: 6, h: 4 },
+      ],
+      phone: [
+        { id: "records", x: 0, y: 0, w: 2, h: 1 },
+        { id: "active-warranties", x: 0, y: 1, w: 2, h: 2 },
+        { id: "due-maintenance", x: 0, y: 3, w: 2, h: 2 },
+        { id: "reminders", x: 0, y: 5, w: 2, h: 4 },
+        { id: "expiring-warranties", x: 0, y: 9, w: 2, h: 2 },
+      ],
+    }
+    expect(validateLayout(l, limitsMap())).toBeNull()
+    expect(repairLayout(l, limitsMap())).toEqual(l)
+    const saved = defaultLayout(ALL_ON)
+    expect(repairLayout(saved, limitsMap())).toEqual(saved)
+  })
+
+  it("one-row Reminders and Expiring Warranties are now valid", () => {
+    const l = {
+      format: LAYOUT_FORMAT,
+      cards: [
+        { id: "r", type: "reminders", config: {} },
+        { id: "e", type: "expiring-warranties", config: {} },
+      ],
+      large: [
+        { id: "r", x: 0, y: 0, w: 2, h: 1 },
+        { id: "e", x: 2, y: 0, w: 12 - 2, h: 1 },
+      ],
+      phone: null,
+    }
+    expect(validateLayout(l, limitsMap())).toBeNull()
+  })
 })
 
 describe("defaultLayout", () => {

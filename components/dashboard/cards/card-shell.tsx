@@ -90,15 +90,3 @@ export function GroupHeading({ label, count }: { label: string; count: number })
     </h3>
   )
 }
-
-/** "+3 more due": the small tiers' way into the full list (no room for a header link). */
-export function MoreLink({ href, text }: { href: string; text: string }) {
-  return (
-    <Link
-      href={href}
-      className="mt-1 inline-block rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors duration-150 hover:bg-muted/60 hover:text-foreground"
-    >
-      {text}
-    </Link>
-  )
-}

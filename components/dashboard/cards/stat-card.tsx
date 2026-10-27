@@ -6,17 +6,20 @@ import { assetImageSrc } from "@/components/asset-image"
 import { InitialsTile } from "@/components/dashboard/summary-card"
 import { useSize } from "@/components/charts/primitives/use-width"
 import { assetHref } from "@/lib/assets"
+import { ASSET_TIERS } from "@/lib/dashboard/card-types"
 import { mosaicFit } from "@/lib/dashboard/mosaic-fit"
 import { cn } from "@/lib/utils"
 import type { AssetType } from "@/app/generated/prisma/client"
 import type { AssetCardData, AssetCardItem } from "@/lib/dashboard/loaders"
+import { AvatarStrip } from "./avatar-strip"
 import { ChooseAnother } from "./card-configure"
 import { CardMessage, CardShell } from "./card-shell"
 import type { CardViewProps } from "./types"
 
-// An asset card ("stat card"): a count at its smallest, a photo mosaic when it
-// has room, and a per-item list when large. Properties is the first; Vehicles,
-// Equipment, People and Rooms reuse it with their own spec.
+// An asset card ("stat card"): avatars only at long, thin sizes (one row, one
+// or two columns: avatar-strip.tsx), a photo mosaic from 3 columns and 2 rows,
+// and a per-item list when large. Properties is the first; Vehicles, Equipment
+// and People reuse it with their own spec (Rooms has its own view).
 
 export type AssetCardSpec = {
   assetType: AssetType
@@ -30,8 +33,7 @@ export type AssetCardSpec = {
   openLabel: string
 }
 
-const TIER_COUNT = 0
-const TIER_THUMBNAILS = 1
+const tierName = (tier: number) => ASSET_TIERS[tier]?.name
 
 function isAssetCardData(data: unknown): data is AssetCardData {
   if (typeof data !== "object" || data === null || !("missing" in data)) return false
@@ -66,7 +68,7 @@ function IconChip({ icon: Icon }: { icon: LucideIcon }) {
   )
 }
 
-/** Count (or the one item's name) beside the type's icon. Also the footer of the mosaic tier. */
+/** Count (or the one item's name) beside the type's icon: the footer of the mosaic tier. */
 function StatRow({ spec, data, className }: { spec: AssetCardSpec; data: Extract<AssetCardData, { missing: false }>; className?: string }) {
   const item = data.single ? data.items[0] : undefined
   return (
@@ -87,35 +89,6 @@ function StatRow({ spec, data, className }: { spec: AssetCardSpec; data: Extract
       )}
       <IconChip icon={spec.icon} />
     </Link>
-  )
-}
-
-/**
- * The notice for the smallest tier, where a centred icon block would not fit:
- * text only, wrapping to two lines rather than truncating mid-word.
- */
-function InlineNotice({
-  message,
-  note,
-  action,
-  footer,
-}: {
-  message: string
-  note?: string
-  action?: { href: string; label: string }
-  footer?: React.ReactNode
-}) {
-  return (
-    <div className="flex h-full min-w-0 flex-col justify-center gap-0.5 px-4">
-      <p className="line-clamp-2 text-[13px] leading-snug text-muted-foreground">{message}</p>
-      {action && (
-        <Link href={action.href} className="self-start text-xs font-medium text-primary hover:underline">
-          {action.label}
-        </Link>
-      )}
-      {note && <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{note}</p>}
-      {footer}
-    </div>
   )
 }
 
@@ -218,13 +191,15 @@ function ItemDetail({ spec, item }: { spec: AssetCardSpec; item: AssetCardItem }
   )
 }
 
-export function AssetStatCard({ spec, data, tier }: CardViewProps & { spec: AssetCardSpec }) {
+export function AssetStatCard({ spec, data, tier, size }: CardViewProps & { spec: AssetCardSpec }) {
   if (!isAssetCardData(data)) throw new Error(`Unexpected ${spec.label} card data`)
 
+  // Long, thin sizes: avatars only (their own missing and empty states).
+  const look = ASSET_TIERS[tier]?.look
+  if (look) return <AvatarStrip spec={spec} data={data} look={look} size={size} />
+
   if (data.missing) {
-    return tier === TIER_COUNT ? (
-      <InlineNotice message={spec.missingMessage} footer={<ChooseAnother compact />} />
-    ) : (
+    return (
       <CardShell title={spec.label}>
         <CardMessage icon={spec.icon} message={spec.missingMessage} footer={<ChooseAnother />} />
       </CardShell>
@@ -233,18 +208,14 @@ export function AssetStatCard({ spec, data, tier }: CardViewProps & { spec: Asse
 
   if (data.total === 0) {
     const action = { href: spec.listHref, label: spec.addLabel }
-    return tier === TIER_COUNT ? (
-      <InlineNotice message={spec.emptyMessage} action={action} />
-    ) : (
+    return (
       <CardShell title={spec.label}>
         <CardMessage icon={spec.icon} message={spec.emptyMessage} action={action} />
       </CardShell>
     )
   }
 
-  if (tier === TIER_COUNT) return <StatRow spec={spec} data={data} className="h-full" />
-
-  if (tier === TIER_THUMBNAILS) {
+  if (tierName(tier) === "thumbnails") {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <Mosaic spec={spec} data={data} />

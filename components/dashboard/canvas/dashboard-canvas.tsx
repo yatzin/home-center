@@ -467,7 +467,10 @@ function DashboardEditor({ cards, layout, revision, features, itemOptions }: Omi
           : { kind: "idle" }
 
   return (
-    <div ref={rootRef}>
+    // relative: the sr-only announcer below is absolutely positioned. Without a
+    // positioned ancestor inside the scrolling <main>, it is placed against the
+    // page and stretches the document, adding a second, empty page scrollbar.
+    <div ref={rootRef} className="relative">
       {loadError && !state.conflict && (
         <div
           role="alert"

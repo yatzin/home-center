@@ -255,8 +255,12 @@ export type CardLine = {
   /** The asset it belongs to, when known. */
   assetName: string | null
   href: string
-  /** Right-hand text, already formatted ("Mar 4", "12d left", "3d late"). */
+  /** Right-hand text, already formatted ("Mar 4, 2026", "12d left", "3d late"). */
   meta: string
+  /** The same, short, for a narrow chip ("Mar 4", "12d", "3d late"). */
+  short: string
+  /** What it cost (or is expected to cost), formatted; null when not recorded. */
+  cost: string | null
 }
 
 export type RecordsCardData = { total: number; recent: CardLine[] }
@@ -269,7 +273,7 @@ const loadRecords: CardLoader = async (_config, { features, fmt, scope }): Promi
       where: owned,
       orderBy: [{ date: "desc" }, { id: "asc" }],
       take: LIST_LENGTH,
-      select: { id: true, title: true, date: true, assetType: true, assetId: true },
+      select: { id: true, title: true, date: true, cost: true, assetType: true, assetId: true },
     }),
     assetIndex(),
   ])
@@ -282,6 +286,8 @@ const loadRecords: CardLoader = async (_config, { features, fmt, scope }): Promi
       href: `${assetHref(r.assetType, r.assetId)}?tab=service&open=${r.id}`,
       // Stored as UTC midnight: show the stored day, as the Records page does.
       meta: fmt.date(r.date, { utc: true }),
+      short: fmt.dayMonth(r.date, { utc: true }),
+      cost: r.cost != null ? fmt.money(r.cost) : null,
     })),
   }
 }
@@ -299,7 +305,7 @@ export type WarrantiesCardData = {
   /** Active warranties per asset type, largest first. */
   breakdown: { label: string; count: number }[]
   /** Soonest to expire first. */
-  soonest: CardLine[]
+  soonest: (CardLine & { daysLeft: number })[]
 }
 
 const loadWarranties: CardLoader = async (_config, { now, features, scope }): Promise<WarrantiesCardData> => {
@@ -329,6 +335,9 @@ const loadWarranties: CardLoader = async (_config, { now, features, scope }): Pr
         assetName: index.assetName(w.assetType, w.assetId) ?? null,
         href: assetHref(w.assetType, w.assetId),
         meta: `${daysLeft}d left`,
+        short: `${daysLeft}d`,
+        cost: null,
+        daysLeft,
       }
     }),
   }
@@ -354,6 +363,8 @@ const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt, sco
       assetName: index.assetName(s.assetType, s.assetId) ?? null,
       href: assetHref(s.assetType, s.assetId),
       meta: dueLabel(d, fmt),
+      short: dueLabel(d, fmt),
+      cost: s.estimatedCost != null ? fmt.money(s.estimatedCost) : null,
       overdue: d.overdue,
     })),
   }
@@ -368,6 +379,8 @@ export type ReminderItem = {
   urgency: Urgency
   overdue: boolean
   dueLabel: string
+  /** The schedule's estimated cost, formatted; null when it has none. */
+  cost: string | null
   currentMileage: number | null
   meterUnit: MeterUnit
 }
@@ -411,6 +424,7 @@ const loadReminders: CardLoader = async (config, { now, features, fmt, scope }):
         urgency: urgencyOf(due),
         overdue: due.overdue,
         dueLabel: dueLabel(due, fmt),
+        cost: s.estimatedCost != null ? fmt.money(s.estimatedCost) : null,
         currentMileage: reading?.value ?? null,
         meterUnit: reading?.unit ?? "MILES",
       }
