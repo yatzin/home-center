@@ -4,15 +4,20 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { requireHealth } from "@/lib/features-server"
 import { allergySchema, conditionSchema, immunizationSchema, medicationSchema, observationSchema } from "@/lib/health-schemas"
 import { nextRefillFrom } from "@/lib/health"
+import { orGone } from "@/lib/gone"
+import { RANGE_DATE_MESSAGE, dateInRange } from "@/lib/input-limits"
 import { removeUploadDir } from "@/lib/upload-fs"
 import { STALE_ENTRY } from "@/lib/observation-cards"
 import type { ActionResult, FormValues } from "@/lib/form-types"
 
+/** Signed in, and Health switched on: with it off, health records are out of reach here too, not only hidden. */
 async function requireSession() {
   const session = await auth()
   if (!session) redirect("/login")
+  await requireHealth()
   return session
 }
 
@@ -108,7 +113,11 @@ export async function markMedicationRefilled(id: string): Promise<ActionResult> 
 
   const today = new Date()
   today.setUTCHours(0, 0, 0, 0)
-  await prisma.medication.update({ where: { id }, data: { nextRefillDate: nextRefillFrom(today, med.refillIntervalDays) } })
+  const nextRefillDate = nextRefillFrom(today, med.refillIntervalDays)
+  // A refill interval saved before the limits can push the date out of range.
+  if (!dateInRange(nextRefillDate)) return { error: RANGE_DATE_MESSAGE }
+  const saved = await orGone(() => prisma.medication.update({ where: { id }, data: { nextRefillDate } }))
+  if (saved) return { error: saved.error }
   revalidatePerson(med.personId)
   return { success: true }
 }

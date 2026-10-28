@@ -23,11 +23,15 @@ export function CompositionBar({
   activeKey,
   emptyMessage = "Nothing to show yet.",
   caption,
+  bare = false,
 }: {
   entries: CompositionSlice[]
   activeKey?: string
   emptyMessage?: string
   caption?: string
+  /// Just the bar: no legend and no table view, for a caller that shows its own
+  /// keyed totals table (which then is the legend and the text alternative).
+  bare?: boolean
 }) {
   const fmt = useFormat()
   const { containerRef, cardRef, tip, offset, anchorProps } = useChartTooltip()
@@ -126,27 +130,31 @@ export function CompositionBar({
 
       {/* The legend and the bar are the same control: both set the category
           filter, so clicking a label does exactly what clicking its slice does. */}
-      <Legend
-        items={legendItems}
-        hrefFor={linked ? (item) => hrefByKey.get(item.key) ?? "" : undefined}
-        activeKey={activeKey}
-      />
+      {!bare ? (
+        <Legend
+          items={legendItems}
+          hrefFor={linked ? (item) => hrefByKey.get(item.key) ?? "" : undefined}
+          activeKey={activeKey}
+        />
+      ) : null}
 
-      <ChartTable
-        caption={caption}
-        columns={[
-          { key: "label", label: "Category" },
-          { key: "total", label: "Spend", align: "right" },
-          { key: "share", label: "Share", align: "right" },
-          { key: "count", label: "Records", align: "right" },
-        ]}
-        rows={entries.map((entry) => ({
-          label: entry.label,
-          total: fmt.money(entry.total),
-          share: ((entry.total / total) * 100).toFixed(1) + "%",
-          count: entry.count,
-        }))}
-      />
+      {!bare ? (
+        <ChartTable
+          caption={caption}
+          columns={[
+            { key: "label", label: "Category" },
+            { key: "total", label: "Spend", align: "right" },
+            { key: "share", label: "Share", align: "right" },
+            { key: "count", label: "Records", align: "right" },
+          ]}
+          rows={entries.map((entry) => ({
+            label: entry.label,
+            total: fmt.money(entry.total),
+            share: ((entry.total / total) * 100).toFixed(1) + "%",
+            count: entry.count,
+          }))}
+        />
+      ) : null}
     </div>
   )
 }

@@ -8,26 +8,32 @@ import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useDropTarget } from "@/components/drop/drop-provider"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { completeMaintenanceSchedule } from "@/lib/actions/maintenance"
 import { uploadAll } from "@/lib/upload-client"
 import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
 import { useFormat } from "@/components/regional-provider"
+import { localDay } from "@/lib/equipment-life"
+import { ManualLink, type ManualLinkTarget } from "./manual-link"
+import { showServerError } from "@/components/forms/server-errors"
 
 /** Marks a reminder done and, unless unticked, logs it in the service history. */
-export function CompleteDialog({ schedule, currentMileage, meterUnit, onClose }: {
+export function CompleteDialog({ schedule, currentMileage, meterUnit, manual, onClose }: {
   schedule: MaintenanceSchedule
   currentMileage?: number | null
   meterUnit: MeterUnit
+  /** The reminder's manual link, when the caller has loaded it. */
+  manual?: ManualLinkTarget
   onClose: () => void
 }) {
   const router = useRouter()
   const fmt = useFormat()
   const [files, setFiles] = useState<File[]>([])
-  const { register, handleSubmit, watch, formState: { isSubmitting } } = useForm({
+  const form = useForm({
     defaultValues: {
-      completedDate: new Date().toISOString().split("T")[0],
+      completedDate: localDay(new Date()).toISOString().split("T")[0],
       completedMileage: schedule.assetType === "VEHICLE" ? currentMileage?.toString() ?? "" : "",
       logService: true,
       vendor: "",
@@ -35,6 +41,7 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, onClose }:
       notes: "",
     },
   })
+  const { register, handleSubmit, watch, formState: { isSubmitting, errors } } = form
   const logService = watch("logService")
   const isPerson = schedule.assetType === "PERSON"
 
@@ -46,8 +53,11 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, onClose }:
   })
 
   async function onSubmit(values: { completedDate: string; completedMileage: string; logService: boolean; vendor: string; cost: string; notes: string }) {
-    const result = await completeMaintenanceSchedule(schedule.id, values as Parameters<typeof completeMaintenanceSchedule>[1])
-    if (result?.error || !result) { toast.error("Something went wrong."); return }
+    // Vendor and cost are hidden while the work isn't logged, so a leftover value mustn't be checked.
+    const sent = values.logService ? values : { ...values, vendor: "", cost: "" }
+    const result = await completeMaintenanceSchedule(schedule.id, sent as Parameters<typeof completeMaintenanceSchedule>[1])
+    if (!result) { toast.error("Something went wrong."); return }
+    if (result.error) { showServerError(form, result.error); return }
 
     // The receipt goes on the service record the completion just logged.
     const recordId = result.serviceRecordId
@@ -64,41 +74,46 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, onClose }:
         <DialogHeader>
           <DialogTitle>Mark Complete: {schedule.title}</DialogTitle>
         </DialogHeader>
+        <ManualLink manual={manual} />
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label htmlFor="complete-date" className="text-sm font-medium">Completion Date</label>
+              <Label htmlFor="complete-date" help="complete.date">Completion Date</Label>
               <Input id="complete-date" type="date" {...register("completedDate")} />
+              {errors.completedDate && <p className="text-xs text-destructive">{errors.completedDate.message}</p>}
             </div>
             {schedule.assetType === "VEHICLE" && (
               <div className="space-y-1.5">
-                <label htmlFor="complete-mileage" className="text-sm font-medium">{fmt.meterNoun(meterUnit)} at Completion</label>
+                <Label htmlFor="complete-mileage" help="complete.mileage">{fmt.meterNoun(meterUnit)} at Completion</Label>
                 <Input id="complete-mileage" type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...register("completedMileage")} />
+                {errors.completedMileage && <p className="text-xs text-destructive">{errors.completedMileage.message}</p>}
               </div>
             )}
           </div>
 
-          <label className="flex items-center gap-2 text-sm font-medium">
+          <Label help="complete.log">
             <input type="checkbox" className="h-4 w-4 accent-primary" {...register("logService")} />
             {isPerson ? "Add to visits" : "Add to service history"}
-          </label>
+          </Label>
 
           {logService && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label htmlFor="complete-vendor" className="text-sm font-medium">{isPerson ? "Facility" : "Vendor / Shop"}</label>
+                <Label htmlFor="complete-vendor" help="complete.vendor">{isPerson ? "Facility" : "Vendor / Shop"}</Label>
                 <Input id="complete-vendor" placeholder={isPerson ? "City Medical Center" : "Jiffy Lube"} {...register("vendor")} />
+                {errors.vendor && <p className="text-xs text-destructive">{errors.vendor.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="complete-cost" className="text-sm font-medium">{`Cost (${fmt.currencySymbol})`}</label>
-                <Input id="complete-cost" type="number" step="0.01" min="0" placeholder="89.99" {...register("cost")} />
+                <Label htmlFor="complete-cost" help="complete.cost">{`Cost (${fmt.currencySymbol})`}</Label>
+                <Input id="complete-cost" type="number" step="0.01" min="0" placeholder={schedule.estimatedCost != null ? `Est. ${fmt.money(schedule.estimatedCost)}` : "89.99"} {...register("cost")} />
+                {errors.cost && <p className="text-xs text-destructive">{errors.cost.message}</p>}
               </div>
               <div className="col-span-2 space-y-1.5">
-                <label htmlFor="complete-notes" className="text-sm font-medium">Notes</label>
+                <Label htmlFor="complete-notes" help="complete.notes">Notes</Label>
                 <Textarea id="complete-notes" rows={2} {...register("notes")} />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <label htmlFor="complete-files" className="text-sm font-medium">Receipt or photos</label>
+                <Label htmlFor="complete-files" help="complete.files">Receipt or photos</Label>
                 <Input
                   id="complete-files"
                   type="file"

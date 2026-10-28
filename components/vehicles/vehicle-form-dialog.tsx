@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect } from "react"
+import { CheckList } from "@/components/forms/check-list"
 import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
@@ -16,20 +17,26 @@ import { createVehicle, updateVehicle } from "@/lib/actions/vehicles"
 import { AddRemindersSubmit, remindersHref } from "@/components/maintenance/add-reminders-submit"
 import type { Vehicle } from "@/app/generated/prisma/client"
 import { useFormat } from "@/components/regional-provider"
+import { boundedNumber, meterReading, moneyAmount, nameText, numberText, optionalDateText, optionalNameText } from "@/lib/input-limits"
+import { showServerError } from "@/components/forms/server-errors"
 
 const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-  make: z.string().min(1, "Make is required"),
-  model: z.string().min(1, "Model is required"),
-  year: z.string().min(1, "Year is required"),
-  vin: z.string().optional(),
-  color: z.string().optional(),
-  purchaseDate: z.string().optional(),
-  purchasePrice: z.string().optional(),
-  currentMileage: z.string().optional(),
+  name: nameText("Name is required"),
+  make: nameText("Make is required"),
+  model: nameText("Model is required"),
+  year: numberText(boundedNumber(1900, 2100, { whole: true, message: "Enter a year from 1900 to 2100." }), "Year is required"),
+  vin: optionalNameText,
+  color: optionalNameText,
+  purchaseDate: optionalDateText,
+  purchasePrice: numberText(moneyAmount()),
+  currentMileage: numberText(meterReading()),
   meterUnit: z.enum(["MILES", "HOURS"]),
   notes: z.string().optional(),
+  policyIds: z.array(z.string()),
+  propertyId: z.string(),
 })
+
+const NO_PROPERTY = "__none__"
 
 type FormValues = z.infer<typeof schema>
 
@@ -37,9 +44,20 @@ interface Props {
   open: boolean
   onClose: () => void
   vehicle?: Vehicle | null
+  /** Policies that may cover a vehicle, for the Insurance list. Edit only: empty hides the list. */
+  policyChoices?: { id: string; name: string }[]
+  /** The policies linked to this vehicle now. */
+  policyIds?: string[]
+  /** Properties to pick from. Absent: the field is hidden and the vehicle's link is left alone. */
+  propertyChoices?: { id: string; name: string }[]
+  /** Property a new vehicle starts on; null: Not assigned. Create only. */
+  newPropertyId?: string | null
 }
 
-export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
+const NO_CHOICES: { id: string; name: string }[] = []
+const NO_IDS: string[] = []
+
+export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_CHOICES, policyIds = NO_IDS, propertyChoices, newPropertyId }: Props) {
   const router = useRouter()
   const fmt = useFormat()
   const milesLabel = fmt.distanceWords.charAt(0).toUpperCase() + fmt.distanceWords.slice(1)
@@ -48,9 +66,16 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-      vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
+      vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "", policyIds: [], propertyId: newPropertyId ?? NO_PROPERTY,
     },
   })
+  const ticked = useWatch({ control: form.control, name: "policyIds" })
+  // Shown only when editing and there is at least one policy that could cover a vehicle.
+  const showInsurance = !!vehicle && policyChoices.length > 0
+  const linkedKey = policyIds.join(",")
+  // A filter can leave out the property this vehicle is linked to; keep it selectable so saving doesn't unlink it.
+  const linkedOutside = !!vehicle?.propertyId && !!propertyChoices && !propertyChoices.some((p) => p.id === vehicle.propertyId)
+  const propertyOptions = propertyChoices && (linkedOutside ? [...propertyChoices, { id: vehicle!.propertyId!, name: "Linked property" }] : propertyChoices)
 
   useEffect(() => {
     if (vehicle) {
@@ -66,22 +91,27 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
         currentMileage: vehicle.currentMileage?.toString() ?? "",
         meterUnit: vehicle.meterUnit,
         notes: vehicle.notes ?? "",
+        policyIds: linkedKey ? linkedKey.split(",") : [],
+        propertyId: vehicle.propertyId ?? NO_PROPERTY,
       })
     } else {
       form.reset({
         name: "", make: "", model: "", year: new Date().getFullYear().toString(),
-        vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "",
+        vin: "", color: "", purchaseDate: "", purchasePrice: "", currentMileage: "", meterUnit: "MILES", notes: "", policyIds: [], propertyId: newPropertyId ?? NO_PROPERTY,
       })
     }
-  }, [vehicle, open, form])
+  }, [vehicle, open, form, linkedKey, newPropertyId])
 
   async function onSubmit(values: FormValues, then: "close" | "reminders" = "close") {
+    const { policyIds: chosen, propertyId, ...rest } = values
+    // Only sent when the field was shown, so saving with the switch off never touches the link.
+    const fields = propertyChoices ? { ...rest, propertyId: propertyId === NO_PROPERTY ? "" : propertyId } : rest
     const result = vehicle
-      ? await updateVehicle(vehicle.id, values as unknown as Parameters<typeof updateVehicle>[1])
-      : await createVehicle(values as unknown as Parameters<typeof createVehicle>[0])
+      ? await updateVehicle(vehicle.id, fields as unknown as Parameters<typeof updateVehicle>[1], showInsurance ? chosen : undefined)
+      : await createVehicle(fields as unknown as Parameters<typeof createVehicle>[0])
 
     if (result?.error) {
-      toast.error("Please fix the errors and try again.")
+      showServerError(form, result.error)
       return
     }
     toast.success(vehicle ? "Vehicle updated." : "Vehicle added.")
@@ -101,7 +131,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Nickname *</FormLabel>
+                  <FormLabel help="vehicle.name">Nickname *</FormLabel>
                   <FormControl><Input placeholder="Family SUV" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -109,7 +139,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="year" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Year *</FormLabel>
+                  <FormLabel help="vehicle.year">Year *</FormLabel>
                   <FormControl><Input type="number" placeholder="2022" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -117,7 +147,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="make" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Make *</FormLabel>
+                  <FormLabel help="vehicle.make">Make *</FormLabel>
                   <FormControl><Input placeholder="Toyota" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -125,7 +155,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="model" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Model *</FormLabel>
+                  <FormLabel help="vehicle.model">Model *</FormLabel>
                   <FormControl><Input placeholder="RAV4" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -133,7 +163,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="color" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Color</FormLabel>
+                  <FormLabel help="vehicle.color">Color</FormLabel>
                   <FormControl><Input placeholder="Silver" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -141,7 +171,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="purchaseDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Date</FormLabel>
+                  <FormLabel help="vehicle.purchase-date">Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +179,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{`Purchase Price (${fmt.currencySymbol})`}</FormLabel>
+                  <FormLabel help="vehicle.purchase-price">{`Purchase Price (${fmt.currencySymbol})`}</FormLabel>
                   <FormControl><Input type="number" step="0.01" placeholder="28500" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -157,7 +187,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="currentMileage" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Current {fmt.meterNoun(form.watch("meterUnit"))}</FormLabel>
+                  <FormLabel help="vehicle.current-mileage">Current {fmt.meterNoun(form.watch("meterUnit"))}</FormLabel>
                   <FormControl><Input type="number" placeholder={form.watch("meterUnit") === "HOURS" ? "1250" : "45000"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -165,7 +195,7 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="meterUnit" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tracked In</FormLabel>
+                  <FormLabel help="vehicle.tracked-in">Tracked In</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => meterUnitLabels[v] ?? v}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
@@ -177,9 +207,27 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
                 </FormItem>
               )} />
 
+              {propertyOptions && (
+                <FormField control={form.control} name="propertyId" render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel help="vehicle.property">Property</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => propertyOptions.find((p) => p.id === v)?.name ?? "Not assigned"}</SelectValue></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_PROPERTY}>Not assigned</SelectItem>
+                        {propertyOptions.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+
               <FormField control={form.control} name="vin" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>VIN</FormLabel>
+                  <FormLabel help="vehicle.vin">VIN</FormLabel>
                   <FormControl><Input placeholder="1HGCM82633A123456" className="font-mono text-sm" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -187,11 +235,21 @@ export function VehicleFormDialog({ open, onClose, vehicle }: Props) {
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="vehicle.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {showInsurance && (
+                <CheckList
+                  label="Insurance"
+                  help="vehicle.insurance"
+                  options={policyChoices}
+                  value={ticked}
+                  onChange={(next) => form.setValue("policyIds", next, { shouldDirty: true })}
+                />
+              )}
             </div>
 
             <DialogFooter>

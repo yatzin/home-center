@@ -17,6 +17,11 @@ describe("defaults reproduce today's output", () => {
   it("whole money", () => {
     expect(f.moneyWhole(1234.56)).toBe((1234.56).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }))
   })
+  it("rates keep two decimals, even in a currency with none", () => {
+    expect(f.moneyRate(0.15)).toBe("$0.15")
+    expect(fmt({ currency: "JPY" }).money(0.15)).toBe("¥0")
+    expect(fmt({ currency: "JPY" }).moneyRate(0.15)).toContain("0.15")
+  })
   it("units", () => {
     expect(f.meterShort("MILES")).toBe("mi")
     expect(f.meterShort("HOURS")).toBe("hrs")
@@ -89,6 +94,30 @@ describe("time", () => {
     expect(fmt().clock(null)).toBe("")
   })
   it("dateTime", () => expect(fmt({ dateFormat: "ISO", hour12: false }).dateTime(d)).toBe("2026-01-05 14:07"))
+  it("timeParts splits the time for a clock face (12h)", () => {
+    const at = new Date(2026, 0, 5, 14, 7, 9)
+    expect(fmt().timeParts(at)).toEqual({ hm: "2:07", seconds: "09", period: "PM" })
+    expect(fmt().timeParts(new Date(2026, 0, 5, 0, 0, 0))).toEqual({ hm: "12:00", seconds: "00", period: "AM" })
+    expect(fmt().timeParts(new Date(2026, 0, 5, 12, 30, 59))).toEqual({ hm: "12:30", seconds: "59", period: "PM" })
+  })
+  it("timeParts (24h): two-digit hours, no period", () => {
+    expect(fmt({ hour12: false }).timeParts(new Date(2026, 0, 5, 9, 5, 0))).toEqual({ hm: "09:05", seconds: "00", period: null })
+    expect(fmt({ hour12: false }).timeParts(new Date(2026, 0, 5, 23, 59, 59))).toEqual({ hm: "23:59", seconds: "59", period: null })
+  })
+  it("timeParts agrees with time()", () => {
+    for (const hour12 of [true, false]) {
+      const f = fmt({ hour12 })
+      for (let h = 0; h < 24; h++) {
+        const at = new Date(2026, 2, 8, h, 41)
+        const p = f.timeParts(at)
+        expect([p.hm, p.period].filter(Boolean).join(" ")).toBe(f.time(at))
+      }
+    }
+  })
+  it("exposes hour12", () => {
+    expect(fmt().hour12).toBe(true)
+    expect(fmt({ hour12: false }).hour12).toBe(false)
+  })
 })
 
 describe("currencies", () => {
@@ -127,5 +156,25 @@ describe("metric units", () => {
     expect(f.areaShort).toBe("m²")
     expect(f.area(1200)).toBe(`${(1200).toLocaleString()} m²`)
     expect(f.areaWords).toBe("square metres")
+  })
+})
+
+describe("monthYear", () => {
+  it("follows the date preset", () => {
+    expect(fmt().monthYear(DAY, { utc: true })).toBe("January 2026")
+    expect(fmt({ dateFormat: "DMY_SHORT" }).monthYear(DAY, { utc: true })).toBe("January 2026")
+    expect(fmt({ dateFormat: "MDY_NUM" }).monthYear(DAY, { utc: true })).toBe("01/2026")
+    expect(fmt({ dateFormat: "ISO" }).monthYear(DAY, { utc: true })).toBe("2026-01")
+  })
+})
+
+describe("number", () => {
+  it("groups digits in the runtime locale, like area()", () => {
+    expect(fmt().number(1234567)).toBe((1234567).toLocaleString())
+    expect(fmt().number(-300)).toBe((-300).toLocaleString())
+  })
+  it("rounds to whole numbers by default, or to the given fraction digits", () => {
+    expect(fmt().number(12.6)).toBe((13).toLocaleString())
+    expect(fmt().number(12.25, 1)).toBe((12.3).toLocaleString())
   })
 })

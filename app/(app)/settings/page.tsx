@@ -6,6 +6,10 @@ import { EmailPreferences } from "@/components/settings/email-preferences"
 import { NotificationRecipients } from "@/components/settings/notification-recipients"
 import { RepeatPreferences } from "@/components/settings/repeat-preferences"
 import { MailSettings } from "@/components/settings/mail-settings"
+import { NotificationSchedule } from "@/components/settings/notification-schedule"
+import { PushSettings } from "@/components/settings/push-settings"
+import { loadNotificationConfig } from "@/lib/notifications/notification-settings"
+import { effectiveInterval } from "@/lib/notifications/interval"
 import { LlmSettings } from "@/components/settings/llm-settings"
 import { loadMailConfig, SETTINGS_ID } from "@/lib/notifications/mail-config"
 import { isMailConfigured } from "@/lib/notifications/mailer"
@@ -13,7 +17,7 @@ import { loadLlmConfig, loadLlmStatus } from "@/lib/llm/config"
 import { cookies } from "next/headers"
 import { PLACEMENTS, readPlacement } from "@/lib/placement"
 import { PlacementSettings } from "@/components/settings/placement-settings"
-import { isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
+import { assistantShown, isLlmReady, parseExtraBody } from "@/lib/llm/settings-schema"
 import { DocumentSettings } from "@/components/settings/document-settings"
 import { CaptureSettings } from "@/components/settings/capture-settings"
 import { loadCaptureParser } from "@/lib/capture-server"
@@ -24,7 +28,7 @@ import { SettingsNav } from "@/components/settings/settings-nav"
 import { FeatureSettings } from "@/components/settings/feature-settings"
 import { RegionalSettingsForm } from "@/components/settings/regional-settings"
 import { loadRegionalSettings } from "@/lib/regional-server"
-import { loadFeatures } from "@/lib/features-server"
+import { loadFeatures, loadPropertyFilterEnabled } from "@/lib/features-server"
 import { DataSettings } from "@/components/settings/data/data-settings"
 import { loadBackupOverview } from "@/lib/backup/overview-server"
 import { resolveSection, visibleSections, type SettingsSectionId } from "@/lib/settings-sections"
@@ -46,12 +50,15 @@ export default async function SettingsPage({
   // gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. resolveSection keeps the admin-only sections from
   // non-admins, and only the open section's data is loaded.
-  const [me, users, recipients, mail, storedMail, llm, docs, features, capture, appearance, backup, regional] = await Promise.all([
+  const [me, users, recipients, mail, storedMail, llm, docs, features, capture, appearance, backup, regional, notify, propertyFilterEnabled] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true, receivesNotifications: true, notificationRepeat: true },
     }),
-    is("users") ? prisma.user.findMany({ orderBy: { createdAt: "asc" } }) : Promise.resolve([]),
+    // Only what the table shows: the rows are sent to the browser, so no password hashes.
+    is("users")
+      ? prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, mustResetPassword: true }, orderBy: { createdAt: "asc" } })
+      : Promise.resolve([]),
     is("notifications") && isAdmin
       ? prisma.user.findMany({
           select: { id: true, name: true, email: true, role: true, receivesNotifications: true },
@@ -75,11 +82,21 @@ export default async function SettingsPage({
           assistant: readPlacement("assistant", jar.get(PLACEMENTS.assistant.cookie)?.value),
           intake: readPlacement("intake", jar.get(PLACEMENTS.intake.cookie)?.value),
           // Same rule as the layout.
-          assistantShown: s.available,
+          assistantShown: assistantShown(s),
         }))
       : Promise.resolve(null),
     is("data") ? loadBackupOverview() : Promise.resolve(null),
     is("regional") ? loadRegionalSettings() : Promise.resolve(null),
+    // Everyone sees how often checks run (it decides how noisy repeat reminders are);
+    // admins also get the schedule and push cards.
+    is("notifications")
+      ? Promise.all([
+          loadNotificationConfig(),
+          prisma.notificationSettings.findUnique({ where: { id: "singleton" }, select: { intervalMinutes: true } }),
+          isAdmin ? prisma.user.count({ where: { receivesNotifications: true, notificationRepeat: "UNTIL_DISMISSED" } }) : Promise.resolve(0),
+        ])
+      : Promise.resolve(null),
+    is("features") ? loadPropertyFilterEnabled() : Promise.resolve(false),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -122,8 +139,29 @@ export default async function SettingsPage({
                 mailConfigured={isMailConfigured(mail)}
                 receivesNotifications={me.receivesNotifications}
               />
-              <RepeatPreferences repeat={me.notificationRepeat} />
+              <RepeatPreferences repeat={me.notificationRepeat} intervalMinutes={notify?.[0].interval.minutes ?? 360} />
               {isAdmin && <NotificationRecipients users={recipients} currentUserId={session.user.id} />}
+              {isAdmin && notify && (
+                <>
+                  <NotificationSchedule
+                    savedMinutes={notify[1]?.intervalMinutes?.toString() ?? ""}
+                    effectiveMinutes={notify[0].interval.minutes}
+                    fallbackMinutes={effectiveInterval(null, process.env.NOTIFY_INTERVAL_MINUTES).minutes}
+                    source={notify[0].interval.source}
+                    untilDismissedPeople={notify[2]}
+                  />
+                  <PushSettings
+                    // The URL and token are never sent, only whether they're stored.
+                    initial={{ enabled: notify[0].push.enabled, type: notify[0].push.type, chatId: notify[0].push.target.chatId ?? "" }}
+                    hasStoredUrl={notify[0].push.hasUrl}
+                    hasStoredToken={notify[0].push.hasToken}
+                    unreadable={notify[0].push.unreadable}
+                    lastError={notify[0].push.lastError}
+                    lastOk={notify[0].push.lastOkAt ? notify[0].push.lastOkAt.toLocaleString() : null}
+                    intervalMinutes={notify[0].interval.minutes}
+                  />
+                </>
+              )}
             </div>
           )}
 
@@ -147,7 +185,7 @@ export default async function SettingsPage({
             </div>
           )}
 
-          {is("features") && features &&<FeatureSettings initial={{ healthEnabled: features.health, roomsEnabled: features.rooms, equipmentTabEnabled: features.equipmentTab }} />}
+          {is("features") && features &&<FeatureSettings initial={{ healthEnabled: features.health, roomsEnabled: features.rooms, equipmentTabEnabled: features.equipmentTab, propertyFilterEnabled }} />}
 
           {is("regional") && regional && <RegionalSettingsForm initial={regional} />}
 

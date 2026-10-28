@@ -1,3 +1,4 @@
+import { repeatsLabel } from "@/lib/maintenance-schedule"
 import { z } from "zod/v4"
 import { prisma } from "@/lib/prisma"
 import { loadAssetIndex } from "@/lib/assets-server"
@@ -13,7 +14,8 @@ import {
 } from "@/lib/health"
 import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
 import { ENTITIES, HEALTH_ENTITIES, ROOM_ENTITIES, type EntityKey, type Row } from "../ontology"
-import { coerceValue, entityDef, healthOn, inDayRange, roomsOn, requireDay, selectFor, ToolInputError, withLocationSelect, type ToolContext } from "../query"
+import { coerceValue, entityDef, healthOffWhere, healthOn, inDayRange, roomsOn, requireDay, selectFor, ToolInputError, withLocationSelect, type ToolContext } from "../query"
+import { HEALTH_INSURANCE_KINDS } from "@/lib/insurance"
 import { compact, serializeRow, toDay } from "../serialize"
 import { aggregateRows, groupSpec, measureSpec } from "../aggregate"
 import { assetRef, attachAssets, delegate } from "../execute"
@@ -25,6 +27,8 @@ import { matchAsset, resolveAssetId, type AssetEntry } from "../asset-ids"
 import { analyzeObservations } from "../observation-log"
 import { observationHref } from "@/lib/observations"
 import { defineTool } from "./registry"
+import { entityScopeWhere, nonEmpty, scopedNames, withScope } from "../property-scope"
+import { ownedScopeWhere, personChildScopeWhere, personScopeWhere, policyScopeWhere, type PropertyScope } from "@/lib/property-filter"
 
 // Curated tools for the questions people ask most. Narrow arguments so small
 // models call them reliably, and each reuses the logic behind the matching page
@@ -81,7 +85,8 @@ async function searchRecords(query: string, entities: string[] | undefined, ctx:
           ...words.map((w) => ({ OR: owned ? [...own(w), { person: { name: { contains: w } } }] : own(w) })),
           ...(owned && words.length ? [{ OR: words.flatMap(own) }] : []),
           ...(def.scope ? [def.scope(ctx)] : []),
-          ...(def.polymorphic && !healthOn(ctx) ? [{ assetType: { not: "PERSON" } }] : []),
+          ...healthOffWhere(key, ctx),
+          ...nonEmpty(entityScopeWhere(key, ctx)),
         ],
       }
       // Say whose record each row is: a bare personId leaves the model unable
@@ -111,14 +116,16 @@ export const ASSET_ARG = "A property, vehicle, equipment item or person: its nam
 export type FoundAsset = AssetEntry & { href: string }
 export const assetLinkRef = (a: FoundAsset) => ({ type: a.type, name: a.name, href: a.href })
 
-async function loadAssetCatalog(): Promise<AssetEntry[]> {
+/** Assets the property filter hides are left out, so their names read as "not found". */
+async function loadAssetCatalog(scope: PropertyScope | null): Promise<AssetEntry[]> {
   const [index, vehicles] = await Promise.all([
     loadAssetIndex(),
     prisma.vehicle.findMany({ select: { id: true, year: true, make: true, model: true } }),
   ])
   const aka = new Map(vehicles.map((v) => [v.id, [v.year, v.make, v.model].filter(Boolean).join(" ")]))
-  return (Object.keys(index.names) as AssetType[]).flatMap((type) =>
-    Object.entries(index.names[type]).map(([id, name]) => ({ type, id, name, aka: aka.get(id) }))
+  const names = scopedNames(index.names, scope)
+  return (Object.keys(names) as AssetType[]).flatMap((type) =>
+    Object.entries(names[type]).map(([id, name]) => ({ type, id, name, aka: aka.get(id) }))
   )
 }
 
@@ -130,7 +137,7 @@ async function loadAssetCatalog(): Promise<AssetEntry[]> {
  */
 export async function findAsset(raw: string, ctx: ToolContext, types?: AssetType[]): Promise<{ asset: FoundAsset } | { reply: unknown }> {
   const withHref = (a: AssetEntry): FoundAsset => ({ ...a, href: assetHref(a.type, a.id) })
-  const m = matchAsset(await loadAssetCatalog(), raw, types)
+  const m = matchAsset(await loadAssetCatalog(ctx.scope ?? null), raw, types)
   if (m.kind === "found") return { asset: withHref(m.asset) }
   if (m.kind === "ambiguous") {
     return {
@@ -215,7 +222,7 @@ export const costSummaryTool = defineTool({
       : null
 
     const [records, index, installed] = await Promise.all([
-      loadCostRecords(),
+      loadCostRecords({ scope: ctx.scope }),
       loadAssetIndex(),
       prisma.equipment.findMany({ where: { propertyId: { not: null } }, select: { id: true, propertyId: true } }),
     ])
@@ -317,7 +324,10 @@ export const warrantyStatusTool = defineTool({
     const scope = await assetScope(a, ctx)
     if ("reply" in scope) return scope.reply
     const index = await loadAssetIndex()
-    const warranties = await prisma.warranty.findMany({ where: scope.where, orderBy: { expirationDate: "asc" } })
+    const warranties = await prisma.warranty.findMany({
+      where: withScope(scope.where, ownedScopeWhere(ctx.scope ?? null)),
+      orderBy: { expirationDate: "asc" },
+    })
     const status = a.status ?? "expiring"
     const withinDays = a.withinDays ?? 180
     const rows = warranties
@@ -360,7 +370,7 @@ export const maintenanceStatusTool = defineTool({
     const index = await loadAssetIndex()
     const [schedules, mileage] = await Promise.all([
       prisma.maintenanceSchedule.findMany({
-        where: { isActive: true, ...scope.where },
+        where: withScope({ isActive: true, ...scope.where }, ownedScopeWhere(ctx.scope ?? null)),
         orderBy: { nextDueDate: "asc" },
       }),
       loadVehicleMileage(),
@@ -391,6 +401,8 @@ export const maintenanceStatusTool = defineTool({
           meterLeft: due.milesLeft,
           meterUnit: due.meterUnit,
           lastCompletedDate: dayOrNull(s.lastCompletedDate),
+          repeats: repeatsLabel(s, mileage.get(s.assetId)?.unit === "HOURS" ? "hr" : "mi"),
+          estimatedCost: s.estimatedCost,
           intervalDays: s.intervalDays,
           intervalMeter: s.intervalMiles,
           snoozedUntil: isSnoozed(s, ctx.now) ? dayOrNull(s.snoozedUntil) : null,
@@ -411,15 +423,20 @@ export const healthAlertsTool = defineTool({
   schema: z.object({ personId: z.string().optional() }),
   label: () => "Checking health reminders…",
   async run(a, ctx) {
-    const personId = a.personId ? resolveAssetId((await loadAssetIndex()).names, a.personId, ["PERSON"]) : undefined
+    const personId = a.personId ? resolveAssetId(scopedNames((await loadAssetIndex()).names, ctx.scope), a.personId, ["PERSON"]) : undefined
     const byPerson = personId ? { personId } : {}
     const person = { select: { id: true, name: true } } as const
+    const ofVisible = personChildScopeWhere(ctx.scope ?? null)
     const [meds, imms, policies] = await Promise.all([
-      prisma.medication.findMany({ where: { ...byPerson, nextRefillDate: { not: null } }, include: { person } }),
-      prisma.immunization.findMany({ where: byPerson, include: { person } }),
+      prisma.medication.findMany({ where: withScope({ ...byPerson, nextRefillDate: { not: null } }, ofVisible), include: { person } }),
+      prisma.immunization.findMany({ where: withScope(byPerson, ofVisible), include: { person } }),
       prisma.insurancePolicy.findMany({
-        where: { endDate: { not: null }, ...(personId ? { members: { some: { id: personId } } } : {}) },
-        include: { members: person },
+        where: withScope(
+          { kind: { in: [...HEALTH_INSURANCE_KINDS] }, endDate: { not: null }, ...(personId ? { members: { some: { id: personId } } } : {}) },
+          policyScopeWhere(ctx.scope ?? null)
+        ),
+        // A shared policy still names only the people in view.
+        include: { members: ctx.scope ? { ...person, where: personScopeWhere(ctx.scope) } : person },
       }),
     ])
     return {
@@ -453,10 +470,10 @@ export const observationLogTool = defineTool({
   }),
   label: (a) => (a.type ? `Reading the ${a.type} log…` : "Reading the observation log…"),
   async run(a, ctx) {
-    const personId = a.personId ? resolveAssetId((await loadAssetIndex()).names, a.personId, ["PERSON"]) : undefined
+    const personId = a.personId ? resolveAssetId(scopedNames((await loadAssetIndex()).names, ctx.scope), a.personId, ["PERSON"]) : undefined
     const range = { from: optionalDay(a.from, "from"), to: optionalDay(a.to, "to") }
     const rows = await prisma.observation.findMany({
-      where: personId ? { personId } : {},
+      where: withScope(personId ? { personId } : {}, personChildScopeWhere(ctx.scope ?? null)),
       include: { condition: { select: { name: true } }, person: { select: { id: true, name: true } } },
     })
     const wanted = a.type?.trim().toLowerCase()

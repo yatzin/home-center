@@ -1,31 +1,37 @@
 import Link from "next/link"
 import { X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { RankedBars } from "@/components/charts/ranked-bars"
+import { RankedBars, type RankedRow } from "@/components/charts/ranked-bars"
 import { TrendChart } from "@/components/charts/trend-chart"
 import { CompositionBar } from "@/components/charts/composition-bar"
-import { Sparkline } from "@/components/charts/sparkline"
-import { loadCostRecords } from "@/lib/costs-server"
+import { TileChart, type TilePoint } from "@/components/charts/tile-chart"
+import { loadCostRecords, loadPlannedSchedules } from "@/lib/costs-server"
 import { loadFeatures } from "@/lib/features-server"
 import { loadAssetIndex } from "@/lib/assets-server"
+import { loadPropertyScope } from "@/lib/property-filter-server"
+import { filteredEmptyText } from "@/lib/property-filter"
 import { assetHref, assetIcon } from "@/lib/assets"
 import { cn } from "@/lib/utils"
 import { withParams } from "@/lib/table-params"
 import type { AssetType } from "@/app/generated/prisma/client"
 import {
-  CATEGORY_ORDER, assetKey, averagePerMonth, nestedByAsset, bucketed, byAsset, byCategory, byVendor, categoryColor,
+  CATEGORY_ORDER, assetKey, averagePerMonth, monthsBack, dailyTotals, lastYearMonthly, yearlyBars, nestedByAsset, bucketed, byAsset, byCategory, byVendor, categoryColor,
   categoryLabel, costRange, inYear, isGranularity, parseAssetKey, ranked,
   rollingAverage, stackedBuckets, sum, yearToDate, type CategoryKey, type CostRow,
   type Granularity,
 } from "@/lib/costs"
 import { getFormat } from "@/lib/regional-server"
 import type { Formatter } from "@/lib/regional"
+import { forecastByMonth, forecastSchedules, largestPlanned, mileageNote, type Forecast } from "@/lib/forecast"
+import { localDay } from "@/lib/equipment-life"
 
 const TOP_ASSETS = 8
 const TOP_VENDORS = 6
 const BIGGEST_EXPENSES = 8
+const TOP_PLANNED = 8
 /// Months of history behind the year-to-date tile.
 const TILE_MONTHS = 12
+const DAILY_DAYS = 60
 /// Buckets in the hero's trailing average. Three is enough to damp a single
 /// large repair without smoothing away a real change of direction.
 const TREND_WINDOW = 3
@@ -53,36 +59,56 @@ export default async function CostsPage({
   const params = await searchParams
   const fmt = await getFormat()
   const now = new Date()
-  const [allRows, assets, features] = await Promise.all([loadCostRecords(), loadAssetIndex(), loadFeatures()])
+  // Every one of these arrives from the query string, so every one is whitelisted
+  // against a known set before it reaches a filter.
+  const typeParam = typeof params.type === "string" ? params.type : undefined
+  const requestedType = ASSET_TYPE_FILTERS.some((t) => t.value === typeParam) ? (typeParam as AssetType) : undefined
+  const scope = await loadPropertyScope()
+  // Planned spend follows the asset-type filter only; year, bucket and category are about history.
+  // It loads beside the rest: it only needs the type, and with Health off it returns nothing for people.
+  const [allRows, assets, features, plannedSchedules] = await Promise.all([
+    loadCostRecords({ scope }),
+    loadAssetIndex(scope),
+    loadFeatures(),
+    loadPlannedSchedules(requestedType ? { assetType: requestedType, scope } : { scope }),
+  ])
   const typeFilters = features.health ? ASSET_TYPE_FILTERS : ASSET_TYPE_FILTERS.filter((t) => t.value !== "PERSON")
+  const assetType = typeFilters.some((t) => t.value === requestedType) ? requestedType : undefined
+  // ?type=PERSON with Health off falls back to every asset, as the rest of the page does.
+  const planned = assetType === requestedType ? plannedSchedules : await loadPlannedSchedules({ scope })
+  const today = localDay(now)
+  const forecast = forecastSchedules(planned, today)
+  const plannedPanel = <PlannedPanel forecast={forecast} today={today} assets={assets} fmt={fmt} />
 
   if (allRows.length === 0) {
+    const empty = filteredEmptyText(scope)
     return (
       <div className="space-y-6">
         <Heading />
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          <p className="font-medium">No costs recorded yet</p>
-          <p className="mt-1 text-sm">
-            Add a cost to a service record and this page will start reporting on it.
-          </p>
+          {empty ? (
+            <p className="font-medium">{empty}</p>
+          ) : (
+            <>
+              <p className="font-medium">No costs recorded yet</p>
+              <p className="mt-1 text-sm">
+                Add a cost to a service record and this page will start reporting on it.
+              </p>
+            </>
+          )}
         </div>
+        {plannedPanel}
       </div>
     )
   }
 
-  // Every one of these arrives from the query string, so every one is whitelisted
-  // against a known set before it reaches a filter.
-  const typeParam = typeof params.type === "string" ? params.type : undefined
-  const assetType = typeFilters.some((t) => t.value === typeParam)
-    ? (typeParam as AssetType)
-    : undefined
   const yearRaw = typeof params.year === "string" ? params.year : undefined
   const yearParam = Number(yearRaw ?? NaN)
   // The page opens on the current year, monthly, across all assets. "all" is an
   // explicit value because an absent param now means "the default", not "no filter".
   // Falls back to every year when the current one has no costs, so a fresh January
   // doesn't open on an empty page.
-  const years = [...new Set(allRows.map((r) => r.date.getFullYear()))].sort((a, b) => b - a)
+  const years = [...new Set(allRows.map((r) => r.date.getUTCFullYear()))].sort((a, b) => b - a)
   const thisYear = now.getFullYear()
   const year =
     yearRaw === "all"
@@ -130,6 +156,7 @@ export default async function CostsPage({
           <p className="font-medium">No costs match those filters</p>
           <p className="mt-1 text-sm">Try a different year, asset type, or category.</p>
         </div>
+        {plannedPanel}
       </div>
     )
   }
@@ -144,11 +171,19 @@ export default async function CostsPage({
   const ytdPrior = sum(yearToDate(typeRows, now, thisYear - 1))
   const lastYear = sum(inYear(typeRows, thisYear - 1))
   const yearBefore = sum(inYear(typeRows, thisYear - 2))
-  const tileHistory = bucketed(
-    typeRows,
-    "month",
-    { start: new Date(now.getFullYear(), now.getMonth() - (TILE_MONTHS - 1), 1), end: now }
-  ).map((p) => p.total)
+  // Every tile chart follows the asset type but not the year or category filters.
+  const withText = (points: { label: string; total: number }[]): TilePoint[] =>
+    points.map((p) => ({ ...p, text: fmt.money(p.total) }))
+  const tileHistory = withText(
+    bucketed(
+      typeRows,
+      "month",
+      { start: monthsBack(now, TILE_MONTHS), end: localDay(now) }
+    ).map((p) => ({ label: p.fullLabel, total: p.total }))
+  )
+  const lastYearHistory = withText(lastYearMonthly(typeRows, now))
+  const yearBars = withText(yearlyBars(typeRows, now))
+  const dailyPoints = withText(dailyTotals(typeRows, now, DAILY_DAYS).map((d) => ({ label: fmt.date(d.date, { utc: true }), total: d.total })))
 
   // Equipment rolls into its property only when the view includes equipment (All).
   // Filtered to Properties it is not in the rows at all, and filtered to Equipment
@@ -223,20 +258,38 @@ export default async function CostsPage({
           value={fmt.money(ytd)}
           delta={ytdPrior > 0 ? (ytd - ytdPrior) / ytdPrior : null}
           deltaNote={`vs ${fmt.money(ytdPrior)} by this point in ${thisYear - 1}`}
-          history={tileHistory}
-          historyLabel={`Monthly spending over the last ${TILE_MONTHS} months`}
+          chart={{ kind: "line", points: tileHistory, label: `Monthly spending over the last ${TILE_MONTHS} months` }}
         />
         <Kpi
           label={`All of ${thisYear - 1}`}
           value={fmt.money(lastYear)}
           delta={yearBefore > 0 ? (lastYear - yearBefore) / yearBefore : null}
           deltaNote={`vs ${fmt.money(yearBefore)} in ${thisYear - 2}`}
+          chart={{ kind: "line", points: lastYearHistory, label: `Monthly spending in ${thisYear - 1}, January to December` }}
         />
-        {/* All-time and the monthly average carry no trend of their own: one is
-            cumulative, so its sparkline could only ever rise, and the other is the
-            same series the first tile already draws. */}
-        <Kpi label="All time" value={fmt.money(sum(typeRows))} />
-        <Kpi label="Average per month" value={fmt.money(averagePerMonth(typeRows, now))} />
+        {/* All time is cumulative, so a line could only ever rise: it gets a bar per
+            year instead. The monthly average has no trend line of its own (it would
+            repeat the first tile), so it shows the last 60 days day by day. */}
+        <Kpi
+          label="All time"
+          value={fmt.money(sum(typeRows))}
+          chart={{
+            kind: "bars",
+            points: yearBars,
+            label: "Total spending for each year",
+            edgeLabels: [yearBars[0]?.label ?? "", yearBars[yearBars.length - 1]?.label ?? ""],
+          }}
+        />
+        <Kpi
+          label="Average per month"
+          value={fmt.money(averagePerMonth(typeRows, now))}
+          chart={{
+            kind: "bars",
+            points: dailyPoints,
+            label: `Daily spending over the last ${DAILY_DAYS} days`,
+            edgeLabels: [dailyPoints[0].label, dailyPoints[dailyPoints.length - 1].label],
+          }}
+        />
       </div>
 
       <Panel title={year != null ? `Spend through ${year}` : "Spend over time"}>
@@ -286,7 +339,49 @@ export default async function CostsPage({
           </ul>
         </Panel>
       </div>
+
+      {plannedPanel}
     </div>
+  )
+}
+
+/// Reminders with an estimated cost, spread over the next 12 months. No card at all
+/// when nothing is estimated and nothing is waiting on a mileage.
+function PlannedPanel({
+  forecast,
+  today,
+  assets,
+  fmt,
+}: {
+  forecast: Forecast
+  today: Date
+  assets: Awaited<ReturnType<typeof loadAssetIndex>>
+  fmt: Formatter
+}) {
+  if (forecast.total === 0 && forecast.mileageOnly === 0) return null
+  const note = mileageNote(forecast.mileageOnly)
+  const monthRows: RankedRow[] = forecastByMonth(forecast.occurrences, today).map((m) => ({
+    ...m,
+    label: m.start.toLocaleString(undefined, { month: "short", year: "numeric", timeZone: "UTC" }),
+  }))
+  const itemRows: RankedRow[] = largestPlanned(forecast.occurrences, TOP_PLANNED).map((item) => ({
+    key: item.scheduleId,
+    label: `${item.title} · ${assets.assetName(item.assetType, item.assetId) ?? "Unknown"}`,
+    total: item.total,
+    count: item.count,
+    share: item.share,
+    href: `${assetHref(item.assetType, item.assetId)}?tab=${item.assetType === "PERSON" ? "reminders" : "maintenance"}&open=${item.scheduleId}`,
+  }))
+
+  return (
+    <Panel title="Planned, next 12 months">
+      <div className="text-[22px] font-semibold leading-none">{fmt.money(forecast.total)}</div>
+      {note && <p className="mt-1.5 text-xs text-muted-foreground">{note}</p>}
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <RankedBars entries={monthRows} valueLabel="Planned" caption="Planned spend by month" size="compact" countNoun="occurrence" />
+        <RankedBars entries={itemRows} valueLabel="Planned" caption="Largest planned items" size="compact" countNoun="occurrence" emptyMessage="Nothing planned with a date." />
+      </div>
+    </Panel>
   )
 }
 
@@ -306,8 +401,7 @@ function Kpi({
   value,
   delta,
   deltaNote,
-  history,
-  historyLabel,
+  chart,
 }: {
   label: string
   value: string
@@ -315,8 +409,8 @@ function Kpi({
   /// prior period to compare against.
   delta?: number | null
   deltaNote?: string
-  history?: number[]
-  historyLabel?: string
+  /// A line, or bars where a line could not show the figure honestly.
+  chart?: { kind: "line" | "bars"; points: TilePoint[]; label: string; edgeLabels?: [string, string] }
 }) {
   return (
     <Card className="py-4">
@@ -330,8 +424,10 @@ function Kpi({
         <div className="mt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {label}
         </div>
-        {history && history.length > 1 ? (
-          <Sparkline values={history} ariaLabel={historyLabel ?? label} className="mt-3 h-8 w-full" />
+        {chart && chart.points.length > 1 ? (
+          <div className="mt-3">
+            <TileChart kind={chart.kind} points={chart.points} ariaLabel={chart.label} edgeLabels={chart.edgeLabels} />
+          </div>
         ) : null}
         {deltaNote && delta != null ? (
           <p className="mt-2 text-[11px] text-muted-foreground">{deltaNote}</p>
@@ -478,7 +574,7 @@ function FilterRow({
         <FilterGroup label="Category">
           <Link
             href={`/costs${withParams(params, { category: undefined })}`}
-            className="flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+            className="relative flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs max-sm:before:absolute max-sm:before:top-1/2 max-sm:before:left-1/2 max-sm:before:h-10 max-sm:before:w-full max-sm:before:-translate-1/2 font-medium text-primary transition-colors hover:bg-primary/20"
           >
             <span
               aria-hidden="true"
@@ -512,7 +608,7 @@ function FilterLink({ label, href, active }: { label: string; href: string; acti
       href={href}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150",
+        "relative rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 max-sm:before:absolute max-sm:before:top-1/2 max-sm:before:left-1/2 max-sm:before:h-10 max-sm:before:w-full max-sm:before:-translate-1/2",
         active
           ? "bg-primary/10 text-primary"
           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"

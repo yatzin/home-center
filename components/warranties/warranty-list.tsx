@@ -1,6 +1,8 @@
 "use client"
 
 import { useFormat } from "@/components/regional-provider"
+import { useStripOpenParam } from "@/components/strip-open-param"
+import { findOpenRow } from "@/lib/deep-link"
 import { Fragment, useCallback, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -18,6 +20,7 @@ import { SortableTableHead } from "@/components/ui/sortable-table-head"
 import { PaginationBar } from "@/components/ui/pagination-bar"
 import { useClientTable, type Accessor } from "@/lib/use-client-table"
 import type { SortDir } from "@/lib/table-params"
+import { warrantyState } from "@/lib/llm/warranty-status"
 import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
 
 type WarrantyWithAttachments = Warranty & { attachments: Attachment[] }
@@ -45,13 +48,10 @@ interface Props {
 
 function warrantyStatus(expirationDate: Date | null) {
   if (!expirationDate) return null
-  // Same -0 guard as the global warranties page: Math.ceil of a small negative
-  // is -0, which is not < 0, so a warranty that lapsed hours ago would show
-  // "0d left" instead of "Expired".
-  const ms = new Date(expirationDate).getTime() - Date.now()
-  if (ms < 0) return { label: "Expired", variant: "destructive" as const }
-  const daysLeft = Math.ceil(ms / 86400000)
-  if (daysLeft <= 60) return { label: `${daysLeft}d left`, variant: "secondary" as const }
+  // Same whole-day rule as the global warranties page: ending today is not expired.
+  const { state, daysLeft } = warrantyState(new Date(expirationDate), new Date(), 60)
+  if (state === "expired") return { label: "Expired", variant: "destructive" as const }
+  if (state === "expiring") return { label: daysLeft === 0 ? "Today" : `${daysLeft}d left`, variant: "secondary" as const }
   return { label: "Active", variant: "outline" as const }
 }
 
@@ -64,11 +64,13 @@ export function WarrantyList({ warranties: initialWarranties, assetId, assetType
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [prevOpenId, setPrevOpenId] = useState<string | undefined>(undefined)
+  const [linkOpens, setLinkOpens] = useState(0)
   if (openId !== prevOpenId) {
     setPrevOpenId(openId)
-    const match = openId ? initialWarranties.find((w) => w.id === openId) : undefined
-    if (match) { setEditing(match); setDialogOpen(true) }
+    const match = findOpenRow(initialWarranties, openId)
+    if (match) { setEditing(match); setDialogOpen(true); setLinkOpens((n) => n + 1) }
   }
+  useStripOpenParam(linkOpens)
 
   if (initialWarranties !== prevInitialWarranties) {
     setPrevInitialWarranties(initialWarranties)
@@ -173,10 +175,10 @@ export function WarrantyList({ warranties: initialWarranties, assetId, assetType
                         </TableCell>
                       )}
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {w.purchaseDate ? fmt.date(w.purchaseDate) : <span>—</span>}
+                        {w.purchaseDate ? fmt.date(w.purchaseDate, { utc: true }) : <span>—</span>}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {w.expirationDate ? fmt.date(w.expirationDate) : <span>—</span>}
+                        {w.expirationDate ? fmt.date(w.expirationDate, { utc: true }) : <span>—</span>}
                       </TableCell>
                       <TableCell>
                         {status && <Badge variant={status.variant}>{status.label}</Badge>}

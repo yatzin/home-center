@@ -11,6 +11,8 @@ import { useFormat } from "@/components/regional-provider"
 import type { MaintenanceTemplate } from "@/lib/maintenance-templates"
 import type { AssetType, MeterUnit } from "@/app/generated/prisma/client"
 import { cn } from "@/lib/utils"
+import { formatDueMonths, repeatsLabel } from "@/lib/maintenance-schedule"
+import { MAX_INTERVAL_DAYS, MAX_INTERVAL_MILES } from "@/lib/input-limits"
 
 type Row = { checked: boolean; days: string; miles: string }
 
@@ -52,11 +54,15 @@ export function TemplatePicker({ assetType, assetId, templates, existingTitles, 
       const result = await addTemplateSchedules(
         assetType,
         assetId,
-        picked.map((t) => ({
-          key: t.key,
-          intervalDays: num(rows[t.key].days),
-          ...(t.intervalMiles !== undefined ? { intervalMiles: num(rows[t.key].miles) } : {}),
-        }))
+        picked.map((t) =>
+          t.dueMonths
+            ? { key: t.key }
+            : {
+                key: t.key,
+                intervalDays: num(rows[t.key].days),
+                ...(t.intervalMiles !== undefined ? { intervalMiles: num(rows[t.key].miles) } : {}),
+              }
+        )
       )
       if (result?.error) {
         toast.error(result.error === "Invalid input" ? "Check the intervals and try again." : result.error)
@@ -91,11 +97,15 @@ export function TemplatePicker({ assetType, assetId, templates, existingTitles, 
                   )}
                 </span>
               </label>
+              {t.dueMonths ? (
+                <div className="text-sm text-muted-foreground">{repeatsLabel({ intervalDays: null, intervalMiles: null, dueMonths: formatDueMonths(t.dueMonths), dueDay: t.dueDay }, "")}</div>
+              ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>Every</span>
                 <Input
                   type="number"
                   min={1}
+                  max={MAX_INTERVAL_DAYS}
                   inputMode="numeric"
                   aria-label={`${t.title}: days between`}
                   className="h-8 w-20"
@@ -110,6 +120,7 @@ export function TemplatePicker({ assetType, assetId, templates, existingTitles, 
                     <Input
                       type="number"
                       min={1}
+                      max={MAX_INTERVAL_MILES}
                       inputMode="numeric"
                       aria-label={`${t.title}: ${fmt.meterShort(meterUnit)} between`}
                       className="h-8 w-24"
@@ -121,6 +132,7 @@ export function TemplatePicker({ assetType, assetId, templates, existingTitles, 
                   </>
                 )}
               </div>
+              )}
             </li>
           )
         })}

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { signOut } from "next-auth/react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
@@ -12,9 +12,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { Badge } from "@/components/ui/badge"
+import { FieldHelp } from "@/components/ui/field-help"
 import { createUser, updateUserRole, resetUserPassword, deleteUser, updateSelf, changeOwnPassword } from "@/lib/actions/users"
 import { MIN_PASSWORD_LENGTH } from "@/lib/password-change"
-import type { User } from "@/app/generated/prisma/client"
+import { nameText } from "@/lib/input-limits"
+import { showServerError } from "@/components/forms/server-errors"
+import type { User as PrismaUser } from "@/app/generated/prisma/client"
+
+type User = Pick<PrismaUser, "id" | "name" | "email" | "role" | "mustResetPassword">
 
 const roleLabel: Record<string, string> = { ADMIN: "Admin", USER: "User" }
 
@@ -51,13 +56,15 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
         <Button onClick={() => setCreateOpen(true)}>Add User</Button>
       </div>
 
-      <div className="rounded-lg border overflow-hidden bg-card">
+      <div className="rounded-lg border overflow-x-auto bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Name</th>
               <th className="text-left font-medium px-4 py-2.5 hidden sm:table-cell">Email</th>
-              <th className="text-left font-medium px-4 py-2.5">Role</th>
+              <th className="text-left font-medium px-4 py-2.5">
+                <span className="inline-flex items-center gap-1.5">Role <FieldHelp id="users.role" /></span>
+              </th>
               <th className="text-right font-medium px-4 py-2.5">Actions</th>
             </tr>
           </thead>
@@ -65,11 +72,11 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
             {users.map((u) => (
               <tr key={u.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3 font-medium">
-                  {u.name}
+                  <span className="inline-block max-w-40 truncate align-bottom sm:max-w-64" title={u.name}>{u.name}</span>
                   {u.id === currentUserId && <Badge variant="outline" className="ml-2 text-xs">You</Badge>}
                   {u.mustResetPassword && <Badge variant="secondary" className="ml-2 text-xs">Must reset pw</Badge>}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{u.email}</td>
+                <td className="max-w-64 truncate px-4 py-3 text-muted-foreground hidden sm:table-cell" title={u.email}>{u.email}</td>
                 <td className="px-4 py-3">
                   {u.id === currentUserId ? (
                     <Badge variant="secondary">{roleLabel[u.role]}</Badge>
@@ -85,7 +92,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
                     </Select>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
                   <div className="flex items-center justify-end gap-2">
                     {u.id === currentUserId ? (
                       <>
@@ -128,7 +135,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
           <DialogContent className="max-w-sm">
             <DialogHeader><DialogTitle>Temporary Password</DialogTitle></DialogHeader>
             <div className="space-y-3 text-sm">
-              <p>Share this temporary password with <strong>{tempPassword.name}</strong>. They will be required to set a new password on first login.</p>
+              <p className="break-words">Share this temporary password with <strong>{tempPassword.name}</strong>. They will be required to set a new password on first login.</p>
               <div className="rounded-md bg-muted px-4 py-3 font-mono text-lg tracking-widest text-center select-all">
                 {tempPassword.password}
               </div>
@@ -144,7 +151,7 @@ export function UserManagement({ users, currentUserId }: { users: User[]; curren
 }
 
 const createSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: nameText("Name is required"),
   email: z.string().min(1, "Email is required"),
   role: z.enum(["ADMIN", "USER"]),
 })
@@ -152,17 +159,24 @@ const createSchema = z.object({
 function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?: { name: string; password: string }) => void }) {
   const form = useForm({ resolver: zodResolver(createSchema), defaultValues: { name: "", email: "", role: "USER" as const } })
 
+  // A fast double click can submit twice before the button disables.
+  const sending = useRef(false)
+
   async function onSubmit(values: z.infer<typeof createSchema>) {
-    const result = await createUser(values)
-    if (result?.error) {
-      const emailError = Array.isArray(result.error.email) ? result.error.email[0] : null
-      if (emailError) form.setError("email", { message: emailError })
-      toast.error("Failed to create user.")
-      return
+    if (sending.current) return
+    sending.current = true
+    try {
+      const result = await createUser(values)
+      if (result?.error) {
+        showServerError(form, result.error)
+        return
+      }
+      toast.success(`User created.`)
+      form.reset()
+      onClose({ name: values.name, password: result.tempPassword! })
+    } finally {
+      sending.current = false
     }
-    toast.success(`User created.`)
-    form.reset()
-    onClose({ name: values.name, password: result.tempPassword! })
   }
 
   return (
@@ -170,16 +184,16 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?:
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Add User</DialogTitle></DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={(e) => void form.handleSubmit(onSubmit)(e)} className="space-y-4">
             <FormField control={form.control} name="name" render={({ field }) => (
-              <FormItem><FormLabel>Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.name">Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="email" render={({ field }) => (
-              <FormItem><FormLabel>Email *</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.email">Email *</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="role" render={({ field }) => (
               <FormItem>
-                <FormLabel>Role *</FormLabel>
+                <FormLabel help="users.role">Role *</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl><SelectTrigger><SelectValue>{(v: keyof typeof roleLabel) => roleLabel[v]}</SelectValue></SelectTrigger></FormControl>
                   <SelectContent>
@@ -204,22 +218,22 @@ function CreateUserDialog({ open, onClose }: { open: boolean; onClose: (result?:
 }
 
 const editSelfSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: nameText("Name is required"),
   email: z.string().min(1, "Email is required"),
+  currentPassword: z.string(),
 })
 
 function EditSelfDialog({ user, onClose }: { user: User; onClose: () => void }) {
   const form = useForm({
     resolver: zodResolver(editSelfSchema),
-    defaultValues: { name: user.name, email: user.email },
+    defaultValues: { name: user.name, email: user.email, currentPassword: "" },
   })
+  const emailChanged = useWatch({ control: form.control, name: "email" }) !== user.email
 
   async function onSubmit(values: z.infer<typeof editSelfSchema>) {
     const result = await updateSelf(values)
     if (result?.error) {
-      const emailError = Array.isArray(result.error.email) ? result.error.email[0] : null
-      if (emailError) form.setError("email", { message: emailError })
-      toast.error("Failed to update profile.")
+      showServerError(form, result.error)
       return
     }
     toast.success("Profile updated.")
@@ -233,11 +247,16 @@ function EditSelfDialog({ user, onClose }: { user: User; onClose: () => void }) 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField control={form.control} name="name" render={({ field }) => (
-              <FormItem><FormLabel>Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.name">Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="email" render={({ field }) => (
-              <FormItem><FormLabel>Email *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.own-email">Email *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
             )} />
+            {emailChanged && (
+              <FormField control={form.control} name="currentPassword" render={({ field }) => (
+                <FormItem><FormLabel help="users.current-password">Current password *</FormLabel><FormControl><Input type="password" autoComplete="current-password" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
               <Button type="submit" disabled={form.formState.isSubmitting}>
@@ -282,13 +301,13 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField control={form.control} name="current" render={({ field }) => (
-              <FormItem><FormLabel>Current password</FormLabel><FormControl><Input type="password" autoComplete="current-password" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.current-password">Current password</FormLabel><FormControl><Input type="password" autoComplete="current-password" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="next" render={({ field }) => (
-              <FormItem><FormLabel>New password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.new-password">New password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="confirm" render={({ field }) => (
-              <FormItem><FormLabel>Confirm new password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel help="users.confirm-password">Confirm new password</FormLabel><FormControl><Input type="password" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <p className="text-xs text-muted-foreground">
               Changing it signs you out on every device, including this one.

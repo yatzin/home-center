@@ -2,10 +2,12 @@
 
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { orGone } from "@/lib/gone"
 import { revalidatePath } from "next/cache"
 import { assetHref } from "@/lib/assets"
 import type { AssetType, MeterUnit, Prisma } from "@/app/generated/prisma/client"
 import { redirect } from "next/navigation"
+import { loadFeatures } from "@/lib/features-server"
 import { removeUploadDir } from "@/lib/upload-fs"
 import {
   cleanServiceRecord, newServiceRecordWrites, prepareNewServiceRecord, revalidateNewServiceRecord, serviceRecordSchema,
@@ -53,6 +55,7 @@ export async function loadRecordFormContext(assetType: AssetType, assetId: strin
     return { propertyName: property.name, equipmentOptions: equipment, roomOptions, reminderOptions }
   }
   if (assetType === "PERSON") {
+    if (!(await loadFeatures()).health) return { error: "Not found" }
     const person = await prisma.person.findUnique({ where: { id: assetId }, select: { conditions: { select: { id: true, name: true } } } })
     if (!person) return { error: "Not found" }
     const [providerOptions, reminderOptions] = await Promise.all([
@@ -106,7 +109,8 @@ export async function updateServiceRecord(id: string, data: ServiceRecordInput) 
   if (room && "error" in room) return { error: { roomId: [room.error] } }
 
   const row = await withProviderVendor(cleanServiceRecord(parsed.data, session.user.id))
-  await prisma.serviceRecord.update({ where: { id }, data: { ...row, roomId: room?.roomId } })
+  const saved = await orGone(() => prisma.serviceRecord.update({ where: { id }, data: { ...row, roomId: room?.roomId } }))
+  if (saved) return { error: saved.error }
   revalidatePath(assetHref(parsed.data.assetType, parsed.data.assetId))
   revalidatePath("/records")
   return { success: true }

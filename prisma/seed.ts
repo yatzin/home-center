@@ -15,7 +15,7 @@ async function main() {
 
   // Read from env vars; fall back to insecure defaults that force a password reset
   const name = process.env.ADMIN_NAME ?? "Admin"
-  const email = process.env.ADMIN_EMAIL ?? "admin@localhost"
+  const email = (process.env.ADMIN_EMAIL ?? "admin@localhost").trim().toLowerCase()
   const password = process.env.ADMIN_PASSWORD ?? "changeme"
   const mustReset = !process.env.ADMIN_PASSWORD // force reset only when using the default
 
@@ -26,7 +26,8 @@ async function main() {
 
   console.log(`Created admin: ${admin.email}`)
   if (mustReset) {
-    console.log(`Default password: ${password} — you will be prompted to change it on first login.`)
+    // The default is documented in the README; it is not echoed to the log.
+    console.log("The default password from the README was used — you will be prompted to change it on first login.")
     console.log("Tip: set ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD env vars before seeding to skip this.")
   } else {
     console.log("Admin created with the password you provided.")

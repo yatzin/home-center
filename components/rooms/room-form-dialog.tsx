@@ -12,11 +12,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+import { Label } from "@/components/ui/label"
 import { useFormat } from "@/components/regional-provider"
 import { useDropTarget } from "@/components/drop/drop-provider"
 import { createRoom, updateRoom, deleteRoom } from "@/lib/actions/rooms"
 import { FLOORING_SUGGESTIONS, PAINT_SURFACES, type RoomInput } from "@/lib/rooms"
 import { uploadAll } from "@/lib/upload-client"
+import { DATE_MESSAGE, MAX_NAME_LENGTH, NAME_MESSAGE, parseDateOnly } from "@/lib/input-limits"
+import { showServerError } from "@/components/forms/server-errors"
 import { Plus, Trash2 } from "lucide-react"
 import { RoomEquipment, RoomFiles, RoomReminders, RoomServiceRecords, StagedFiles } from "./room-panels"
 import { ServiceRecordFormDialog } from "@/components/service-records/service-record-form-dialog"
@@ -34,13 +37,13 @@ const paintSchema = z
 
 const schema = z.object({
   propertyId: z.string(),
-  name: z.string().trim().min(1, "Name is required"),
+  name: z.string().trim().min(1, "Name is required").max(MAX_NAME_LENGTH, NAME_MESSAGE),
   level: z.string(),
   area: z.string(),
   dimensions: z.string(),
   flooringType: z.string(),
   flooringProduct: z.string(),
-  flooringInstalled: z.string(),
+  flooringInstalled: z.string().refine((v) => !v.trim() || parseDateOnly(v) !== null, DATE_MESSAGE),
   notes: z.string(),
   paints: z.array(paintSchema),
 })
@@ -98,7 +101,7 @@ export function RoomFormDialog({ open, onClose, propertyId, room, serviceRecords
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()} disablePointerDismissal={filePickerOpen}>
       {/* An existing room has tabs of different lengths: a fixed height keeps the dialog from resizing as you switch. */}
-      <DialogContent className={room ? "h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-5xl" : "sm:max-w-5xl max-h-[90vh] overflow-y-auto"}>
+      <DialogContent className={room ? "h-[85vh] grid-rows-[auto_minmax(0,1fr)] max-sm:grid-cols-[minmax(0,1fr)] sm:max-w-5xl" : "sm:max-w-5xl max-h-[90vh] max-sm:grid-cols-[minmax(0,1fr)] overflow-y-auto"}>
         {/* Keyed so the form, tab and staged files start fresh for each room. */}
         <RoomDialogBody
           key={room?.id ?? "new"}
@@ -168,12 +171,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
     const result = existingId ? await updateRoom(existingId, payload) : await createRoom(payload)
 
     if (result.error) {
-      if (typeof result.error === "string") { toast.error(result.error); return }
-      for (const field of FIELDS) {
-        const message = result.error[field]?.[0]
-        if (message) form.setError(field, { message })
-      }
-      toast.error("Please fix the errors and try again.")
+      showServerError(form, result.error, FIELDS)
       return
     }
 
@@ -211,35 +209,35 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
         <div className="grid grid-cols-2 gap-4">
           <FormField control={form.control} name="name" render={({ field }) => (
             <FormItem>
-              <FormLabel>Name *</FormLabel>
+              <FormLabel help="room.name">Name *</FormLabel>
               <FormControl><Input placeholder="Kitchen" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="level" render={({ field }) => (
             <FormItem>
-              <FormLabel>Level</FormLabel>
+              <FormLabel help="room.level">Level</FormLabel>
               <FormControl><Input placeholder="Main floor" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="area" render={({ field }) => (
             <FormItem>
-              <FormLabel>{fmt.areaLabel}</FormLabel>
+              <FormLabel help="room.area">{fmt.areaLabel}</FormLabel>
               <FormControl><Input type="number" step="any" min="0" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="dimensions" render={({ field }) => (
             <FormItem>
-              <FormLabel>Dimensions</FormLabel>
+              <FormLabel help="room.dimensions">Dimensions</FormLabel>
               <FormControl><Input placeholder={`14 × 16 ${fmt.areaShort === "m²" ? "m" : "ft"}`} {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="flooringType" render={({ field }) => (
             <FormItem>
-              <FormLabel>Flooring</FormLabel>
+              <FormLabel help="room.flooring">Flooring</FormLabel>
               <FormControl><Input list="room-flooring-suggestions" autoComplete="off" placeholder="Hardwood" {...field} /></FormControl>
               <datalist id="room-flooring-suggestions">
                 {FLOORING_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
@@ -249,14 +247,14 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
           )} />
           <FormField control={form.control} name="flooringProduct" render={({ field }) => (
             <FormItem>
-              <FormLabel>Flooring product</FormLabel>
+              <FormLabel help="room.flooring-product">Flooring product</FormLabel>
               <FormControl><Input placeholder="Brand, product, color" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="flooringInstalled" render={({ field }) => (
             <FormItem>
-              <FormLabel>Flooring installed</FormLabel>
+              <FormLabel help="room.flooring-installed">Flooring installed</FormLabel>
               <FormControl><Input type="date" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
@@ -265,7 +263,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Paint</span>
+            <Label help="room.paint">Paint</Label>
             <Button type="button" variant="outline" size="sm" onClick={addPaint}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Add paint
             </Button>
@@ -303,7 +301,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
 
         <FormField control={form.control} name="notes" render={({ field }) => (
           <FormItem>
-            <FormLabel>Notes</FormLabel>
+            <FormLabel help="room.notes">Notes</FormLabel>
             <FormControl><Textarea rows={3} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
@@ -343,7 +341,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
       </DialogHeader>
       {room ? (
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))} className="min-h-0 flex-col">
-          <TabsList variant="line" className="w-full justify-start border-b">
+          <TabsList variant="line" className="w-full justify-start border-b max-sm:h-10! max-sm:overflow-x-auto max-sm:pb-2 max-sm:[scrollbar-width:none]">
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="service">Service records</TabsTrigger>
             {showEquipment && <TabsTrigger value="equipment">Equipment ({room.equipment.length})</TabsTrigger>}
@@ -351,7 +349,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
             <TabsTrigger value="files">Files ({room.attachments.length})</TabsTrigger>
           </TabsList>
           {/* keepMounted so unsaved Details edits survive a look at another tab. */}
-          <TabsContent value="details" keepMounted className="mt-4 min-h-0 overflow-y-auto">{details}</TabsContent>
+          <TabsContent value="details" keepMounted className="mt-4 min-h-0 overflow-y-auto max-sm:-mx-4 max-sm:px-4">{details}</TabsContent>
           <TabsContent value="service" className="mt-4 min-h-0 overflow-y-auto">
             <RoomServiceRecords
               room={room}

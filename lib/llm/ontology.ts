@@ -1,7 +1,8 @@
 import {
-  AllergySeverity, AssetType, ConditionStatus, EquipmentCategory, InsuranceKind, MeterUnit,
-  NotificationType, PropertyType, Relationship, ServiceCategory,
+  AllergySeverity, AssetType, ConditionStatus, EquipmentCategory, EquipmentValueClass, InsuranceKind, MeterUnit,
+  NotificationType, PremiumPeriod, PropertyType, Relationship, ServiceCategory,
 } from "@/app/generated/prisma/enums"
+import { HEALTH_INSURANCE_KINDS } from "@/lib/insurance"
 import { assetHref } from "@/lib/assets"
 import { observationHref } from "@/lib/observations"
 
@@ -18,13 +19,13 @@ export type Row = Record<string, unknown>
 export const ENTITY_KEYS = [
   "property", "vehicle", "equipment", "person", "provider", "serviceRecord", "warranty",
   "maintenanceSchedule", "healthCondition", "medication", "allergy", "immunization",
-  "insurancePolicy", "notification", "observation", "room", "roomPaint",
+  "insurancePolicy", "insurancePremium", "insuranceCoverage", "notification", "observation", "room", "roomPaint",
 ] as const
 export type EntityKey = (typeof ENTITY_KEYS)[number]
 
 /** Health's entities: out of reach, and out of the prompt, while Health is off (Settings → Features). */
 export const HEALTH_ENTITIES: ReadonlySet<EntityKey> = new Set<EntityKey>([
-  "person", "provider", "healthCondition", "medication", "allergy", "immunization", "insurancePolicy", "observation",
+  "person", "provider", "healthCondition", "medication", "allergy", "immunization", "observation",
 ])
 
 /** Rooms' entities: out of reach, and out of the prompt, while Rooms is off (Settings → Features). */
@@ -61,6 +62,8 @@ export type EntityDef = {
   relations: Record<string, RelationDef>
   defaultSort: { field: string; dir: "asc" | "desc" }
   href?: (row: Row) => string | null
+  /** ANDed into every query of this entity while Health is off. */
+  healthOff?: Row
   /** Always ANDed into the where clause; the model cannot override it. */
   scope?: (ctx: { userId: string }) => Row
 }
@@ -116,12 +119,15 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
   },
   equipment: {
     model: "equipment", label: "Equipment", plural: "equipment",
-    description: "Appliances, HVAC, tools, electronics, usually tied to a property.",
+    description: "Appliances, HVAC, tools, electronics, usually tied to a property, with optional expected life and replacement cost.",
     nameField: "name", searchFields: ["name", "manufacturer", "modelNumber", "location"], keys: ["propertyId", "roomId"],
     assetType: "EQUIPMENT",
     fields: {
       name: s, category: enumOf(EquipmentCategory), manufacturer: s, modelNumber: s, serialNumber: s,
       location: s, purchaseDate: date, purchasePrice: money, installDate: date, notes: s,
+      valueClass: enumOf(EquipmentValueClass, "Part of the home (FIXTURE) or belongings (CONTENTS). Null means the category default: HVAC, WATER and SECURITY are FIXTURE, the rest CONTENTS. To select by class, do not filter on this field alone: list the equipment and classify null rows by category, or combine valueClass with category."),
+      expectedLifeYears: { type: "int", description: "Years it should last, counted from installDate, else purchaseDate" },
+      replacementCost: money,
     },
     relations: { property: { kind: "one", entity: "property" }, room: { kind: "one", entity: "room" }, ...assetChildren },
     defaultSort: { field: "name", dir: "asc" },
@@ -192,11 +198,15 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
   },
   maintenanceSchedule: {
     model: "maintenanceSchedule", label: "Maintenance schedule", plural: "maintenance schedules",
-    description: "Recurring maintenance or checkups for an asset. For due/overdue status use the maintenance_status tool.",
-    nameField: "title", searchFields: ["title", "description"], ...polymorphic, keys: ["assetType", "assetId", "roomId"],
+    description: "Recurring, seasonal (set months) or one-time maintenance or checkups for an asset. For due/overdue status use the maintenance_status tool.",
+    nameField: "title", searchFields: ["title", "description"], ...polymorphic, keys: ["assetType", "assetId", "roomId", "referenceAttachmentId"],
     fields: {
       title: s, description: s, intervalDays: int,
       intervalMiles: { type: "int", description: "Interval in the vehicle's meter unit" },
+      estimatedCost: money,
+      dueMonths: { type: "string", description: "Seasonal schedule: months 1-12, comma-separated, e.g. 4,10" },
+      dueDay: { type: "int", description: "Day of the month for a seasonal schedule" },
+      referencePage: { type: "int", description: "Page of the reminder's linked manual. To read it, call read_document with attachmentId = referenceAttachmentId and fromPage = referencePage." },
       lastCompletedDate: date, lastCompletedMileage: int, nextDueDate: date, nextDueMileage: int,
       reminderDaysBefore: int, reminderMilesBefore: int, isActive: bool,
       assetType: enumOf(AssetType, "Kind of asset this belongs to"),
@@ -271,14 +281,46 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
   },
   insurancePolicy: {
     model: "insurancePolicy", label: "Insurance policy", plural: "insurance policies",
-    description: "Health insurance policies and which people they cover.",
+    description: "Insurance policies: home, renters, auto, umbrella, life and other; with Health on also medical, dental and vision. What each covers, its coverage lines and premium history.",
     nameField: "carrier", searchFields: ["carrier", "planName"], keys: [],
     fields: {
       carrier: s, planName: s, kind: enumOf(InsuranceKind), policyNumber: s, groupNumber: s, memberId: s,
       phone: s, startDate: date, endDate: date, deductible: money, outOfPocketMax: money, notes: s,
     },
-    relations: { members: { kind: "many", entity: "person" } },
+    relations: {
+      members: { kind: "many", entity: "person" },
+      properties: { kind: "many", entity: "property" },
+      vehicles: { kind: "many", entity: "vehicle" },
+      premiums: { kind: "many", entity: "insurancePremium" },
+      coverages: { kind: "many", entity: "insuranceCoverage" },
+    },
+    healthOff: { kind: { notIn: [...HEALTH_INSURANCE_KINDS] } },
     defaultSort: { field: "carrier", dir: "asc" },
+    // Stays the plain page: "/insurance?open=id" would be flagged by impossibleLinks (lib/llm/link-check.ts).
+    href: () => "/insurance",
+  },
+  insurancePremium: {
+    model: "insurancePremium", label: "Insurance premium", plural: "insurance premiums",
+    description: "One premium on a policy, effective from a date. The newest one already in effect is the current premium.",
+    nameField: "effectiveDate", searchFields: ["notes"], keys: ["policyId"],
+    fields: {
+      effectiveDate: date,
+      amount: { type: "money", description: "Per billing period. Multiply MONTHLY by 12 and SEMIANNUAL by 2 for the yearly cost." },
+      period: enumOf(PremiumPeriod), notes: s,
+    },
+    relations: { policy: { kind: "one", entity: "insurancePolicy" } },
+    healthOff: { policy: { kind: { notIn: [...HEALTH_INSURANCE_KINDS] } } },
+    defaultSort: { field: "effectiveDate", dir: "desc" },
+    href: () => "/insurance",
+  },
+  insuranceCoverage: {
+    model: "insuranceCoverage", label: "Insurance coverage line", plural: "insurance coverage lines",
+    description: "One line of a policy's coverage: what is covered, its limit and its deductible.",
+    nameField: "label", searchFields: ["label"], keys: ["policyId"],
+    fields: { label: s, limit: money, deductible: money, sortOrder: int },
+    relations: { policy: { kind: "one", entity: "insurancePolicy" } },
+    healthOff: { policy: { kind: { notIn: [...HEALTH_INSURANCE_KINDS] } } },
+    defaultSort: { field: "sortOrder", dir: "asc" },
     href: () => "/insurance",
   },
   notification: {

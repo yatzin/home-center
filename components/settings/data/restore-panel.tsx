@@ -23,9 +23,9 @@ const LABELS: Record<string, string> = {
   Provider: "Providers", InboxItem: "Intake items",
 }
 const SECRETS: Record<string, string> = {
-  carried: "The mail password and AI key come with this backup.",
-  "same-secret": "The mail password and AI key will work (same AUTH_SECRET).",
-  "re-enter": "You'll need to re-enter the mail password and AI key afterwards.",
+  carried: "The mail password, AI key and push URL come with this backup.",
+  "same-secret": "The mail password, AI key and push URL will work (same AUTH_SECRET).",
+  "re-enter": "You'll need to re-enter the mail password, AI key and push URL afterwards.",
   none: "",
 }
 const MANUAL_RESTART = "Restart HomeCenter yourself to finish the restore: stop it and start it again, or restart the container."
@@ -244,14 +244,14 @@ function RestoreDialog({ source, onClose, onStaged, restart }: {
             <p className="text-sm text-destructive">{report.error}</p>
             {needs === "key" && (
               <div className="space-y-1.5">
-                <Label htmlFor="rs-key">Recovery key (paste it, or choose the kit file)</Label>
+                <Label htmlFor="rs-key" help="restore.key">Recovery key (paste it, or choose the kit file)</Label>
                 <Textarea id="rs-key" rows={3} value={key} onChange={(e) => setKey(e.target.value)} placeholder="AGE-SECRET-KEY-1…" />
                 <Input type="file" accept=".txt" aria-label="Recovery kit file" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setKey(await f.text()) }} />
               </div>
             )}
             {needs === "password" && (
               <div className="space-y-1.5">
-                <Label htmlFor="rs-pw">Password</Label>
+                <Label htmlFor="rs-pw" help="restore.password">Password</Label>
                 <Input id="rs-pw" type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
             )}
@@ -276,7 +276,7 @@ function RestoreDialog({ source, onClose, onStaged, restart }: {
               You can undo this for 7 days.
             </p>
             <div className="space-y-1.5">
-              <Label htmlFor="rs-word">Type RESTORE to continue</Label>
+              <Label htmlFor="rs-word" help="restore.confirm">Type RESTORE to continue</Label>
               <Input id="rs-word" autoComplete="off" value={word} onChange={(e) => setWord(e.target.value)} />
             </div>
           </div>

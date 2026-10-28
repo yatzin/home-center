@@ -16,15 +16,20 @@ import { embedderFor } from "@/lib/documents/embed/server"
 import { parseSearch } from "@/lib/documents/fts-query"
 import { passage } from "@/lib/documents/passage"
 import { groupHits } from "@/lib/documents/tool-helpers"
-import { healthAttachmentIds, loadDocumentRefs } from "@/lib/documents/scope"
+import { healthAttachmentIds, loadDocumentRefs, outOfScopeAttachmentIds } from "@/lib/documents/scope"
+import {
+  assetInScope, equipmentScopeWhere, ownedScopeWhere, personChildScopeWhere, personScopeWhere, policyScopeWhere, propertyScopeWhere,
+  roomScopeWhere, vehicleScopeWhere, type PropertyScope,
+} from "@/lib/property-filter"
 import { loadFeatures } from "@/lib/features-server"
 import { getFormat } from "@/lib/regional-server"
 import type { Formatter } from "@/lib/regional"
 import type { Features } from "@/lib/features"
+import { HEALTH_INSURANCE_KINDS, renewalWindowDays } from "@/lib/insurance"
 import type { Hit } from "@/lib/documents/index-db"
 import {
   bestPerKey, byTier, idsNamed, matchKind, MAX_RECORD_DISTANCE, mergeSemantic, nearest, rankSections, RECORD_WINDOW, searchTerms,
-  semanticOnly, termsWhere,
+  semanticOnly, termsWhere, wildcardTermsMatch,
 } from "./query"
 import type { EntityKind } from "./entities/text"
 import type {
@@ -167,7 +172,9 @@ const PAINT_FIELDS = ["brand", "colorName", "colorCode"] as const
 const termsWhereAlso = <W>(terms: string[], fields: readonly string[], also: (term: string) => Record<string, unknown>[]): W =>
   ({ AND: terms.map((t) => ({ OR: [...fields.map((f) => ({ [f]: { contains: t } })), ...also(t)] })) }) as W
 
-function keywordWheres(terms: string[], owners: Owners): Wheres {
+export function keywordWheres(terms: string[], owners: Owners, health: boolean, scope: PropertyScope | null): Wheres {
+  // Hidden owners' names don't find their policies.
+  const named = (type: AssetType, t: string) => idsNamed(owners.names[type], t).filter((id) => assetInScope(scope, type, id))
   const onAsset = { ownerIds: (t: string) => idsNamed(owners.allNames, t), ownerClause: (ids: string[]) => ({ assetId: { in: ids } }) }
   const onPerson = { ownerIds: (t: string) => idsNamed(owners.names.PERSON, t), ownerClause: (ids: string[]) => ({ personId: { in: ids } }) }
   return {
@@ -182,7 +189,21 @@ function keywordWheres(terms: string[], owners: Owners): Wheres {
     insurance: termsWhere(
       terms,
       FIELDS.insurance,
-      { ownerIds: onPerson.ownerIds, ownerClause: (ids) => ({ members: { some: { id: { in: ids } } } }) }
+      {
+        // A policy is found by the property or vehicle it covers, and by its people only with Health on.
+        ownerIds: (t: string) => [
+          ...named("PROPERTY", t),
+          ...named("VEHICLE", t),
+          ...(health ? named("PERSON", t) : []),
+        ],
+        ownerClause: (ids: string[]) => ({
+          OR: [
+            { properties: { some: { id: { in: ids } } } },
+            { vehicles: { some: { id: { in: ids } } } },
+            { members: { some: { id: { in: ids } } } },
+          ],
+        }),
+      }
     ),
     provider: termsWhere(terms, FIELDS.provider),
     condition: termsWhere(terms, FIELDS.condition, onPerson),
@@ -208,6 +229,7 @@ function matchKinds(terms: string[]) {
     /** Exact matches first, so partial ones don't push them past the section's limit. */
     rank<T extends { id: string }>(rows: T[], texts: (row: T) => (string | null | undefined)[]): T[] {
       if (!terms.length) return rows
+      rows = rows.filter((r) => wildcardTermsMatch(terms, texts(r)))
       for (const r of rows) kinds.set(r.id, matchKind(terms, texts(r)))
       const tier = (r: T) => (kinds.get(r.id) === "exact" ? 0 : 1)
       return [...rows].sort((a, b) => tier(a) - tier(b))
@@ -222,10 +244,10 @@ function matchKinds(terms: string[]) {
 const NOTHING = { id: { in: [] as string[] } }
 
 /** Health's record kinds, as the search index names them. */
-const HEALTH_KINDS = new Set<EntityKind>(["PERSON", "PROVIDER", "INSURANCE", "CONDITION", "MEDICATION", "ALLERGY", "IMMUNIZATION", "OBSERVATION"])
+const HEALTH_KINDS = new Set<EntityKind>(["PERSON", "PROVIDER", "CONDITION", "MEDICATION", "ALLERGY", "IMMUNIZATION", "OBSERVATION"])
 
 /**
- * With Health off: no people, providers, insurance or health records, and nothing a person owns.
+ * With Health off: no people, providers, health insurance or health records, and nothing a person owns.
  * With Rooms off: no rooms.
  */
 function withFeatures(all: Wheres, features: Features): Wheres {
@@ -234,11 +256,37 @@ function withFeatures(all: Wheres, features: Features): Wheres {
   const notPerson = { assetType: { not: "PERSON" as const } }
   return {
     ...w,
-    person: NOTHING, insurance: NOTHING, provider: NOTHING, condition: NOTHING, medication: NOTHING,
+    person: NOTHING, provider: NOTHING, condition: NOTHING, medication: NOTHING,
     allergy: NOTHING, immunization: NOTHING, observation: NOTHING,
+    insurance: { AND: [w.insurance, { kind: { notIn: [...HEALTH_INSURANCE_KINDS] } }] },
     service: { AND: [w.service, notPerson] },
     maintenance: { AND: [w.maintenance, notPerson] },
     warranty: { AND: [w.warranty, notPerson] },
+  }
+}
+
+/** With the property filter on: only what belongs to the selected property. Providers aren't tied to one. */
+export function withPropertyScope(all: Wheres, scope: PropertyScope | null): Wheres {
+  if (!scope) return all
+  const owned = ownedScopeWhere(scope)
+  const personChild = personChildScopeWhere(scope)
+  return {
+    ...all,
+    property: { AND: [all.property, propertyScopeWhere(scope)] },
+    vehicle: { AND: [all.vehicle, vehicleScopeWhere(scope)] },
+    equipment: { AND: [all.equipment, equipmentScopeWhere(scope)] },
+    person: { AND: [all.person, personScopeWhere(scope)] },
+    service: { AND: [all.service, owned] },
+    maintenance: { AND: [all.maintenance, owned] },
+    warranty: { AND: [all.warranty, owned] },
+    insurance: { AND: [all.insurance, policyScopeWhere(scope)] },
+    condition: { AND: [all.condition, personChild] },
+    medication: { AND: [all.medication, personChild] },
+    allergy: { AND: [all.allergy, personChild] },
+    immunization: { AND: [all.immunization, personChild] },
+    observation: { AND: [all.observation, personChild] },
+    // A room's paint is searched through its room, so this covers paint too.
+    room: { AND: [all.room, roomScopeWhere(scope)] },
   }
 }
 
@@ -267,7 +315,9 @@ function entityKeyOf(section: Section, item: Section["items"][number]): string |
 }
 
 /** Records by meaning: nearest record chunks, minus anything the keyword pass already showed, best first. */
-async function semanticRecords(vector: number[], shown: Set<string>, owners: Owners, now: Date, features: Features): Promise<Section[]> {
+async function semanticRecords(
+  vector: number[], shown: Set<string>, owners: Owners, now: Date, features: Features, scope: PropertyScope | null,
+): Promise<Section[]> {
   const all = await (await searchIndex()).entityVectorSearch(vector, ENTITY_POOL)
   // Dropped before ranking so hidden kinds don't take up places.
   const hits = all.filter((h) => (features.health || !HEALTH_KINDS.has(h.kind as EntityKind)) && (features.rooms || h.kind !== "ROOM"))
@@ -281,8 +331,8 @@ async function semanticRecords(vector: number[], shown: Set<string>, owners: Own
     const kind = key.slice(0, at) as EntityKind
     ids.set(kind, [...(ids.get(kind) ?? []), key.slice(at + 1)])
   }
-  const where = withFeatures(idWheres(ids), features)
-  const [assets, records] = await Promise.all([searchAssets(where, now, []), searchRecords(where, owners, now, [])])
+  const where = withPropertyScope(withFeatures(idWheres(ids), features), scope)
+  const [assets, records] = await Promise.all([searchAssets(where, now, []), searchRecords(where, owners, now, [], features.health, scope)])
   const byRank = (section: Section) => (item: Section["items"][number]) => rank.get(entityKeyOf(section, item) ?? "") ?? Infinity
   return [...assets, ...records]
     .filter((sec) => sec.items.length > 0)
@@ -411,8 +461,20 @@ async function searchAssets(where: Wheres, now: Date, terms: string[]): Promise<
   ])
 }
 
+/** A policy's people, properties and vehicles, leaving out any the property filter hides. */
+export function policyInclude(scope: PropertyScope | null) {
+  const byName = { select: { name: true }, orderBy: { name: "asc" as const } }
+  return {
+    members: { ...byName, where: personScopeWhere(scope) },
+    properties: { ...byName, where: propertyScopeWhere(scope) },
+    vehicles: { ...byName, where: vehicleScopeWhere(scope) },
+  } satisfies Prisma.InsurancePolicyInclude
+}
+
 /** `terms` empty for the meaning pass; otherwise rows are ranked and marked exact or partial. */
-async function searchRecords(where: Wheres, owners: Owners, now: Date, terms: string[]): Promise<Section[]> {
+async function searchRecords(
+  where: Wheres, owners: Owners, now: Date, terms: string[], showPeople: boolean, scope: PropertyScope | null,
+): Promise<Section[]> {
   const fmt = await getFormat()
   const money = moneyWith(fmt)
   const day = dayWith(fmt)
@@ -450,7 +512,7 @@ async function searchRecords(where: Wheres, owners: Owners, now: Date, terms: st
     }),
     prisma.insurancePolicy.findMany({
       where: where.insurance,
-      include: { members: { select: { name: true }, orderBy: { name: "asc" } } },
+      include: policyInclude(scope),
       orderBy: { carrier: "asc" },
       take,
     }),
@@ -565,28 +627,32 @@ async function searchRecords(where: Wheres, owners: Owners, now: Date, terms: st
     }
   })
 
-  const ins = page(kinds.rank(policies, (r) => textsOf(r, FIELDS.insurance, ...r.members.map((x) => x.name))))
+  // People are health data: with Health off their names neither rank nor show.
+  const peopleOf = (r: (typeof policies)[number]) => (showPeople ? r.members.map((x) => x.name) : [])
+  const coversOf = (r: (typeof policies)[number]) => [...r.properties, ...r.vehicles].map((x) => x.name)
+  const ins = page(kinds.rank(policies, (r) => textsOf(r, FIELDS.insurance, ...peopleOf(r), ...coversOf(r))))
   const insuranceCards: RecordResult[] = ins.items.map((r) => {
     const expired = r.endDate != null && r.endDate.getTime() < now.getTime() - 86_400_000
     const status: Status | null = expired ? { label: "Ended", tone: "outline" }
-      : insuranceExpiring(r, now) ? { label: "Ending soon", tone: "secondary" } : null
+      : insuranceExpiring(r, now, renewalWindowDays(r.kind)) ? { label: "Ending soon", tone: "secondary" } : null
     return {
       kind: "insurance", id: r.id, href: `/insurance?open=${r.id}`,
       title: r.carrier, subtitle: r.planName, date: r.endDate ? `Ends ${day(r.endDate)}` : null, amount: null, status,
       facts: facts([
         ["Kind", labelFor(INSURANCE_KINDS, r.kind)],
+        ["Covers", coversOf(r).join(", ") || null],
         ["Policy #", r.policyNumber],
         ["Group #", r.groupNumber],
         ["Deductible", money(r.deductible)],
         ["Phone", r.phone],
       ]),
-      owner: null, people: r.members.map((x) => x.name).join(", ") || null,
+      owner: null, people: peopleOf(r).join(", ") || null,
     }
   })
 
   const pr = page(kinds.rank(providers, (r) => textsOf(r, FIELDS.provider)))
   const providerCards: RecordResult[] = pr.items.map((r) => ({
-    kind: "provider", id: r.id, href: "/providers",
+    kind: "provider", id: r.id, href: `/providers?open=${r.id}`,
     title: r.name, subtitle: [r.specialty, r.practice].filter(Boolean).join(" · ") || null,
     date: null, amount: null, status: null,
     facts: facts([["Phone", r.phone], ["Email", r.email], ["Address", r.address]]),
@@ -682,7 +748,7 @@ async function toDocuments(hits: Hit[], terms: string[], by: "keyword" | "semant
   return { items: ranked.slice(0, DOC_LIMIT), more: ranked.length > DOC_LIMIT }
 }
 
-export async function globalSearch(query: string, opts: { semantic: boolean }): Promise<SearchResults> {
+export async function globalSearch(query: string, opts: { semantic: boolean; scope: PropertyScope | null }): Promise<SearchResults> {
   const q = query.trim()
   const terms = searchTerms(q)
   if (!q) return { query: q, terms, sections: [], semantic: { state: "off" }, total: 0 }
@@ -691,7 +757,10 @@ export async function globalSearch(query: string, opts: { semantic: boolean }): 
   const [owners, features] = await Promise.all([loadOwners(), loadFeatures()])
   const parsed = parseSearch(q)
   // With Health off, its files never come back either; with Rooms off, neither do room files.
-  const hidden = features.health ? null : new Set(await healthAttachmentIds())
+  // With the property filter on, neither do files on what it hides.
+  const { scope } = opts
+  const hidden = features.health && !scope ? null
+    : new Set((await Promise.all([features.health ? [] : healthAttachmentIds(), outOfScopeAttachmentIds(scope)])).flat())
   const visibleHits = <H extends { attachmentId: string }>(hits: H[]) => (hidden ? hits.filter((h) => !hidden.has(h.attachmentId)) : hits)
   const excludeRecordTypes = features.rooms ? [] : ["ROOM"]
 
@@ -705,10 +774,10 @@ export async function globalSearch(query: string, opts: { semantic: boolean }): 
     }
   }
 
-  const where = terms.length ? withFeatures(keywordWheres(terms, owners), features) : null
+  const where = terms.length ? withPropertyScope(withFeatures(keywordWheres(terms, owners, features.health, scope), features), scope) : null
   const [assetSections, recordSections, keyword] = await Promise.all([
     where ? searchAssets(where, now, terms) : Promise.resolve([]),
-    where ? searchRecords(where, owners, now, terms) : Promise.resolve([]),
+    where ? searchRecords(where, owners, now, terms, features.health, scope) : Promise.resolve([]),
     keywordDocs(),
   ])
   const kwDocs = await toDocuments(keyword.hits, parsed?.terms ?? terms, "keyword", owners)
@@ -726,7 +795,7 @@ export async function globalSearch(query: string, opts: { semantic: boolean }): 
           [...assetSections, ...recordSections].flatMap((sec) => sec.items.map((item) => entityKeyOf(sec, item)).filter((k): k is string => k !== null))
         )
         const [records, docHits] = await Promise.all([
-          semanticRecords(vector, shown, owners, now, features),
+          semanticRecords(vector, shown, owners, now, features, scope),
           (await searchIndex()).vectorSearch(vector, { excludeRecordTypes, limit: DOC_POOL }),
         ])
         const fresh = semanticOnly(visibleHits(docHits), new Set(keyword.hits.map((h) => h.attachmentId)))

@@ -18,8 +18,16 @@ export type FieldConfig = {
   placeholder?: string
   /// select and checkboxes only. A non-required select gets a "None" choice.
   options?: FieldOption[]
+  /// select only: the label of the empty choice. Defaults to "None".
+  emptyLabel?: string
   /// text only: values offered as you type (the field still accepts anything).
   suggestions?: string[]
   /// Spans both columns of the dialog grid.
   wide?: boolean
+  /// A lib/field-help id: adds the "?" popover beside the label.
+  help?: string
+  /// Shown only while this returns true (values are the form's current values). A hidden field keeps its value.
+  showWhen?: (values: FormValues) => boolean
+  /// A warning shown under the field while it returns text.
+  notice?: (values: FormValues) => string | null
 }

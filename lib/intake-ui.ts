@@ -1,5 +1,8 @@
 // Pure helpers for the places outside /intake that point people at it: the
 // dashboard card, the empty states, and the one-time tip after a manual record.
+import type { Formatter } from "@/lib/regional"
+import type { InboxListItem } from "@/lib/inbox-server"
+import { inboxHeadline, readFields } from "@/lib/inbox-form"
 
 /**
  * The dashboard card's numbers: how many items wait for review and the newest
@@ -30,4 +33,19 @@ export function emptyStateCopy(kind: EmptyStateKind): string {
 /** The "drop the receipt next time" tip: only after a new record saved without files, and only once. */
 export function receiptTipDue({ isNew, hadFiles, seen }: { isNew: boolean; hadFiles: boolean; seen: boolean }): boolean {
   return isNew && !hadFiles && !seen
+}
+
+/** One Intake item as a dashboard row reads it: what was read from it, or its file name. */
+export function headlineOf(item: InboxListItem, householdNames: string[], fmt: Formatter) {
+  const first = item.attachments[0]
+  const fileName = first ? (item.attachments.length > 1 ? `${first.originalName} +${item.attachments.length - 1}` : first.originalName) : "Uploading…"
+  const fields = readFields(item, householdNames)
+  return inboxHeadline(
+    {
+      total: item.parsedTotal != null ? fmt.money(item.parsedTotal) : null,
+      vendor: fields.vendor.state === "found" ? item.parsedVendor : null,
+      date: item.parsedDate ? fmt.date(item.parsedDate, { utc: true }) : null,
+    },
+    fileName
+  )
 }

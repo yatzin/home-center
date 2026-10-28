@@ -67,8 +67,15 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/lib/backup ./lib/backup
 COPY --from=builder /app/lib/attachment-location.ts ./lib/attachment-location.ts
 COPY --from=builder /app/lib/secret-box.ts ./lib/secret-box.ts
+COPY --from=builder /app/lib/maintenance-schedule.ts ./lib/maintenance-schedule.ts
+COPY --from=builder /app/lib/equipment-value.ts ./lib/equipment-value.ts
+COPY --from=builder /app/lib/manual-reference.ts ./lib/manual-reference.ts
+COPY --from=builder /app/lib/insurance.ts ./lib/insurance.ts
 COPY --from=builder /app/scripts ./scripts
-# Embedding worker (plain ESM, not bundled by Next) and the built-in model
+# Document extractors, loaded with tsx by workers/extract-worker.mjs (not bundled by Next).
+COPY --from=builder /app/lib/documents/extract ./lib/documents/extract
+COPY --from=builder /app/lib/documents/limits.ts /app/lib/documents/types.ts /app/lib/documents/normalize.ts ./lib/documents/
+# Embedding and extraction workers (plain ESM, not bundled by Next) and the built-in model
 COPY --from=builder /app/workers ./workers
 COPY --from=builder /app/models/builtin ./models/builtin
 COPY docker-entrypoint.sh ./docker-entrypoint.sh

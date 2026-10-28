@@ -15,6 +15,9 @@ import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import type { AssetType, Prisma } from "@/app/generated/prisma/client"
 import { ownedWhere } from "@/lib/features"
 import { loadFeatures } from "@/lib/features-server"
+import { isDoneOnce } from "@/lib/maintenance-schedule"
+import { filteredEmptyText, ownedScopeWhere } from "@/lib/property-filter"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 
 const DEFAULT_SORT = "nextDue"
 const DEFAULT_DIR = "asc"
@@ -58,7 +61,8 @@ export default async function MaintenancePage({
     tiebreaker: { id: "asc" },
   })
 
-  const where: Prisma.MaintenanceScheduleWhereInput = { isActive: true, ...ownedWhere(await loadFeatures()) }
+  const scope = await loadPropertyScope()
+  const where: Prisma.MaintenanceScheduleWhereInput = { isActive: true, ...ownedWhere(await loadFeatures()), ...ownedScopeWhere(scope) }
 
   const [schedules, total, statusRows, mileage, assets] = await Promise.all([
     prisma.maintenanceSchedule.findMany({ where, orderBy, skip, take }),
@@ -105,8 +109,14 @@ export default async function MaintenancePage({
 
       {total === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          <p className="font-medium">No maintenance schedules</p>
-          <p className="text-sm mt-1">Add schedules from a property, vehicle, or equipment detail page.</p>
+          {scope ? (
+            <p className="font-medium">{filteredEmptyText(scope)}</p>
+          ) : (
+            <>
+              <p className="font-medium">No maintenance schedules</p>
+              <p className="text-sm mt-1">Add schedules from a property, vehicle, or equipment detail page.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
@@ -124,6 +134,7 @@ export default async function MaintenancePage({
                   <Suspense>
                     <UrlSortHead column="nextDue" label="Next Due" className="hidden sm:table-cell" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
                   </Suspense>
+                  <th scope="col" className="text-left font-medium px-4 py-2.5 hidden md:table-cell">Est. cost</th>
                   <Suspense>
                     <UrlSortHead column="lastDone" label="Last Done" className="hidden md:table-cell" initialDir="desc" defaultSort={DEFAULT_SORT} defaultDir={DEFAULT_DIR} />
                   </Suspense>
@@ -133,7 +144,9 @@ export default async function MaintenancePage({
                 {schedules.map((s) => {
                   const assetName = assets.assetName(s.assetType, s.assetId)
                   const AssetIcon = assetIcon[s.assetType]
-                  const status = statusOf(scheduleDue(s, mileage, now), s.snoozedUntil, now, fmt)
+                  const status = isDoneOnce(s)
+                    ? { label: "Done", variant: "outline" as const, icon: CheckCircle2 }
+                    : statusOf(scheduleDue(s, mileage, now), s.snoozedUntil, now, fmt)
                   const StatusIcon = status.icon
 
                   return (
@@ -156,11 +169,14 @@ export default async function MaintenancePage({
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                        {s.nextDueDate ? fmt.date(s.nextDueDate) : "—"}
+                        {s.nextDueDate ? fmt.date(s.nextDueDate, { utc: true }) : isDoneOnce(s) ? "Done" : "—"}
                         {s.nextDueMileage != null && <span className="block text-xs">{s.nextDueMileage.toLocaleString()} {fmt.meterShort(mileage.get(s.assetId)?.unit ?? "MILES")}</span>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                        {s.lastCompletedDate ? fmt.date(s.lastCompletedDate) : "Never"}
+                        {s.estimatedCost != null ? fmt.money(s.estimatedCost) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                        {s.lastCompletedDate ? fmt.date(s.lastCompletedDate, { utc: true }) : "Never"}
                       </td>
                     </tr>
                   )

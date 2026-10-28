@@ -4,11 +4,12 @@ import { ASSET_TYPES, assetHref } from "@/lib/assets"
 import type { AssetType } from "@/app/generated/prisma/client"
 import { ENTITIES, type EntityKey, type Row } from "./ontology"
 import {
-  CHILD_LIMIT, compileInclude, compileLimit, compileSort, compileWhere, entityDef, healthOn, selectFor, ToolInputError,
+  CHILD_LIMIT, compileInclude, compileLimit, compileSort, compileWhere, entityDef, healthOffWhere, selectFor, ToolInputError,
   type Filter, type Op, type RelatedFilter, type ToolContext,
 } from "./query"
 import { serializeRow } from "./serialize"
 import { aggregateRows, groupSpec, measureSpec, type MeasureInput } from "./aggregate"
+import { entityScopeWhere, nonEmpty } from "./property-scope"
 
 // Runs compiled queries. The only module in the query path that touches Prisma;
 // everything it executes was built and validated by query.ts through the ontology.
@@ -124,7 +125,8 @@ export async function getRecord(args: { entity: string; id: string; include?: st
     AND: [
       { id: args.id },
       ...(def.scope ? [def.scope(ctx)] : []),
-      ...(def.polymorphic && !healthOn(ctx) ? [{ assetType: { not: "PERSON" } }] : []),
+      ...healthOffWhere(key, ctx),
+      ...nonEmpty(entityScopeWhere(key, ctx)),
     ],
   }
   const row = await delegate(key).findFirst({ where, select: plan.select })

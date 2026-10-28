@@ -24,6 +24,9 @@ import type { Attachment, ServiceRecord, MeterUnit, AssetType } from "@/app/gene
 import { useFormat } from "@/components/regional-provider"
 import { RoomSelect } from "@/components/rooms/room-select"
 import type { RoomOption } from "@/lib/rooms-server"
+import { localDay } from "@/lib/equipment-life"
+import { meterReading, moneyAmount, nameText, numberText, optionalNameText, requiredDateText } from "@/lib/input-limits"
+import { showServerError } from "@/components/forms/server-errors"
 
 // Base UI Select has no empty-string option, so "no category" needs a sentinel.
 const NO_CATEGORY = "__none__"
@@ -32,13 +35,14 @@ const NO_LINK = "__none__"
 const schema = z.object({
   assetId: z.string(),
   assetType: z.enum(ASSET_TYPES),
-  date: z.string().min(1, "Date is required"),
-  title: z.string().min(1, "Title is required"),
+  date: requiredDateText("Date is required"),
+  title: nameText("Title is required"),
   description: z.string().optional(),
-  vendor: z.string().optional(),
-  cost: z.string().optional(),
+  vendor: optionalNameText,
+  // Negative is allowed here: it's how a refund is entered.
+  cost: numberText(moneyAmount({ negative: true })),
   category: z.string().optional(),
-  mileageAtService: z.string().optional(),
+  mileageAtService: numberText(meterReading()),
   providerId: z.string().optional(),
   conditionId: z.string().optional(),
   roomId: z.string().optional(),
@@ -46,6 +50,9 @@ const schema = z.object({
 })
 
 type FormValues = z.infer<typeof schema>
+
+// The fields that show their own message; an error on any other (the room, the reminder) is toasted.
+const SHOWN_FIELDS = ["date", "title", "description", "vendor", "cost", "category", "mileageAtService", "providerId", "conditionId"]
 
 interface Props {
   open: boolean
@@ -111,7 +118,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
     resolver: zodResolver(schema),
     defaultValues: {
       assetId, assetType,
-      date: new Date().toISOString().split("T")[0],
+      date: localDay(new Date()).toISOString().split("T")[0],
       title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "",
       providerId: "", conditionId: "", roomId: defaultRoomId ?? "", scheduleId: "",
     },
@@ -144,7 +151,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
         scheduleId: "",
       })
     } else {
-      form.reset({ assetId, assetType, date: new Date().toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "", providerId: "", conditionId: "", roomId: defaultRoomId ?? "", scheduleId: "" })
+      form.reset({ assetId, assetType, date: localDay(new Date()).toISOString().split("T")[0], title: "", description: "", vendor: "", cost: "", category: NO_CATEGORY, mileageAtService: "", providerId: "", conditionId: "", roomId: defaultRoomId ?? "", scheduleId: "" })
     }
   }, [record, open, form, assetId, assetType, defaultRoomId, roomKey])
 
@@ -193,8 +200,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
       : await createServiceRecord(payload)
 
     if (result?.error) {
-      const roomError = typeof result.error === "object" && "roomId" in result.error ? result.error.roomId?.[0] : undefined
-      toast.error(roomError ?? "Please fix the errors and try again.")
+      showServerError(form, result.error, SHOWN_FIELDS)
       return
     }
 
@@ -254,7 +260,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {equipmentOptions && equipmentOptions.length > 0 && (
               <FormItem>
-                <FormLabel>For</FormLabel>
+                <FormLabel help="service.target">For</FormLabel>
                 <Select
                   value={targetKey(form.watch("assetType"), form.watch("assetId"))}
                   onValueChange={(value) => {
@@ -290,7 +296,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
             {!record && targetReminders.length > 0 && (
               <FormField control={form.control} name="scheduleId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Completes reminder</FormLabel>
+                  <FormLabel help="service.completes-reminder">Completes reminder</FormLabel>
                   <Select
                     value={field.value || NO_LINK}
                     onValueChange={(v) => {
@@ -318,7 +324,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Date *</FormLabel>
+                  <FormLabel help="service.date">Date *</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -326,7 +332,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Title *</FormLabel>
+                  <FormLabel help="service.title">Title *</FormLabel>
                   <FormControl><Input placeholder={isPerson ? "Annual physical" : "Oil Change"} {...field} /></FormControl>
                   <FormMessage />
                   {suggested && (
@@ -349,7 +355,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
               <FormField control={form.control} name="vendor" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{isPerson ? "Facility" : "Vendor / Shop"}</FormLabel>
+                  {isPerson ? <FormLabel help="service.facility">Facility</FormLabel> : <FormLabel help="service.vendor">Vendor / Shop</FormLabel>}
                   <FormControl><Input placeholder={isPerson ? "City Medical Center" : "Jiffy Lube"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -357,7 +363,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
               <FormField control={form.control} name="cost" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{`Cost (${fmt.currencySymbol})`}</FormLabel>
+                  <FormLabel help="service.cost">{`Cost (${fmt.currencySymbol})`}</FormLabel>
                   <FormControl><Input type="number" step="0.01" placeholder="89.99" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -365,7 +371,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Category</FormLabel>
+                  <FormLabel help="service.category">Category</FormLabel>
                   <Select value={field.value} onValueChange={(v) => field.onChange(v ?? NO_CATEGORY)}>
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -388,7 +394,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               {providerOptions && (
                 <FormField control={form.control} name="providerId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Provider</FormLabel>
+                    <FormLabel help="service.provider">Provider</FormLabel>
                     <Select value={field.value || NO_LINK} onValueChange={(v) => field.onChange(!v || v === NO_LINK ? "" : v)}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -407,7 +413,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               {conditionOptions && conditionOptions.length > 0 && (
                 <FormField control={form.control} name="conditionId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>For condition</FormLabel>
+                    <FormLabel help="service.condition">For condition</FormLabel>
                     <Select value={field.value || NO_LINK} onValueChange={(v) => field.onChange(!v || v === NO_LINK ? "" : v)}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -426,7 +432,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               {assetType === "VEHICLE" && (
                 <FormField control={form.control} name="mileageAtService" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{fmt.meterNoun(meterUnit)} at Service</FormLabel>
+                    <FormLabel help="service.mileage">{fmt.meterNoun(meterUnit)} at Service</FormLabel>
                     <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -435,7 +441,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
 
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="service.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

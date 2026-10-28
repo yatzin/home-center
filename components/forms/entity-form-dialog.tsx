@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { deleteAttachment } from "@/lib/actions/attachments"
-import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
+import { GENERIC_ERROR, firstMessages } from "./server-errors"
+import { Paperclip, TriangleAlert, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { ActionResult, FieldConfig, FormValues } from "@/lib/form-types"
 import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
 
@@ -65,6 +66,7 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
   const router = useRouter()
 
   const existingAttachments = initialAttachments.filter((a) => !removedIds.has(a.id))
+  const visibleFields = fields.filter((f) => !f.showWhen || f.showWhen(values))
 
   // Reset whenever the dialog opens, so it shows the record being edited (or a
   // blank form) rather than whatever was typed last time.
@@ -126,7 +128,7 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const missing = fields.filter((f) => f.required && !values[f.name]?.trim())
+    const missing = visibleFields.filter((f) => f.required && !values[f.name]?.trim())
     if (missing.length > 0) {
       setErrors(Object.fromEntries(missing.map((f) => [f.name, `${f.label} is required`])))
       return
@@ -139,8 +141,12 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
         if (typeof result.error === "string") {
           toast.error(result.error)
         } else {
-          setErrors(Object.fromEntries(Object.entries(result.error).map(([k, v]) => [k, v?.[0] ?? "Invalid value"])))
-          toast.error("Please fix the errors and try again.")
+          const messages = firstMessages(result.error)
+          setErrors(messages)
+          // The message shows under its field; only one for a field this form doesn't show is toasted.
+          const hidden = Object.entries(messages).find(([name]) => !visibleFields.some((f) => f.name === name))
+          if (hidden) toast.error(hidden[1])
+          else if (Object.keys(messages).length === 0) toast.error(GENERIC_ERROR)
         }
         return
       }
@@ -190,14 +196,20 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {fields.map((f) => (
+            {visibleFields.map((f) => (
               <div key={f.name} className={cn("space-y-1.5", f.wide && "sm:col-span-2")}>
-                <Label htmlFor={`field-${f.name}`}>
+                <Label htmlFor={`field-${f.name}`} help={f.help}>
                   {f.label}
                   {f.required && " *"}
                 </Label>
                 <FieldInput field={f} value={values[f.name] ?? ""} onChange={(v) => set(f.name, v)} />
                 {errors[f.name] && <p className="text-xs text-destructive">{errors[f.name]}</p>}
+                {f.notice?.(values) && (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    <TriangleAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    {f.notice(values)}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -290,13 +302,14 @@ function FieldInput({ field, value, onChange }: { field: FieldConfig; value: str
 
   if (field.kind === "select") {
     const options = field.options ?? []
+    const emptyLabel = field.emptyLabel ?? "None"
     return (
       <Select value={value || NONE} onValueChange={(v) => onChange(!v || v === NONE ? "" : v)}>
         <SelectTrigger id={id} className="w-full">
-          <SelectValue>{(v: string) => options.find((o) => o.value === v)?.label ?? "None"}</SelectValue>
+          <SelectValue>{(v: string) => options.find((o) => o.value === v)?.label ?? emptyLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {!field.required && <SelectItem value={NONE}>None</SelectItem>}
+          {!field.required && <SelectItem value={NONE}>{emptyLabel}</SelectItem>}
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
           ))}
@@ -311,10 +324,10 @@ function FieldInput({ field, value, onChange }: { field: FieldConfig; value: str
     return (
       <div id={id} className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
         {options.map((o) => (
-          <label key={o.value} className="flex items-center gap-2 text-sm">
+          <label key={o.value} className="flex min-w-0 max-w-full items-center gap-2 text-sm [overflow-wrap:anywhere] max-sm:min-h-10">
             <input
               type="checkbox"
-              className="h-4 w-4"
+              className="h-4 w-4 shrink-0"
               checked={selected.has(o.value)}
               onChange={(e) => {
                 const next = new Set(selected)

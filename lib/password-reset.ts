@@ -1,5 +1,5 @@
 import type { LoginThrottle } from "./login-throttle"
-import { isEmailAddress } from "./email-address"
+import { isEmailAddress, normalizeEmail } from "./email-address"
 import { MIN_PASSWORD_LENGTH } from "./password-change"
 
 // "Forgot password": an emailed one-time link to /reset-password. Kept free of
@@ -69,7 +69,7 @@ export function resetEmail(name: string | null, token: string, appUrl: string | 
 
 export async function requestPasswordReset(emailInput: unknown, ip: string, deps: RequestDeps): Promise<RequestResult> {
   if (!(await deps.mailReady())) return "unavailable"
-  const email = typeof emailInput === "string" ? emailInput.trim() : ""
+  const email = typeof emailInput === "string" ? normalizeEmail(emailInput) : ""
   if (!isEmailAddress(email)) return "invalid"
 
   if (deps.throttle.isBlocked(email, ip)) return "throttled"
@@ -79,15 +79,25 @@ export async function requestPasswordReset(emailInput: unknown, ip: string, deps
   const user = await deps.findUser(email)
   if (!user) return "sent"
 
+  // Not awaited: waiting on the mail server would make a real account answer
+  // measurably slower than an unknown address, and give away who has one.
+  void sendResetLink(user, deps)
+  return "sent"
+}
+
+async function sendResetLink(user: { id: string; email: string; name: string | null }, deps: RequestDeps) {
   const token = deps.generateToken()
   try {
     await deps.send({ to: user.email, ...resetEmail(user.name, token, await deps.appUrl()) })
   } catch (error) {
     console.error("[password-reset] could not send the email:", error instanceof Error ? error.message : error)
-    return "sent"
+    return
   }
-  await deps.storeToken(user.id, deps.hashToken(token), new Date(deps.now().getTime() + RESET_TOKEN_MS))
-  return "sent"
+  try {
+    await deps.storeToken(user.id, deps.hashToken(token), new Date(deps.now().getTime() + RESET_TOKEN_MS))
+  } catch (error) {
+    console.error("[password-reset] could not store the link:", error instanceof Error ? error.message : error)
+  }
 }
 
 export type CompleteDeps = {

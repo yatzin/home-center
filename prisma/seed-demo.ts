@@ -1,6 +1,7 @@
 /**
  * Demo data seeder — wipes the database and rebuilds it with a realistic,
- * lived-in dataset for screenshots.
+ * lived-in dataset for screenshots. With --keep it wipes nothing and adds the
+ * demo data beside what's already there.
  *
  * Every date is written relative to the moment you run it, so re-running months
  * from now refreshes the whole timeline: overdue stays overdue, "due soon"
@@ -9,6 +10,7 @@
  *   npx tsx prisma/seed-demo.ts             # prompts before wiping
  *   npx tsx prisma/seed-demo.ts --yes       # no prompt (CI / scripted use)
  *   npx tsx prisma/seed-demo.ts --no-images # skip photo downloads
+ *   npx tsx prisma/seed-demo.ts --keep      # add the demo data, delete nothing, keep your login
  *
  * See DEMO-DATA.md.
  */
@@ -20,6 +22,7 @@ import { existsSync } from "fs"
 import { createInterface } from "readline"
 import path from "path"
 import zlib from "zlib"
+import { firstCalendarDue, parseDueMonths } from "../lib/maintenance-schedule"
 
 const url = process.env.DATABASE_URL ?? "file:./prisma/dev.db"
 const prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) })
@@ -27,13 +30,15 @@ const prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) })
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads"
 const MANAGED_DIRS = ["properties", "vehicles", "equipment", "people", "service", "warranty", "maintenance", "condition", "insurance"]
 
-const ADMIN_EMAIL = process.env.DEMO_EMAIL ?? "demo@homecenter.local"
+const ADMIN_EMAIL = (process.env.DEMO_EMAIL ?? "demo@homecenter.local").trim().toLowerCase()
 const ADMIN_PASSWORD = process.env.DEMO_PASSWORD ?? "demo1234"
 const ADMIN_NAME = process.env.DEMO_NAME ?? "Alex Rivera"
 
 const args = new Set(process.argv.slice(2))
 const SKIP_PROMPT = args.has("--yes") || args.has("-y")
 const SKIP_IMAGES = args.has("--no-images")
+/** Add the demo data beside what exists: no confirmation, no wipe, existing login kept. */
+const KEEP = args.has("--keep")
 const REFRESH_PHOTOS = args.has("--refresh-photos")
 
 // Downloaded photos are cached outside the uploads folder so re-seeding is fast
@@ -319,23 +324,30 @@ async function writePhotos(jobs: PhotoJob[]) {
 
 // ─── Attachments (small generated PDFs, so records look documented) ──────────
 
-function receiptPdf(lines: string[]) {
-  const content =
-    "BT /F1 14 Tf 60 720 Td (" +
-    lines[0].replace(/[()\\]/g, "") +
-    ") Tj /F1 10 Tf 0 -28 Td " +
-    lines
-      .slice(1)
-      .map((l) => `(${l.replace(/[()\\]/g, "")}) Tj 0 -16 Td `)
-      .join("") +
-    "ET"
+/// One text page per entry: the first line is a heading, the rest are body lines.
+function pdfPages(pages: string[][]) {
+  const contents = pages.map(
+    (lines) =>
+      "BT /F1 14 Tf 60 720 Td (" +
+      lines[0].replace(/[()\\]/g, "") +
+      ") Tj /F1 10 Tf 0 -28 Td " +
+      lines
+        .slice(1)
+        .map((l) => `(${l.replace(/[()\\]/g, "")}) Tj 0 -16 Td `)
+        .join("") +
+      "ET"
+  )
 
+  // 1 catalog, 2 page tree, 3 font, then a page and its content stream per page.
+  const kids = pages.map((_, i) => `${4 + i * 2} 0 R`).join(" ")
   const objects = [
     "<</Type/Catalog/Pages 2 0 R>>",
-    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
-    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>",
+    `<</Type/Pages/Kids[${kids}]/Count ${pages.length}>>`,
     "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
-    `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
+    ...contents.flatMap((content, i) => [
+      `<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Resources<</Font<</F1 3 0 R>>>>/Contents ${5 + i * 2} 0 R>>`,
+      `<</Length ${content.length}>>\nstream\n${content}\nendstream`,
+    ]),
   ]
 
   let pdf = "%PDF-1.4\n"
@@ -350,6 +362,8 @@ function receiptPdf(lines: string[]) {
   pdf += `trailer\n<</Size ${objects.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF\n`
   return Buffer.from(pdf, "latin1")
 }
+
+const receiptPdf = (lines: string[]) => pdfPages([lines])
 
 async function attach(
   recordType: "SERVICE" | "WARRANTY" | "MAINTENANCE",
@@ -416,18 +430,19 @@ const VEHICLES: {
 const EQUIPMENT: {
   house: number; name: string; category: EquipmentCategory; manufacturer: string; model: string
   location: string; installedDaysAgo: number; price: number | null; photo: string; notes?: string
+  life?: number; replace?: number; valueClass?: "FIXTURE" | "CONTENTS"
 }[] = [
   // ── Maple Street House ──
-  { house: 0, name: "Kitchen Refrigerator", category: "APPLIANCE", manufacturer: "LG", model: "LRFVS3006S", location: "Kitchen", installedDaysAgo: 640, price: 2499, photo: "refrigerator kitchen" },
-  { house: 0, name: "Dishwasher", category: "APPLIANCE", manufacturer: "Bosch", model: "SHPM88Z75N", location: "Kitchen", installedDaysAgo: 1180, price: 1049, photo: "dishwasher" },
+  { house: 0, name: "Kitchen Refrigerator", category: "APPLIANCE", manufacturer: "LG", model: "LRFVS3006S", location: "Kitchen", installedDaysAgo: 640, price: 2499, photo: "refrigerator kitchen", life: 13, replace: 2700 },
+  { house: 0, name: "Dishwasher", category: "APPLIANCE", manufacturer: "Bosch", model: "SHPM88Z75N", location: "Kitchen", installedDaysAgo: 1180, price: 1049, photo: "dishwasher", life: 10, valueClass: "FIXTURE" },
   { house: 0, name: "Gas Range", category: "APPLIANCE", manufacturer: "GE", model: "JGB735SPSS", location: "Kitchen", installedDaysAgo: 1180, price: 899, photo: "gas stove kitchen" },
   { house: 0, name: "Over-Range Microwave", category: "APPLIANCE", manufacturer: "Panasonic", model: "NN-SN67KS", location: "Kitchen", installedDaysAgo: 420, price: 289, photo: "microwave oven" },
   { house: 0, name: "Washing Machine", category: "APPLIANCE", manufacturer: "Whirlpool", model: "WFW5620HW", location: "Laundry Room", installedDaysAgo: 1460, price: 799, photo: "washing machine top load" },
   { house: 0, name: "Clothes Dryer", category: "APPLIANCE", manufacturer: "Whirlpool", model: "WED5620HW", location: "Laundry Room", installedDaysAgo: 1460, price: 749, photo: "clothes dryer" },
-  { house: 0, name: "Gas Furnace", category: "HVAC", manufacturer: "Carrier", model: "59SC5A100", location: "Basement", installedDaysAgo: 2190, price: 4200, photo: "gas furnace", notes: "96% AFUE. Filter is 16x25x4 — takes the thick media filter, not the cheap ones." },
-  { house: 0, name: "Central Air Conditioner", category: "HVAC", manufacturer: "Trane", model: "XR16", location: "Side Yard", installedDaysAgo: 2190, price: 5100, photo: "air conditioner condenser unit" },
-  { house: 0, name: "Whole-House Humidifier", category: "HVAC", manufacturer: "Aprilaire", model: "700M", location: "Basement", installedDaysAgo: 1830, price: 320, photo: "humidifier" },
-  { house: 0, name: "Water Heater", category: "WATER", manufacturer: "Rheem", model: "XE50T10H45U0", location: "Basement", installedDaysAgo: 1290, price: 1450, photo: "water heater tank" },
+  { house: 0, name: "Gas Furnace", category: "HVAC", manufacturer: "Carrier", model: "59SC5A100", location: "Basement", installedDaysAgo: 2190, price: 4200, photo: "gas furnace", notes: "96% AFUE. Filter is 16x25x4 — takes the thick media filter, not the cheap ones.", life: 18, replace: 5200 },
+  { house: 0, name: "Central Air Conditioner", category: "HVAC", manufacturer: "Trane", model: "XR16", location: "Side Yard", installedDaysAgo: 2190, price: 5100, photo: "air conditioner condenser unit", life: 15, replace: 6500 },
+  { house: 0, name: "Whole-House Humidifier", category: "HVAC", manufacturer: "Aprilaire", model: "700M", location: "Basement", installedDaysAgo: 1830, price: 320, photo: "humidifier", life: 5, replace: 450 },
+  { house: 0, name: "Water Heater", category: "WATER", manufacturer: "Rheem", model: "XE50T10H45U0", location: "Basement", installedDaysAgo: 1290, price: 1450, photo: "water heater tank", life: 12, replace: 1800 },
   { house: 0, name: "Water Softener", category: "WATER", manufacturer: "Culligan", model: "HE 1.25", location: "Basement", installedDaysAgo: 980, price: 1890, photo: "water softener" },
   { house: 0, name: "Sump Pump", category: "WATER", manufacturer: "Zoeller", model: "M53", location: "Basement", installedDaysAgo: 730, price: 240, photo: "sump pump", notes: "Battery backup was added at the same time — battery is the part that ages out." },
   { house: 0, name: "Garage Door Opener", category: "SECURITY", manufacturer: "Chamberlain", model: "B4643T", location: "Garage", installedDaysAgo: 560, price: 329, photo: "garage door opener" },
@@ -449,8 +464,8 @@ const EQUIPMENT: {
   { house: 2, name: "Rental Range", category: "APPLIANCE", manufacturer: "Hotpoint", model: "RBS360DMWW", location: "Kitchen", installedDaysAgo: 760, price: 549, photo: "electric stove" },
   { house: 2, name: "Rental Washer", category: "APPLIANCE", manufacturer: "Maytag", model: "MVWC565FW", location: "Basement", installedDaysAgo: 520, price: 679, photo: "washing machine top load" },
   { house: 2, name: "Rental Dryer", category: "APPLIANCE", manufacturer: "Maytag", model: "MEDC465HW", location: "Basement", installedDaysAgo: 520, price: 629, photo: "clothes dryer laundry room" },
-  { house: 2, name: "Boiler", category: "HVAC", manufacturer: "Weil-McLain", model: "CGa-4-PIDN", location: "Basement", installedDaysAgo: 2920, price: 3900, photo: "boiler heating", notes: "Cast iron, original to the 1990s remodel. Annual service is not optional at this age." },
-  { house: 2, name: "Rental Water Heater", category: "WATER", manufacturer: "A. O. Smith", model: "GCR-40", location: "Basement", installedDaysAgo: 1980, price: 890, photo: "water heater basement" },
+  { house: 2, name: "Boiler", category: "HVAC", manufacturer: "Weil-McLain", model: "CGa-4-PIDN", location: "Basement", installedDaysAgo: 2920, price: 3900, photo: "boiler heating", notes: "Cast iron, original to the 1990s remodel. Annual service is not optional at this age.", life: 25, replace: 7800 },
+  { house: 2, name: "Rental Water Heater", category: "WATER", manufacturer: "A. O. Smith", model: "GCR-40", location: "Basement", installedDaysAgo: 1980, price: 890, photo: "water heater basement", life: 10, replace: 1500 },
   { house: 2, name: "Smoke & CO Alarms", category: "SECURITY", manufacturer: "First Alert", model: "SC9120B", location: "Hallways", installedDaysAgo: 760, price: 180, photo: "smoke detector" },
 ]
 
@@ -538,18 +553,23 @@ const WARRANTIES: {
 const MAINTENANCE: {
   ref: Ref; title: string; description?: string; intervalDays: number | null; dueInDays: number | null
   intervalMiles?: number; dueInMiles?: number; reminderDaysBefore?: number
+  estimatedCost?: number; dueMonths?: string; dueDay?: number
+  /** Page of the demo furnace manual this reminder points at. */
+  manualPage?: number
 }[] = [
   // Overdue
-  { ref: E(8), title: "Replace humidifier water panel", description: "Aprilaire #35 panel. Takes ten minutes.", intervalDays: 365, dueInDays: -21 },
+  { ref: E(8), title: "Replace humidifier water panel", description: "Aprilaire #35 panel. Takes ten minutes.", intervalDays: 365, dueInDays: -21, estimatedCost: 24 },
   { ref: E(23), title: "Rental smoke alarm battery check", intervalDays: 182, dueInDays: -9, reminderDaysBefore: 14 },
   { ref: V(2), title: "Oil change", intervalDays: 180, dueInDays: -4, intervalMiles: 7500, dueInMiles: 500 },
 
   // Due soon
-  { ref: E(6), title: "Replace furnace filter", description: "16x25x4 media filter — the thick one.", intervalDays: 90, dueInDays: 6, reminderDaysBefore: 14 },
+  { ref: E(6), title: "Replace furnace filter", description: "16x25x4 media filter — the thick one.", intervalDays: 90, dueInDays: 6, reminderDaysBefore: 14, estimatedCost: 38, manualPage: 3 },
+  { ref: P(0), title: "Winterize sprinklers", description: "Blow out the lines before the first hard freeze.", intervalDays: null, dueInDays: null, dueMonths: "10", dueDay: 15, estimatedCost: 85 },
+  { ref: P(0), title: "Replace roof", description: "Shingles are rated for 30 years. Get quotes two years out.", intervalDays: null, dueInDays: 1095, estimatedCost: 14000 },
   { ref: E(11), title: "Test sump pump", description: "Pour a bucket into the pit and confirm it kicks on.", intervalDays: 90, dueInDays: 11 },
   { ref: P(1), title: "Winterize cabin — blow out water lines", description: "Before first hard freeze. Geneva Well & Pump does it, book two weeks ahead.", intervalDays: 365, dueInDays: 19, reminderDaysBefore: 30 },
   { ref: E(16), title: "Chimney sweep", intervalDays: 365, dueInDays: 24, reminderDaysBefore: 30 },
-  { ref: V(0), title: "Oil change", intervalDays: 180, dueInDays: 27, intervalMiles: 7500, dueInMiles: 4900 },
+  { ref: V(0), title: "Oil change", intervalDays: 180, dueInDays: 27, intervalMiles: 7500, dueInMiles: 4900, estimatedCost: 89 },
 
   // Comfortably ahead
   { ref: E(10), title: "Refill softener salt", intervalDays: 60, dueInDays: 38 },
@@ -566,7 +586,7 @@ const MAINTENANCE: {
   { ref: E(19), title: "Cabin water heater anode check", intervalDays: 730, dueInDays: 186 },
   { ref: E(20), title: "Dock lift cable inspection", intervalDays: 365, dueInDays: 205 },
   { ref: E(22), title: "Sharpen chainsaw chain", intervalDays: 180, dueInDays: 74 },
-  { ref: V(3), title: "Timing belt — 105k interval", intervalDays: null, dueInDays: null, intervalMiles: 105000, dueInMiles: 3200 },
+  { ref: V(3), title: "Timing belt — 105k interval", intervalDays: null, dueInDays: null, intervalMiles: 105000, dueInMiles: 3200, estimatedCost: 900 },
   { ref: E(1), title: "Clean dishwasher filter", intervalDays: 90, dueInDays: 33 },
 ]
 
@@ -581,6 +601,83 @@ type VisitSeed = {
   title: string
   category: "OFFICE_VISIT" | "DENTAL" | "PRESCRIPTION"
   cost: number
+}
+
+/**
+ * Home, auto, life and umbrella policies, so every non-health kind shows: coverage lines, premium history
+ * (yearly, every 6 months, monthly), renewals inside and outside the 30-day window, one policy covering
+ * nothing yet, and one covering people (visible only with Health on). They show with Health off too.
+ */
+async function seedInsurance(properties: { id: string }[], vehicles: { id: string }[]) {
+  await prisma.insurancePolicy.create({
+    data: {
+      carrier: "State Farm", planName: "Homeowners HO-3", kind: "HOME", policyNumber: "HO-4471-208",
+      startDate: at(-344), endDate: at(21), deductible: 2500,
+      properties: { connect: [{ id: properties[0].id }] },
+      coverages: {
+        create: [
+          { label: "Dwelling", limit: 450000, sortOrder: 0 },
+          { label: "Other structures", limit: 45000, sortOrder: 1 },
+          { label: "Personal property", limit: 225000, sortOrder: 2 },
+          { label: "Loss of use", limit: 90000, sortOrder: 3 },
+          { label: "Liability", limit: 300000, sortOrder: 4 },
+          { label: "Medical payments", limit: 5000, sortOrder: 5 },
+        ],
+      },
+      premiums: {
+        create: [
+          { effectiveDate: at(-709), amount: 1560, period: "ANNUAL" },
+          { effectiveDate: at(-344), amount: 1740, period: "ANNUAL" },
+        ],
+      },
+    },
+  })
+  await prisma.insurancePolicy.create({
+    data: {
+      carrier: "Progressive", planName: "Auto", kind: "AUTO", startDate: at(-40), endDate: at(142),
+      vehicles: { connect: [{ id: vehicles[2].id }] },
+      coverages: {
+        create: [
+          { label: "Bodily injury", limit: 100000, sortOrder: 0 },
+          { label: "Property damage", limit: 50000, sortOrder: 1 },
+          { label: "Collision", deductible: 1000, sortOrder: 2 },
+          { label: "Comprehensive", deductible: 500, sortOrder: 3 },
+          { label: "Uninsured motorist", limit: 100000, sortOrder: 4 },
+        ],
+      },
+      premiums: {
+        create: [
+          { effectiveDate: at(-222), amount: 672, period: "SEMIANNUAL" },
+          { effectiveDate: at(-40), amount: 708, period: "SEMIANNUAL" },
+        ],
+      },
+    },
+  })
+  // Renewing in 18 days (a second renewal notice), linked to nothing, monthly premium unchanged.
+  await prisma.insurancePolicy.create({
+    data: {
+      carrier: "Chubb", planName: "Personal umbrella", kind: "UMBRELLA", policyNumber: "UMB-90311",
+      startDate: at(-347), endDate: at(18),
+      coverages: { create: [{ label: "Liability", limit: 1000000, sortOrder: 0 }] },
+      premiums: { create: [{ effectiveDate: at(-347), amount: 33.33, period: "MONTHLY" }] },
+    },
+  })
+  // Covers the people, so it shows their names only with Health on. Ends well outside the 30-day window.
+  const people = await prisma.person.findMany({ select: { id: true } })
+  await prisma.insurancePolicy.create({
+    data: {
+      carrier: "Lifeco", planName: "20-year term", kind: "LIFE", policyNumber: "TL-77210",
+      startDate: at(-900), endDate: at(5000),
+      members: { connect: people.map((x) => ({ id: x.id })) },
+      coverages: { create: [{ label: "Death benefit", limit: 500000, sortOrder: 0 }] },
+      premiums: {
+        create: [
+          { effectiveDate: at(-900), amount: 41, period: "MONTHLY" },
+          { effectiveDate: at(-170), amount: 45, period: "MONTHLY" },
+        ],
+      },
+    },
+  })
 }
 
 async function seedPeople(userId: string) {
@@ -631,15 +728,25 @@ async function seedPeople(userId: string) {
 // ─── Seed ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  await confirmWipe()
+  let user: { id: string }
+  if (KEEP) {
+    console.log("\n  --keep given: nothing is deleted. Adding demo data beside what's already here.\n")
+    // Records need an author: use an existing admin, else any user, else create the demo login.
+    const existing = (await prisma.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" } })) ?? (await prisma.user.findFirst())
+    user = existing ?? (await prisma.user.create({
+      data: { name: ADMIN_NAME, email: ADMIN_EMAIL, passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 12), role: "ADMIN", mustResetPassword: false },
+    }))
+  } else {
+    await confirmWipe()
 
-  console.log("  Wiping…")
-  await wipe()
+    console.log("  Wiping…")
+    await wipe()
 
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12)
-  const user = await prisma.user.create({
-    data: { name: ADMIN_NAME, email: ADMIN_EMAIL, passwordHash, role: "ADMIN", mustResetPassword: false },
-  })
+    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12)
+    user = await prisma.user.create({
+      data: { name: ADMIN_NAME, email: ADMIN_EMAIL, passwordHash, role: "ADMIN", mustResetPassword: false },
+    })
+  }
 
   console.log("  Creating assets…")
   const properties: { id: string }[] = []
@@ -676,6 +783,7 @@ async function main() {
           location: e.location, propertyId: properties[e.house].id,
           purchaseDate: at(-e.installedDaysAgo - 3), installDate: at(-e.installedDaysAgo),
           purchasePrice: e.price, notes: e.notes ?? null,
+          expectedLifeYears: e.life ?? null, replacementCost: e.replace ?? null, valueClass: e.valueClass ?? null,
         },
       })
     )
@@ -732,6 +840,30 @@ async function main() {
     }
   }
 
+  // A 3-page owner's manual filed on the Gas Furnace, so "Replace furnace filter" can point at page 3.
+  const furnace = resolve(E(6))
+  const manualBytes = pdfPages([
+    ["Carrier 59SC5A owner's manual", "Page 1: Safety", "Read all warnings before servicing the furnace."],
+    ["Thermostat settings", "Page 2: Thermostat settings", "Set the fan to auto for normal heating."],
+    ["Replacing the air filter", "Page 3: Replacing the air filter", "Use a 16x25x4 media filter.", "Turn the power off, slide the old filter out, and slide the new one in with the arrow toward the furnace."],
+  ])
+  const manualFilename = "furnace-manual.pdf"
+  const manualDir = path.join(UPLOAD_DIR, "document", furnace.assetId)
+  await mkdir(manualDir, { recursive: true })
+  await writeFile(path.join(manualDir, manualFilename), manualBytes)
+  const manual = await prisma.attachment.create({
+    data: {
+      recordType: "DOCUMENT",
+      filename: manualFilename,
+      originalName: "Carrier 59SC5A owner's manual.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: manualBytes.length,
+      uploadedById: user.id,
+      assetType: furnace.assetType,
+      assetId: furnace.assetId,
+    },
+  })
+
   for (const m of MAINTENANCE) {
     const asset = resolve(m.ref)
     const vehicle = m.ref.kind === "vehicle" ? vehicles[m.ref.index] : null
@@ -739,7 +871,14 @@ async function main() {
       data: {
         ...asset, title: m.title, description: m.description ?? null,
         intervalDays: m.intervalDays, intervalMiles: m.intervalMiles ?? null,
-        nextDueDate: m.dueInDays === null ? null : at(m.dueInDays),
+        estimatedCost: m.estimatedCost ?? null,
+        referenceAttachmentId: m.manualPage ? manual.id : null,
+        referencePage: m.manualPage ?? null,
+        dueMonths: m.dueMonths ?? null,
+        dueDay: m.dueMonths ? m.dueDay ?? 1 : null,
+        nextDueDate: m.dueMonths
+          ? firstCalendarDue(parseDueMonths(m.dueMonths), m.dueDay ?? 1, new Date())
+          : m.dueInDays === null ? null : at(m.dueInDays),
         nextDueMileage: m.dueInMiles != null && vehicle?.currentMileage != null
           ? vehicle.currentMileage + m.dueInMiles
           : null,
@@ -765,6 +904,9 @@ async function main() {
   console.log("  Creating people…")
   await seedPeople(user.id)
 
+  console.log("  Creating insurance…")
+  await seedInsurance(properties, vehicles)
+
   const jobs: PhotoJob[] = [
     ...properties.map((p, i) => ({ kind: "properties" as const, id: p.id, query: PROPERTIES[i].photo, fallbackQuery: "house exterior", variant: i })),
     ...vehicles.map((v, i) => ({ kind: "vehicles" as const, id: v.id, query: VEHICLES[i].photo, fallbackQuery: "automobile", variant: i })),
@@ -789,14 +931,14 @@ async function main() {
     ${properties.length} properties, ${vehicles.length} vehicles, ${equipment.length} equipment
     ${SERVICE.length} service records, ${WARRANTIES.length} warranties, ${MAINTENANCE.length} reminders
     ${await prisma.attachment.count()} attachments
-    ${await prisma.person.count()} people, ${await prisma.provider.count()} providers, ${await prisma.insurancePolicy.count()} insurance policies
+    ${await prisma.person.count()} people, ${await prisma.provider.count()} providers, ${await prisma.insurancePolicy.count()} insurance policies (${await prisma.insurancePolicy.count({ where: { kind: { notIn: ["MEDICAL", "DENTAL", "VISION", "OTHER"] } } })} home or auto)
     photos: ${cached} cached, ${downloaded} fetched, ${generated} generated
 
   Timeline (relative to today):
     ${overdue} maintenance overdue, ${dueSoon} due within 30 days
     ${expired} warranties expired, ${expiring} expiring within 60 days
 
-  Sign in:  ${ADMIN_EMAIL}  /  ${ADMIN_PASSWORD}
+  ${KEEP ? "Sign in with your existing login (nothing was deleted)." : `Sign in:  ${ADMIN_EMAIL}  /  ${ADMIN_PASSWORD}`}
 `)
 }
 

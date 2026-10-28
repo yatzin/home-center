@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
+import { CheckList } from "@/components/forms/check-list"
 import { useFormat } from "@/components/regional-provider"
 import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
@@ -16,20 +17,24 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { createProperty, updateProperty } from "@/lib/actions/properties"
 import type { Property } from "@/app/generated/prisma/client"
 import { AddRemindersSubmit, remindersHref } from "@/components/maintenance/add-reminders-submit"
+import { boundedNumber, nameText, numberText, optionalDateText } from "@/lib/input-limits"
+import { propertyPrice } from "@/lib/asset-input"
+import { showServerError } from "@/components/forms/server-errors"
 
 const TYPE_LABELS: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
 }
 
 const schema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: nameText("Name is required"),
   type: z.enum(["HOUSE", "CONDO", "TOWNHOUSE", "LOT", "OTHER"]),
   address: z.string().min(1, "Address is required"),
-  purchaseDate: z.string().optional(),
-  purchasePrice: z.string().optional(),
-  yearBuilt: z.string().optional(),
+  purchaseDate: optionalDateText,
+  purchasePrice: numberText(propertyPrice),
+  yearBuilt: numberText(boundedNumber(1800, 2100, { whole: true, message: "Enter a year from 1800 to 2100." })),
   sqFt: z.string().optional(),
   notes: z.string().optional(),
+  policyIds: z.array(z.string()),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -38,18 +43,29 @@ interface Props {
   open: boolean
   onClose: () => void
   property?: Property | null
+  /** Policies that may cover a property, for the Insurance list. Edit only: empty hides the list. */
+  policyChoices?: { id: string; name: string }[]
+  /** The policies linked to this property now. */
+  policyIds?: string[]
 }
 
-export function PropertyFormDialog({ open, onClose, property }: Props) {
+const NO_CHOICES: { id: string; name: string }[] = []
+const NO_IDS: string[] = []
+
+export function PropertyFormDialog({ open, onClose, property, policyChoices = NO_CHOICES, policyIds = NO_IDS }: Props) {
   const router = useRouter()
   const fmt = useFormat()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: "", type: "HOUSE", address: "",
-      purchaseDate: "", purchasePrice: "", yearBuilt: "", sqFt: "", notes: "",
+      purchaseDate: "", purchasePrice: "", yearBuilt: "", sqFt: "", notes: "", policyIds: [],
     },
   })
+  const ticked = useWatch({ control: form.control, name: "policyIds" })
+  // Shown only when editing and there is at least one policy that could cover a property.
+  const showInsurance = !!property && policyChoices.length > 0
+  const linkedKey = policyIds.join(",")
 
   useEffect(() => {
     if (property) {
@@ -62,19 +78,21 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
         yearBuilt: property.yearBuilt?.toString() ?? "",
         sqFt: property.sqFt?.toString() ?? "",
         notes: property.notes ?? "",
+        policyIds: linkedKey ? linkedKey.split(",") : [],
       })
     } else {
-      form.reset({ name: "", type: "HOUSE", address: "", purchaseDate: "", purchasePrice: "", yearBuilt: "", sqFt: "", notes: "" })
+      form.reset({ name: "", type: "HOUSE", address: "", purchaseDate: "", purchasePrice: "", yearBuilt: "", sqFt: "", notes: "", policyIds: [] })
     }
-  }, [property, open, form])
+  }, [property, open, form, linkedKey])
 
   async function onSubmit(values: FormValues, then: "close" | "reminders" = "close") {
+    const { policyIds: chosen, ...fields } = values
     const result = property
-      ? await updateProperty(property.id, values as unknown as Parameters<typeof updateProperty>[1])
-      : await createProperty(values as unknown as Parameters<typeof createProperty>[0])
+      ? await updateProperty(property.id, fields as unknown as Parameters<typeof updateProperty>[1], showInsurance ? chosen : undefined)
+      : await createProperty(fields as unknown as Parameters<typeof createProperty>[0])
 
     if (result?.error) {
-      toast.error("Please fix the errors and try again.")
+      showServerError(form, result.error)
       return
     }
     toast.success(property ? "Property updated." : "Property added.")
@@ -94,7 +112,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Name *</FormLabel>
+                  <FormLabel help="property.name">Name *</FormLabel>
                   <FormControl><Input placeholder="Main House" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -102,7 +120,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="type" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Type *</FormLabel>
+                  <FormLabel help="property.type">Type *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue>{(v: string) => TYPE_LABELS[v] ?? v}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
@@ -119,7 +137,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="yearBuilt" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Year Built</FormLabel>
+                  <FormLabel help="property.year-built">Year Built</FormLabel>
                   <FormControl><Input type="number" placeholder="1995" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -127,7 +145,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="address" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Address *</FormLabel>
+                  <FormLabel help="property.address">Address *</FormLabel>
                   <FormControl><Input placeholder="123 Main St, City, State" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -135,7 +153,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="purchaseDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Date</FormLabel>
+                  <FormLabel help="property.purchase-date">Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -143,7 +161,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Price</FormLabel>
+                  <FormLabel help="property.purchase-price">Purchase Price</FormLabel>
                   <FormControl><Input type="number" placeholder="350000" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -151,7 +169,7 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="sqFt" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{fmt.areaLabel}</FormLabel>
+                  <FormLabel help="property.area">{fmt.areaLabel}</FormLabel>
                   <FormControl><Input type="number" placeholder="2000" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -159,11 +177,21 @@ export function PropertyFormDialog({ open, onClose, property }: Props) {
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="property.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {showInsurance && (
+                <CheckList
+                  label="Insurance"
+                  help="property.insurance"
+                  options={policyChoices}
+                  value={ticked}
+                  onChange={(next) => form.setValue("policyIds", next, { shouldDirty: true })}
+                />
+              )}
             </div>
 
             <DialogFooter>

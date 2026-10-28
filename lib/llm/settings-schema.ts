@@ -130,10 +130,26 @@ export function parseLlmSettings(input: LlmSettingsInput, opts: { requireComplet
 
   return {
     ok: true,
-    // Hidden only makes sense while off — turning the assistant on clears it,
-    // rather than trusting the client to have disabled the checkbox.
-    value: { enabled: v.enabled, hidden: v.enabled ? false : (v.hidden ?? false), baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody, documentsEnabled: v.documentsEnabled ?? true, healthDocumentsEnabled: v.healthDocumentsEnabled ?? false },
+    // Hidden is its own setting: the assistant can be on and hidden (see assistantShown).
+    value: { enabled: v.enabled, hidden: v.hidden ?? false, baseUrl, model, temperature, maxTokens, systemPrompt: v.systemPrompt || null, timeoutSeconds, maxToolRounds, extraBody, documentsEnabled: v.documentsEnabled ?? true, healthDocumentsEnabled: v.healthDocumentsEnabled ?? false },
   }
+}
+
+/**
+ * Whether the assistant has an entry point (nav item, header button, floating chat). It can be on and
+ * working but hidden: features that use the AI model keep working without a visible chat.
+ */
+export function assistantShown(status: { available: boolean; hidden: boolean }): boolean {
+  return status.available && !status.hidden
+}
+
+/** Document reading belongs to the assistant: it can't be switched on while the assistant is off. */
+export function documentSwitchError(
+  next: { enabled: boolean },
+  patch: { enabled?: boolean; hidden?: boolean; documentsEnabled?: boolean; healthDocumentsEnabled?: boolean },
+): string | null {
+  const turningOn = patch.documentsEnabled === true || patch.healthDocumentsEnabled === true
+  return turningOn && !next.enabled ? "Turn on the assistant first." : null
 }
 
 export function isLlmReady(c: { enabled: boolean; baseUrl: string | null; model: string | null; keyUnreadable: boolean }): boolean {
@@ -151,6 +167,46 @@ export function originChanged(saved: string | null, next: string | null): boolea
   } catch {
     return true
   }
+}
+
+/**
+ * True when the LLM server is outside this machine and the home network, so
+ * questions and records leave the house. Blank or unreadable URLs are false.
+ */
+export function isOffNetworkUrl(url: string): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  } catch {
+    return false
+  }
+  // Docker service names and other single-label hosts only resolve locally.
+  if (!host.includes(".") && !host.includes(":")) return false
+  if (/\.(localhost|local|lan|internal|home\.arpa)$/.test(host)) return false
+  const isV6 = host.includes(":")
+  // An IPv4 address written as IPv6 (::ffff:c0a8:105 is 192.168.1.5) is judged by its IPv4 part.
+  const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host)
+  if (mapped) {
+    const hi = parseInt(mapped[1], 16)
+    const lo = parseInt(mapped[2], 16)
+    return isOffNetworkUrl(`http://${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}/`)
+  }
+  // Private IPv6 ranges only count for IPv6 addresses: a host name can start with "fc" or "fd" too.
+  if (isV6 && (host === "::1" || /^f[cd][0-9a-f]{2}:/.test(host) || host.startsWith("fe80:"))) return false
+  const ip = host.split(".").map(Number)
+  if (ip.length === 4 && ip.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+    const [a, b] = ip
+    return !(
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      // Tailscale and other carrier-grade NAT ranges.
+      (a === 100 && b >= 64 && b <= 127)
+    )
+  }
+  return true
 }
 
 /** A stored or typed extra-request JSON object; null when blank or not an object. */

@@ -7,14 +7,22 @@ import { MapPin, Calendar, DollarSign, Maximize, Download, Home, FileText } from
 import { ServiceRecordList } from "@/components/service-records/service-record-list"
 import { WarrantyList } from "@/components/warranties/warranty-list"
 import { MaintenanceList } from "@/components/maintenance/maintenance-list"
+import { loadManualOptions } from "@/lib/manual-reference-server"
 import { AssetDocuments } from "@/components/attachments/asset-documents"
 import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { PropertyEditButton } from "@/components/properties/property-edit-button"
 import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
+import { AssetInsurance } from "@/components/insurance/asset-insurance"
+import { loadAssetPolicies, loadPolicyChoices } from "@/lib/insurance-server"
+import { belongingsComparison } from "@/lib/insurance"
+import { equipmentValueTotals } from "@/lib/equipment-value"
 import { getFormat } from "@/lib/regional-server"
 import { loadFeatures } from "@/lib/features-server"
 import { RoomList } from "@/components/rooms/room-list"
 import { PropertyEquipment } from "@/components/equipment/property-equipment"
+import { HiddenByFilter } from "@/components/hidden-by-filter"
+import { assetInScope } from "@/lib/property-filter"
+import { loadPropertyScope } from "@/lib/property-filter-server"
 
 const typeLabel: Record<string, string> = {
   HOUSE: "House", CONDO: "Condo", TOWNHOUSE: "Townhouse", LOT: "Lot / Land", OTHER: "Other",
@@ -33,13 +41,18 @@ export default async function PropertyDetailPage({
   const property = await prisma.property.findUnique({ where: { id } })
   if (!property) notFound()
 
-  const [propertyServiceRecords, propertyWarranties, propertyMaintenanceSchedules, equipment, documents, features] = await Promise.all([
+  const scope = await loadPropertyScope()
+  if (!assetInScope(scope, "PROPERTY", id)) return <HiddenByFilter propertyName={scope!.propertyName} ownerName={property.name} />
+
+  const [propertyServiceRecords, propertyWarranties, propertyMaintenanceSchedules, equipment, documents, features, policies, policyChoices] = await Promise.all([
     prisma.serviceRecord.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { date: "desc" } }),
     prisma.warranty.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { expirationDate: "asc" } }),
     prisma.maintenanceSchedule.findMany({ where: { assetId: id, assetType: "PROPERTY" }, include: { attachments: true }, orderBy: { nextDueDate: "asc" } }),
     prisma.equipment.findMany({ where: { propertyId: id }, include: { room: { select: { name: true } } }, orderBy: { name: "asc" } }),
     prisma.attachment.findMany({ where: { recordType: "DOCUMENT", assetType: "PROPERTY", assetId: id }, orderBy: { uploadedAt: "asc" } }),
     loadFeatures(),
+    loadAssetPolicies("PROPERTY", id),
+    loadPolicyChoices("properties", false, scope),
   ])
   const { rooms, roomServiceRecords, roomSchedules } = features.rooms ? await loadRooms(id) : { rooms: [], roomServiceRecords: [], roomSchedules: [] }
   // For the room selects and badges on the Service and Maintenance tabs; empty with Rooms off.
@@ -47,8 +60,10 @@ export default async function PropertyDetailPage({
 
   const equipmentIds = equipment.map((e) => e.id)
 
-  const [equipmentServiceRecords, equipmentWarranties, equipmentMaintenanceSchedules] = equipmentIds.length
-    ? await Promise.all([
+  // The manuals need the equipment ids, so they load beside the equipment's own records.
+  const [[equipmentServiceRecords, equipmentWarranties, equipmentMaintenanceSchedules], manualOptions] = await Promise.all([
+    equipmentIds.length
+    ? Promise.all([
         prisma.serviceRecord.findMany({
           where: { assetId: { in: equipmentIds }, assetType: "EQUIPMENT" },
           include: { attachments: true },
@@ -65,7 +80,12 @@ export default async function PropertyDetailPage({
           orderBy: { nextDueDate: "asc" },
         }),
       ])
-    : [[], [], []]
+    : [[], [], []],
+    loadManualOptions([
+      { assetType: "PROPERTY", assetId: id },
+      ...equipmentIds.map((e) => ({ assetType: "EQUIPMENT" as const, assetId: e })),
+    ]),
+  ])
 
   const serviceRecords = [...propertyServiceRecords, ...equipmentServiceRecords]
   const warranties = [...propertyWarranties, ...equipmentWarranties]
@@ -84,10 +104,11 @@ export default async function PropertyDetailPage({
           {property.yearBuilt && <Stat icon={Calendar} label="Year Built" value={property.yearBuilt.toString()} />}
           {property.sqFt && <Stat icon={Maximize} label={fmt.areaLabel} value={fmt.area(property.sqFt)} />}
           {property.purchasePrice && <Stat icon={DollarSign} label="Purchase Price" value={fmt.moneyWhole(property.purchasePrice)} />}
-          {property.purchaseDate && <Stat icon={Calendar} label="Purchased" value={fmt.date(property.purchaseDate)} />}
+          {property.purchaseDate && <Stat icon={Calendar} label="Purchased" value={fmt.date(property.purchaseDate, { utc: true })} />}
         </div>
 
-        <AssetCostPanel assetType="PROPERTY" assetId={id} purchasePrice={property.purchasePrice} ownedSince={property.purchaseDate} />
+        <AssetInsurance policies={policies} belongings={belongingsComparison(equipmentValueTotals(equipment).CONTENTS, policies)} />
+        <AssetCostPanel assetType="PROPERTY" assetId={id} purchasePrice={property.purchasePrice} ownedSince={property.purchaseDate} equipmentIds={equipmentIds} />
 
         {property.notes && (
           <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground whitespace-pre-wrap">
@@ -97,10 +118,10 @@ export default async function PropertyDetailPage({
       </aside>
 
       <div className="min-w-0 flex-1 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="font-heading text-2xl font-semibold">{property.name}</h1>
-          <div className="flex shrink-0 items-center gap-2">
-            <PropertyEditButton property={property} />
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{property.name}</h1>
+          <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
+            <PropertyEditButton property={property} policyChoices={policyChoices} policyIds={policies.map((p) => p.id)} />
             <Link
               href={`/reports/properties/${id}`}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
@@ -119,7 +140,7 @@ export default async function PropertyDetailPage({
 
         {/* Keyed on the tab and open params so a link to ?tab=…&open=… from inside this page (a room's history) switches tabs, even to the tab already showing. */}
         <Tabs key={`${tab ?? ""}:${open ?? ""}`} defaultValue={(tab === "rooms" && !features.rooms) || (tab === "equipment" && !features.equipmentTab) ? "service" : tab ?? "service"}>
-          <TabsList variant="line" className="w-full justify-start border-b">
+          <TabsList variant="line" className="w-full justify-start border-b overflow-x-auto">
             <TabsTrigger value="service">Service ({serviceRecords.length})</TabsTrigger>
             <TabsTrigger value="warranties">Warranties ({warranties.length})</TabsTrigger>
             {features.rooms && <TabsTrigger value="rooms">Rooms ({rooms.length})</TabsTrigger>}
@@ -144,7 +165,7 @@ export default async function PropertyDetailPage({
             </TabsContent>
           )}
           <TabsContent value="maintenance" className="mt-4">
-            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} roomOptions={roomOptions} openId={tab === "maintenance" ? open : undefined} />
+            <MaintenanceList schedules={maintenanceSchedules} assetId={id} assetType="PROPERTY" equipment={equipment} propertyName={property.name} roomOptions={roomOptions} manualOptions={manualOptions} openId={tab === "maintenance" ? open : undefined} />
           </TabsContent>
           <TabsContent value="documents" className="mt-4">
             <AssetDocuments assetId={id} documents={documents} hint="Deed, survey, closing papers, floor plans: files for the property itself, not one service." />
@@ -189,7 +210,7 @@ function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: st
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className="font-semibold text-sm text-right">{value}</div>
+      <div className="min-w-0 break-words font-semibold text-sm text-right">{value}</div>
     </div>
   )
 }

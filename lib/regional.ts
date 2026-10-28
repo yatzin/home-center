@@ -39,7 +39,19 @@ function currencyFormat(currency: string, opts: Intl.NumberFormatOptions = {}): 
 export function createFormatter(r: Regional) {
   const full = currencyFormat(r.currency)
   const whole = currencyFormat(r.currency, { maximumFractionDigits: 0, minimumFractionDigits: 0 })
+  // Always two decimals, so a rate like 0.15 per mile does not round to zero in yen.
+  const rate = currencyFormat(r.currency, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
   const currencySymbol = full?.formatToParts(0).find((p) => p.type === "currency")?.value ?? r.currency
+  const numberFormats = new Map<number, Intl.NumberFormat>()
+  /** A plain number with digit grouping, rounded to `maxFractionDigits` (0: whole). */
+  const number = (n: number, maxFractionDigits = 0) => {
+    let f = numberFormats.get(maxFractionDigits)
+    if (!f) {
+      f = new Intl.NumberFormat(undefined, { maximumFractionDigits: maxFractionDigits })
+      numberFormats.set(maxFractionDigits, f)
+    }
+    return f.format(n)
+  }
   const km = r.distanceUnit === "KM"
   const sqm = r.areaUnit === "SQM"
 
@@ -81,6 +93,17 @@ export function createFormatter(r: Regional) {
     }
   }
 
+  /** Month and year, for grouping headings: "June 2026", "06/2026", "2026-06". */
+  const monthYear = (d: When, opts: { utc?: boolean } = {}) => {
+    const { y, m } = ymd(toDate(d), !!opts.utc)
+    switch (r.dateFormat) {
+      case "MDY_NUM":
+      case "DMY_NUM": return `${pad(m + 1)}/${y}`
+      case "ISO": return `${y}-${pad(m + 1)}`
+      default: return `${LONG[m]} ${y}`
+    }
+  }
+
   const hm = (h: number, min: number) =>
     r.hour12 ? `${h % 12 || 12}:${pad(min)} ${h < 12 ? "AM" : "PM"}` : `${pad(h)}:${pad(min)}`
 
@@ -89,14 +112,28 @@ export function createFormatter(r: Regional) {
     return hm(t.getHours(), t.getMinutes())
   }
 
+  /** The local time in pieces, for a clock: "2:07" or "14:07", the seconds "09", and "PM" (null in 24-hour time). */
+  const timeParts = (d: When) => {
+    const t = toDate(d)
+    const h = t.getHours()
+    return {
+      hm: r.hour12 ? `${h % 12 || 12}:${pad(t.getMinutes())}` : `${pad(h)}:${pad(t.getMinutes())}`,
+      seconds: pad(t.getSeconds()),
+      period: r.hour12 ? (h < 12 ? "AM" : "PM") : null,
+    }
+  }
+
   return {
     currency: r.currency,
     currencySymbol,
     money,
+    /** A per-mile or per-hour rate: two decimals in every currency. */
+    moneyRate: (n: number) => (rate ? rate.format(n) : money(n)),
     moneyWhole: (n: number) => (whole ? whole.format(n) : `${r.currency} ${Math.round(n).toLocaleString()}`),
     /** Axis ticks and captions: "$12.5k", "€980". */
     moneyCompact: (n: number) =>
       Math.abs(n) >= 1000 ? `${currencySymbol}${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k` : `${currencySymbol}${Math.round(n)}`,
+    number,
     distanceShort: km ? "km" : "mi",
     distanceWord: km ? "kilometre" : "mile",
     distanceWords: km ? "kilometres" : "miles",
@@ -111,7 +148,11 @@ export function createFormatter(r: Regional) {
     date,
     dateNumeric,
     dayMonth,
+    monthYear,
     time,
+    timeParts,
+    /** 12-hour time (Settings > Regional). */
+    hour12: r.hour12,
     /** A stored "HH:MM" wall-clock time. */
     clock: (hhmm: string | null | undefined) => {
       if (!hhmm) return ""

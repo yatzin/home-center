@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useStripOpenParam } from "@/components/strip-open-param"
+import { findOpenRow } from "@/lib/deep-link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +14,9 @@ import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle, Clock, Pause,
 import { deleteMaintenanceSchedule, setMaintenanceScheduleActive } from "@/lib/actions/maintenance"
 import { MaintenanceFormDialog } from "./maintenance-form-dialog"
 import { CompleteDialog } from "./complete-dialog"
+import { ManualLink } from "./manual-link"
+import { resolveManual, type ManualOption } from "@/lib/manual-reference"
+import { isDoneOnce, repeatsLabel } from "@/lib/maintenance-schedule"
 import { SnoozeMenu } from "./snooze-menu"
 import { remindersHref } from "./add-reminders-submit"
 import { AttachmentList } from "@/components/attachments/attachment-list"
@@ -51,6 +56,8 @@ interface Props {
   roomOptions?: RoomOption[]
   /** A new schedule's room (on an equipment page: the equipment's own). */
   defaultRoomId?: string | null
+  /** Files a reminder may link as its manual: its asset's documents and its own files. */
+  manualOptions?: ManualOption[]
   openId?: string
 }
 
@@ -80,7 +87,7 @@ function getStatus(s: MaintenanceScheduleWithAttachments, currentMileage: number
 const stickyActions =
   "sticky right-0 z-[1] bg-card shadow-[-10px_0_10px_-10px_rgb(0_0_0/0.25)] [tr:hover_&]:bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))] [tr:has([aria-expanded=true])_&]:bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]"
 
-export function MaintenanceList({ schedules: initialSchedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, roomOptions = [], defaultRoomId, openId }: Props) {
+export function MaintenanceList({ schedules: initialSchedules, assetId, assetType, currentMileage, meterUnit = "MILES", equipment, propertyName, roomOptions = [], defaultRoomId, manualOptions, openId }: Props) {
   const router = useRouter()
   const fmt = useFormat()
   const [schedules, setSchedules] = useState(initialSchedules)
@@ -91,11 +98,13 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [prevOpenId, setPrevOpenId] = useState<string | undefined>(undefined)
+  const [linkOpens, setLinkOpens] = useState(0)
   if (openId !== prevOpenId) {
     setPrevOpenId(openId)
-    const match = openId ? initialSchedules.find((s) => s.id === openId) : undefined
-    if (match) { setEditing(match); setFormOpen(true) }
+    const match = findOpenRow(initialSchedules, openId)
+    if (match) { setEditing(match); setFormOpen(true); setLinkOpens((n) => n + 1) }
   }
+  useStripOpenParam(linkOpens)
 
   if (initialSchedules !== prevInitialSchedules) {
     setPrevInitialSchedules(initialSchedules)
@@ -132,7 +141,7 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
 
   async function handleResume(s: MaintenanceScheduleWithAttachments) {
     const result = await setMaintenanceScheduleActive(s.id, true)
-    if (!result || result.error) { toast.error("Something went wrong."); return }
+    if (!result || result.error) { toast.error(result?.error ?? "Something went wrong."); return }
     toast.success(`"${s.title}" resumed.`)
     router.refresh()
   }
@@ -166,7 +175,7 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
                 {showSource && <TableHead>Source</TableHead>}
                 <SortableTableHead column="status" label="Status" sortState={table.sortState} onToggle={table.toggleSort} />
                 <SortableTableHead column="nextDue" label="Next Due" sortState={table.sortState} onToggle={table.toggleSort} />
-                <TableHead>Interval</TableHead>
+                <TableHead>Repeats</TableHead>
                 <SortableTableHead column="lastCompleted" label="Last Completed" sortState={table.sortState} onToggle={table.toggleSort} />
                 <TableHead>Files</TableHead>
                 <TableHead className={`text-right ${stickyActions}`}>Actions</TableHead>
@@ -188,6 +197,8 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
                         <span className="font-medium">{s.title}</span>
                         {s.roomId && roomNames[s.roomId] && <Badge variant="outline" className="text-xs">{roomNames[s.roomId]}</Badge>}
                       </div>
+                      {s.estimatedCost != null && <div className="text-xs text-muted-foreground">Est. {fmt.money(s.estimatedCost)}</div>}
+                      <ManualLink manual={resolveManual(s, manualOptions ?? [])} className="mt-0.5" />
                     </TableCell>
                     <TableCell className="max-w-[220px]">
                       {s.description ? (
@@ -221,17 +232,15 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {s.nextDueDate && <div>{fmt.date(s.nextDueDate)}</div>}
+                      {s.nextDueDate && <div>{fmt.date(s.nextDueDate, { utc: true })}</div>}
                       {s.nextDueMileage != null && <div>{s.nextDueMileage.toLocaleString()} {fmt.meterShort(meterUnit)}</div>}
-                      {!s.nextDueDate && s.nextDueMileage == null && "—"}
+                      {!s.nextDueDate && s.nextDueMileage == null && (isDoneOnce(s) ? "Done" : "—")}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {s.intervalDays && <div>Every {s.intervalDays}d</div>}
-                      {s.intervalMiles && <div>Every {s.intervalMiles.toLocaleString()} {fmt.meterShort(meterUnit)}</div>}
-                      {!s.intervalDays && !s.intervalMiles && "—"}
+                      {repeatsLabel(s, fmt.meterShort(meterUnit))}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {s.lastCompletedDate ? fmt.date(s.lastCompletedDate) : "—"}
+                      {s.lastCompletedDate ? fmt.date(s.lastCompletedDate, { utc: true }) : "—"}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <AttachmentCount attachments={s.attachments} onClick={() => setExpandedId(expanded ? null : s.id)} />
@@ -302,6 +311,7 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
         roomOptions={roomOptions}
         defaultRoomId={defaultRoomId}
         meterUnit={meterUnit}
+        manualOptions={manualOptions}
       />
 
       {completing && (
@@ -309,6 +319,7 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
           schedule={completing}
           currentMileage={currentMileage}
           meterUnit={meterUnit}
+          manual={resolveManual(completing, manualOptions ?? [])}
           onClose={() => setCompleting(null)}
         />
       )}

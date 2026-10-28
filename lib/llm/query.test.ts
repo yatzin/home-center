@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   compileInclude, compileLimit, compileSort, compileWhere, entityDef, inDayRange, requireDay, selectFor, ToolInputError,
 } from "./query"
+import { ownedScopeWhere, personChildScopeWhere } from "@/lib/property-filter"
 
 const ctx = { userId: "u1", now: new Date("2026-09-26T12:00:00Z") }
 
@@ -115,6 +116,10 @@ describe("compileWhere", () => {
     )
   })
 
+  it("lets an enum be filtered on null, so equipment left on the category default can be found", () => {
+    expect(compileWhere("equipment", [{ field: "valueClass", op: "isNull", value: true }], ctx).where).toEqual({ AND: [{ valueClass: null }] })
+  })
+
   it("handles isNull both ways and 'in' needing an array", () => {
     expect(compileWhere("medication", [{ field: "endDate", op: "isNull", value: true }], ctx).where).toEqual({ AND: [{ endDate: null }] })
     expect(compileWhere("medication", [{ field: "endDate", op: "isNull", value: false }], ctx).where).toEqual({ AND: [{ endDate: { not: null } }] })
@@ -191,6 +196,30 @@ describe("compileLimit", () => {
     expect(compileLimit(1000)).toBe(100)
     expect(compileLimit(0)).toBe(1)
     expect(compileLimit("lots")).toBe(25)
+  })
+})
+
+describe("compileWhere under the property filter", () => {
+  const scopeOnR = { propertyId: "pR", propertyName: "Rental", hiddenEquipmentIds: ["eH"], hiddenVehicleIds: [], hiddenPersonIds: ["ben"] }
+  const scoped = { ...ctx, scope: scopeOnR, hiddenEntityIds: [] }
+
+  it("ANDs the owned-row fragment into warranties", () => {
+    const { where } = compileWhere("warranty", [], scoped)
+    expect(where.AND).toContainEqual(ownedScopeWhere(scopeOnR))
+  })
+  it("ANDs the person fragment into medications, next to the model's filters", () => {
+    const { where } = compileWhere("medication", [{ field: "personId", op: "eq", value: "ben" }], scoped)
+    expect(where.AND).toContainEqual(personChildScopeWhere(scopeOnR))
+    expect(where.AND).toContainEqual({ personId: { equals: "ben" } })
+  })
+  it("filters list includes, such as a policy's members", () => {
+    const plan = compileInclude("insurancePolicy", ["members", "premiums"], undefined, scoped)
+    expect(plan.select.members).toMatchObject({ where: { id: { notIn: ["ben"] } } })
+    expect(compileInclude("insurancePolicy", ["members"], undefined, { scope: null }).select.members).not.toHaveProperty("where")
+  })
+  it("is today's output without a scope", () => {
+    expect(compileWhere("warranty", [], ctx).where).toEqual({})
+    expect(compileWhere("medication", [], { ...ctx, scope: null }).where).toEqual({})
   })
 })
 

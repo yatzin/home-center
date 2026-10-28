@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma"
 import type { AssetType } from "@/app/generated/prisma/client"
 import type { CostRow } from "@/lib/costs"
+import type { ForecastSchedule } from "@/lib/forecast"
 import { ownedWhere } from "@/lib/features"
 import { loadFeatures } from "@/lib/features-server"
+import { ownedScopeWhere, type PropertyScope } from "@/lib/property-filter"
 
 /// One query, many rollups. Grouping happens in memory in lib/costs.ts because
 /// SQLite cannot group by an extracted year without raw SQL, because assetId is
@@ -13,13 +15,15 @@ import { loadFeatures } from "@/lib/features-server"
 export async function loadCostRecords(filter?: {
   assetId?: string
   assetType?: AssetType
+  /** Property filter; ignored when assetId names one asset. */
+  scope?: PropertyScope | null
 }): Promise<CostRow[]> {
   const features = await loadFeatures()
   if (!features.health && filter?.assetType === "PERSON") return []
   const rows = await prisma.serviceRecord.findMany({
     where: {
       cost: { not: null },
-      ...(filter?.assetId ? { assetId: filter.assetId } : {}),
+      ...(filter?.assetId ? { assetId: filter.assetId } : ownedScopeWhere(filter?.scope ?? null)),
       // With Health off, people's visits drop out of every total.
       ...(filter?.assetType ? { assetType: filter.assetType } : ownedWhere(features)),
     },
@@ -40,4 +44,40 @@ export async function loadCostRecords(filter?: {
   // `cost: { not: null }` narrows the rows but not their type, so this assertion
   // states what the query already guarantees.
   return rows.map((row) => ({ ...row, cost: row.cost! }))
+}
+
+/// Every reminder with an estimated cost, for the planned-spend forecast. Paused and
+/// snoozed ones come back too: forecastSchedules drops the first and keeps the second.
+/// With Health off no person's reminder is returned. `assets` narrows to those exact assets.
+export async function loadPlannedSchedules(filter?: {
+  assetType?: AssetType
+  assets?: { assetType: AssetType; assetId: string }[]
+  /** Property filter; ignored when `assets` names the assets. */
+  scope?: PropertyScope | null
+}): Promise<ForecastSchedule[]> {
+  const features = await loadFeatures()
+  if (!features.health && filter?.assetType === "PERSON") return []
+  return prisma.maintenanceSchedule.findMany({
+    where: {
+      estimatedCost: { not: null },
+      ...(filter?.assetType ? { assetType: filter.assetType } : ownedWhere(features)),
+      ...(filter?.assets
+        ? { OR: filter.assets.map(({ assetType, assetId }) => ({ assetType, assetId })) }
+        : ownedScopeWhere(filter?.scope ?? null)),
+    },
+    select: {
+      id: true,
+      title: true,
+      assetType: true,
+      assetId: true,
+      isActive: true,
+      estimatedCost: true,
+      intervalDays: true,
+      intervalMiles: true,
+      dueMonths: true,
+      dueDay: true,
+      nextDueDate: true,
+      nextDueMileage: true,
+    },
+  })
 }

@@ -115,3 +115,14 @@ export function labelStride(count: number, maxLabels: number): number {
   if (count <= maxLabels || maxLabels <= 0) return 1
   return Math.ceil(count / maxLabels)
 }
+
+/// Axis labels thinned to fit `width` px at roughly `spacing` px apiece,
+/// counted back from the last label so the current period is always labelled
+/// and never collides with a strided neighbour. Dropped labels become "" (the
+/// slot stays, so the rest stay aligned); tooltips and tables keep every period.
+export function fitLabels(labels: string[], width: number, spacing = 40): string[] {
+  const fit = width > 0 ? Math.max(2, Math.floor(width / spacing)) : 4
+  const stride = labelStride(labels.length, fit)
+  const last = labels.length - 1
+  return labels.map((label, i) => ((last - i) % stride === 0 ? label : ""))
+}

@@ -5,10 +5,10 @@ const base = { intervalDays: null, intervalMiles: null, nextDueDate: null, nextD
 
 describe("completeSchedule", () => {
   it("counts the next due date and mileage from the completion", () => {
-    const r = completeSchedule({ ...base, intervalDays: 90, intervalMiles: 5000 }, new Date(2026, 9, 1), 41000)
-    expect(r.lastCompletedDate).toEqual(new Date(2026, 9, 1))
+    const r = completeSchedule({ ...base, intervalDays: 90, intervalMiles: 5000 }, new Date(Date.UTC(2026, 9, 1)), 41000)
+    expect(r.lastCompletedDate).toEqual(new Date(Date.UTC(2026, 9, 1)))
     expect(r.lastCompletedMileage).toBe(41000)
-    expect(r.nextDueDate).toEqual(new Date(2026, 11, 30))
+    expect(r.nextDueDate).toEqual(new Date(Date.UTC(2026, 11, 30)))
     expect(r.nextDueMileage).toBe(46000)
   })
 
@@ -40,8 +40,15 @@ describe("completeSchedule", () => {
   })
 
   it("moves an overdue reminder forward from a slightly old completion", () => {
-    const r = completeSchedule({ ...base, intervalDays: 90, nextDueDate: new Date(2026, 5, 1) }, new Date(2026, 8, 1), null)
-    expect(r.nextDueDate).toEqual(new Date(2026, 10, 30))
+    const r = completeSchedule({ ...base, intervalDays: 90, nextDueDate: new Date(Date.UTC(2026, 5, 1)) }, new Date(Date.UTC(2026, 8, 1)), null)
+    expect(r.nextDueDate).toEqual(new Date(Date.UTC(2026, 10, 30)))
+  })
+
+  // Dates are stored as UTC midnight, so counting days must not follow the
+  // server's clock change: 30 days from Oct 25 is Nov 24, not Nov 23 at 23:00.
+  it("counts whole days across a daylight saving change", () => {
+    const r = completeSchedule({ ...base, intervalDays: 30 }, new Date(Date.UTC(2026, 9, 25)), null)
+    expect(r.nextDueDate).toEqual(new Date(Date.UTC(2026, 10, 24)))
   })
 
   it("uses the computed due date when there was none", () => {
@@ -109,8 +116,8 @@ describe("skipSchedule", () => {
   const now = new Date(2026, 9, 9, 12)
 
   it("moves a date one interval on from where it was due", () => {
-    const r = skipSchedule({ ...base, intervalDays: 30, nextDueDate: new Date(2026, 9, 20) }, now, null)
-    expect(r.nextDueDate).toEqual(new Date(2026, 10, 19))
+    const r = skipSchedule({ ...base, intervalDays: 30, nextDueDate: new Date(Date.UTC(2026, 9, 20)) }, now, null)
+    expect(r.nextDueDate).toEqual(new Date(Date.UTC(2026, 10, 19)))
   })
 
   it("keeps stepping until the next one is ahead, so a long-overdue reminder isn't still overdue", () => {
@@ -172,5 +179,45 @@ describe("completionRecordData", () => {
   it("keeps a reading only on a vehicle, and leaves a person's record uncategorized", () => {
     const r = completionRecordData({ ...schedule, assetType: "PERSON" }, { date, mileage: 5, vendor: "", cost: 0, notes: "" }, "u1")
     expect(r).toMatchObject({ mileageAtService: null, category: null, cost: 0 })
+  })
+})
+
+describe("one-time reminders", () => {
+  it("clears the due date when completed", () => {
+    const r = completeSchedule({ ...base, nextDueDate: new Date("2026-05-01T12:00Z") }, new Date("2026-05-10T12:00Z"), null)
+    expect(r.nextDueDate).toBeNull()
+    expect(r.nextDueMileage).toBeNull()
+    expect(r.lastCompletedDate).toEqual(new Date("2026-05-10T12:00Z"))
+  })
+
+  it("clears a mileage-only due value when completed", () => {
+    const r = completeSchedule({ ...base, nextDueMileage: 60000 }, new Date("2026-05-10T12:00Z"), 60250)
+    expect(r.nextDueMileage).toBeNull()
+    expect(r.lastCompletedMileage).toBe(60250)
+  })
+
+  it("can't be skipped", () => {
+    expect(canSkip({ ...base, nextDueDate: new Date("2026-05-01T12:00Z") })).toBe(false)
+  })
+})
+
+describe("calendar reminders", () => {
+  const cal = { ...base, dueMonths: "4,10", dueDay: 1, nextDueDate: new Date("2026-04-01T12:00Z") }
+
+  it("moves to the next listed month after an early completion", () => {
+    expect(completeSchedule(cal, new Date("2026-03-25T12:00Z"), null).nextDueDate?.toISOString()).toBe("2026-10-01T12:00:00.000Z")
+  })
+
+  it("moves to the next listed month after a late completion", () => {
+    expect(completeSchedule(cal, new Date("2026-05-10T12:00Z"), null).nextDueDate?.toISOString()).toBe("2026-10-01T12:00:00.000Z")
+  })
+
+  it("skips to the next listed month", () => {
+    expect(skipSchedule(cal, new Date("2026-04-03T12:00Z"), null).nextDueDate?.toISOString()).toBe("2026-10-01T12:00:00.000Z")
+  })
+
+  it("can be skipped while it has a due date", () => {
+    expect(canSkip(cal)).toBe(true)
+    expect(canSkip({ ...cal, nextDueDate: null })).toBe(false)
   })
 })

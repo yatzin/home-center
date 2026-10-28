@@ -15,21 +15,10 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createWarranty, updateWarranty } from "@/lib/actions/warranties"
 import { deleteAttachment } from "@/lib/actions/attachments"
-import { ASSET_TYPES } from "@/lib/assets"
+import { warrantySchema as schema } from "@/lib/warranty-input"
+import { showServerError } from "@/components/forms/server-errors"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
-
-const schema = z.object({
-  assetId: z.string(),
-  assetType: z.enum(ASSET_TYPES),
-  productName: z.string().min(1, "Product name is required"),
-  purchaseDate: z.string().optional(),
-  expirationDate: z.string().optional(),
-  vendor: z.string().optional(),
-  vendorPhone: z.string().optional(),
-  vendorEmail: z.string().optional(),
-  notes: z.string().optional(),
-})
 
 type FormValues = z.infer<typeof schema>
 
@@ -132,7 +121,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
       ? await updateWarranty(existingId, payload)
       : await createWarranty(payload)
 
-    if (result?.error) { toast.error("Please fix the errors and try again."); return }
+    if (result?.error) { showServerError(form, result.error); return }
 
     const warrantyId = existingId ?? (result as { success: boolean; id?: string }).id
     if (warrantyId && !existingId) setCreatedWarrantyId(warrantyId)
@@ -187,7 +176,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {equipmentOptions && equipmentOptions.length > 0 && (
               <FormItem>
-                <FormLabel>For</FormLabel>
+                <FormLabel help="warranty.target">For</FormLabel>
                 <Select
                   value={targetKey(form.watch("assetType"), form.watch("assetId"))}
                   onValueChange={(value) => {
@@ -217,7 +206,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="productName" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Product / Coverage *</FormLabel>
+                  <FormLabel help="warranty.product">Product / Coverage *</FormLabel>
                   <FormControl><Input placeholder="Roof — GAF Timberline" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -225,7 +214,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="vendor" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Vendor / Manufacturer</FormLabel>
+                  <FormLabel help="warranty.vendor">Vendor / Manufacturer</FormLabel>
                   <FormControl><Input placeholder="GAF" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -233,7 +222,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="purchaseDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Purchase Date</FormLabel>
+                  <FormLabel help="warranty.purchase-date">Purchase Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -241,7 +230,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="expirationDate" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Expiration Date</FormLabel>
+                  <FormLabel help="warranty.expiration">Expiration Date</FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -249,7 +238,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="vendorPhone" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor Phone</FormLabel>
+                  <FormLabel help="warranty.phone">Vendor Phone</FormLabel>
                   <FormControl><Input type="tel" placeholder="555-555-5555" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -257,7 +246,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="vendorEmail" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor Email</FormLabel>
+                  <FormLabel help="warranty.email">Vendor Email</FormLabel>
                   <FormControl><Input type="email" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -265,7 +254,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem className="col-span-2">
-                  <FormLabel>Notes</FormLabel>
+                  <FormLabel help="warranty.notes">Notes</FormLabel>
                   <FormControl><Textarea rows={3} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

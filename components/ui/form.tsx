@@ -27,15 +27,16 @@ const FormField = <
   )
 }
 
+const FormItemContext = React.createContext<{ id: string }>({} as { id: string })
+
 const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext)
   const { getFieldState, formState } = useFormContext()
   const fieldState = getFieldState(fieldContext.name, formState)
-  const id = React.useId()
+  // The FormItem's id, so the label, control and message all agree on one.
+  const { id } = React.useContext(FormItemContext)
   return { id, name: fieldContext.name, formItemId: `${id}-form-item`, formMessageId: `${id}-form-item-message`, ...fieldState }
 }
-
-const FormItemContext = React.createContext<{ id: string }>({} as { id: string })
 
 const FormItem = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
   const id = React.useId()
@@ -47,8 +48,9 @@ const FormItem = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>)
 }
 
 const FormLabel = ({ className, ...props }: React.ComponentPropsWithoutRef<typeof Label>) => {
-  const { error, formItemId } = useFormField()
-  return <Label className={cn(error && "text-destructive", className)} htmlFor={formItemId} {...props} />
+  const { error, formItemId, name } = useFormField()
+  // Outside a FormField (a group heading, a custom control) there's no input with this id to point at.
+  return <Label className={cn(error && "text-destructive", className)} htmlFor={name ? formItemId : undefined} {...props} />
 }
 
 const FormControl = ({ ...props }: { children: React.ReactElement }) => {
