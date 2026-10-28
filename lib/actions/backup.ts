@@ -13,7 +13,7 @@ import { BACKUP_SETTINGS_ID, backupFolder, loadBackupSettings } from "@/lib/back
 import { deleteBackup, folderStatus, listBackups } from "@/lib/backup/store"
 import { hashFile } from "@/lib/backup/archive"
 import { verifyArchive } from "@/lib/backup/verify"
-import { appMigrations, dataDir, workDir } from "@/lib/backup/paths"
+import { appMigrations, dataDir, incomingUploadPath, workDir } from "@/lib/backup/paths"
 import { cancelRestore, cancelStaged, dryRun, hasPending, markSeen, stage, stageUndo, type DryRun } from "@/lib/backup/restore"
 import { restartToFinish, restorePaths } from "@/lib/backup/restore-server"
 import { claimJobLock, startExportJob } from "@/lib/backup/jobs-server"
@@ -135,7 +135,6 @@ export async function setProtectionPassword(input: { password: string }): Saved 
   return { ok: true }
 }
 
-const UPLOAD_ID = /^[0-9a-f-]{36}$/
 const BUSY = "Wait for the running backup or export to finish."
 const WAITING = "A restore is already waiting for a restart."
 
@@ -162,8 +161,9 @@ async function restoreDryRunLocked(input: { source: { upload: string } | { file:
   if (await hasPending(paths.restoreDir)) return { ok: false, error: WAITING }
   let archivePath: string
   if ("upload" in input.source) {
-    if (!UPLOAD_ID.test(String(input.source.upload))) return { ok: false, error: "Upload not found." }
-    archivePath = path.join(paths.restoreDir, "incoming", `${input.source.upload}.upload`)
+    const uploaded = incomingUploadPath(paths.restoreDir, input.source.upload)
+    if (!uploaded) return { ok: false, error: "Upload not found." }
+    archivePath = uploaded
   } else {
     // Only a file that listBackups finds in the backup folder; the client's string is never joined to a path.
     const file = input.source.file

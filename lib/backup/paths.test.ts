@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import path from "node:path"
-import { containsPath, dataDir, dbPathFromUrl, defaultBackupFolder, safeJoin, searchIndexFile } from "./paths"
+import { containsPath, dataDir, dbPathFromUrl, defaultBackupFolder, incomingUploadPath, safeJoin, searchIndexFile } from "./paths"
 
 describe("paths", () => {
   const env = { DATABASE_URL: "file:/data/homecenter.db" }
@@ -32,5 +32,20 @@ describe("containsPath", () => {
     expect(containsPath(work, path.resolve("/data"))).toBe(false)
     expect(containsPath(work, path.resolve("/data/backup-work-2"))).toBe(false)
     expect(containsPath(work, path.join(work, "..x"))).toBe(true) // a child literally named "..x" is inside
+  })
+})
+
+describe("incomingUploadPath", () => {
+  const root = path.resolve("/data/restore")
+  const id = "123e4567-e89b-42d3-a456-426614174000"
+
+  it("is the upload's file in the incoming folder, for the id the upload route makes", () => {
+    expect(incomingUploadPath(root, id)).toBe(path.join(root, "incoming", `${id}.upload`))
+  })
+
+  it("is null for anything that is not a UUID, so a client string never becomes a path", () => {
+    for (const bad of ["", "..", "../x", `../${id}`, `${id}/../../x`, `${id}.upload`, id.toUpperCase(), id + "x", " " + id, "a/b", "/etc/passwd", "C:\\x", `${id}\u0000`, 5, null, undefined, {}]) {
+      expect(incomingUploadPath(root, bad)).toBeNull()
+    }
   })
 })

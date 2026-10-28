@@ -26,6 +26,20 @@ export function searchIndexFile(env: Env = process.env): string {
 /** libsql wants forward slashes, also on Windows. */
 export const fileUrl = (p: string) => "file:" + p.replace(/\\/g, "/")
 
+const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+/**
+ * Where an uploaded backup waits: `<restoreDir>/incoming/<id>.upload`, for the id
+ * the upload route made (a UUID). Null for anything else, and for any id whose path
+ * would leave that folder, so a client-sent string never becomes an arbitrary path.
+ */
+export function incomingUploadPath(restoreFolder: string, id: unknown): string | null {
+  if (typeof id !== "string" || !UPLOAD_ID.test(id)) return null
+  const base = path.resolve(restoreFolder, "incoming")
+  const full = path.resolve(base, `${id}.upload`)
+  return full.startsWith(base + path.sep) ? full : null
+}
+
 /** A path inside root for an archive-relative path, or null if it would escape. */
 export function safeJoin(root: string, rel: string): string | null {
   if (!rel || rel.includes("\\") || path.isAbsolute(rel) || /^[a-zA-Z]:/.test(rel)) return null
