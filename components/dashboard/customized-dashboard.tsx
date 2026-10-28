@@ -9,16 +9,17 @@ import { LOADERS, type LoaderContext } from "@/lib/dashboard/loaders"
 import { DashboardCanvas } from "./canvas/dashboard-canvas"
 
 /**
- * The admin-arranged dashboard (features.customizedDashboards). Loads the saved
+ * The admin-arranged dashboard. Loads the saved
  * layout and runs a loader for each placed card. Cards of an unknown type, for
  * a feature that is off, or without a loader yet are skipped here but stay in
- * the stored layout.
+ * the stored layout. `userName`: the signed-in user's name, for Text cards.
  */
-export async function CustomizedDashboard({ isAdmin }: { isAdmin: boolean }) {
+export async function CustomizedDashboard({ isAdmin, userName }: { isAdmin: boolean; userName: string | null }) {
   const features = await loadFeatures()
   const [{ layout, revision }, fmt, scope] = await Promise.all([loadDashboardLayout(features), getFormat(), loadPropertyScope()])
   // The layout is shared; the property filter is this device's (its cookie), so cards follow it.
-  const ctx: LoaderContext = { now: new Date(), features, fmt, scope }
+  // The user's name is the viewer's own (Text cards' {user}).
+  const ctx: LoaderContext = { now: new Date(), features, fmt, scope, userName }
 
   const placed = layout.cards.filter((c) => {
     const def = cardType(c.type)

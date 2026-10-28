@@ -7,7 +7,7 @@ import { HEALTH_INSURANCE_KINDS } from "@/lib/insurance"
 
 export const FEATURE_SETTINGS_ID = "singleton"
 
-/** The saved switches, or the defaults (Health, Rooms and Equipment on, Customized Dashboards and the property filter off) when nobody has saved them. Once per request. */
+/** The saved switches, or the defaults (Health, Rooms and Equipment on, the property filter off) when nobody has saved them. Once per request. */
 const featureRow = cache(() => prisma.featureSettings.findUnique({ where: { id: FEATURE_SETTINGS_ID } }))
 
 /** Whether the top-bar property filter is on (default off). Shares the row with loadFeatures. */
@@ -21,7 +21,6 @@ export const loadFeatures = cache(async (): Promise<Features> => {
     health: row?.healthEnabled ?? DEFAULT_FEATURES.health,
     rooms: row?.roomsEnabled ?? DEFAULT_FEATURES.rooms,
     equipmentTab: row?.equipmentTabEnabled ?? DEFAULT_FEATURES.equipmentTab,
-    customizedDashboards: row?.customizedDashboardsEnabled ?? DEFAULT_FEATURES.customizedDashboards,
   }
 })
 

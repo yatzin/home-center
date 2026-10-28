@@ -43,10 +43,12 @@ import {
   type Point,
 } from "@/lib/dashboard/grid-pointer"
 import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
+import { isBareCard } from "@/lib/dashboard/text-card"
 import { cn } from "@/lib/utils"
 import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardAdjustMenu, type AdjustGroup } from "./card-adjust-menu"
 import { CardFrame } from "./card-frame"
+import { shouldOpenSettings } from "@/lib/dashboard/open-settings"
 import { CardGear, CardRemoveButton } from "./card-gear"
 import { useDragCancel, inReadingOrder, useKeepInCanvas, useCommit, useEditorSensors, useGestureRef, useLatest } from "./drag-sensors"
 import { GAP, ROW_HEIGHT } from "./grid-metrics"
@@ -435,6 +437,12 @@ function PhoneCard({
     <div
       ref={setNodeRef}
       data-card-id={card.id}
+      onDoubleClick={(e) => {
+        if (shouldOpenSettings({ target: e.target instanceof Element ? e.target : null, hasSettings: !!onConfigure, disabled: frozen })) {
+          e.preventDefault()
+          onConfigure?.()
+        }
+      }}
       className={cn(
         "absolute flex flex-col",
         isDragging
@@ -496,7 +504,8 @@ function PhoneCard({
           </>
         )}
       </div>
-      <div className="min-h-0 flex-1">
+      {/* touch-manipulation: a double tap opens settings instead of zooming the page. */}
+      <div className="min-h-0 flex-1 touch-manipulation">
         <CardConfigureProvider value={missing ? (onConfigure ?? null) : null}>
           <CardFrame
             title={title}
@@ -504,7 +513,11 @@ function PhoneCard({
             busy={isBusy(card)}
             editing
             interactive={missing}
-            className={cn("ring-1 ring-primary/25 transition-shadow duration-200", isDragging && "shadow-xl ring-2 ring-primary/50")}
+            bare={isBareCard(card)}
+            className={cn(
+              isBareCard(card) ? "transition-[outline-color,background-color] duration-200" : "ring-1 ring-primary/25 transition-shadow duration-200",
+              isDragging && (isBareCard(card) ? "outline-primary/70 bg-primary/10" : "shadow-xl ring-2 ring-primary/50"),
+            )}
           >
             <CardView card={card} tier={tier} size={size} mode="phone" editing />
           </CardFrame>

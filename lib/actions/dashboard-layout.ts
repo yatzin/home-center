@@ -64,15 +64,14 @@ export async function saveDashboardLayout(input: { layout: DashboardLayout; base
  * page re-renders (a full page refresh here was seen to stall now and then).
  */
 export async function loadDashboardCards(ids: string[]): Promise<{ revision: number; cards: CardResult[] }> {
-  await requireAdmin()
+  const session = await requireAdmin()
   if (!Array.isArray(ids)) return { revision: 0, cards: [] }
   const wanted = new Set(ids.slice(0, 100).filter((id): id is string => typeof id === "string"))
   const features = await loadFeatures()
-  if (!features.customizedDashboards) return { revision: 0, cards: [] }
   // The scope comes from this request's cookie, so the editor's reloaded cards
   // follow the same device's property filter as the page did.
   const [{ layout, revision }, fmt, scope] = await Promise.all([loadDashboardLayout(features), getFormat(), loadPropertyScope()])
-  const ctx: LoaderContext = { now: new Date(), features, fmt, scope }
+  const ctx: LoaderContext = { now: new Date(), features, fmt, scope, userName: session.user.name ?? null }
   const cards = layout.cards.filter((c) => {
     const def = cardType(c.type)
     return wanted.has(c.id) && def !== undefined && (!def.requires || features[def.requires]) && Object.hasOwn(LOADERS, c.type)

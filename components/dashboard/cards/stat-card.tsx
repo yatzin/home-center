@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Building2, Car, ChevronRight, HeartPulse, Refrigerator, type LucideIcon } from "lucide-react"
 import { assetImageSrc } from "@/components/asset-image"
-import { InitialsTile } from "@/components/dashboard/summary-card"
+import { InitialsTile } from "@/components/dashboard/initials-tile"
 import { useSize } from "@/components/charts/primitives/use-width"
 import { assetHref } from "@/lib/assets"
 import { ASSET_TIERS } from "@/lib/dashboard/card-types"

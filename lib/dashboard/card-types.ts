@@ -15,6 +15,11 @@ import { assetLook, type AssetLook } from "./avatar-layout"
 import { datedLook, type DatedLook } from "./dated-list-layout"
 import { LAYOUT_FORMAT, type CardInstance, type CardLimits, type DashboardLayout, type Placement } from "./layout"
 import { PHONE_COLS, type Size } from "./grid"
+import { plannedConfigSchema } from "./planned-spend"
+import { lifeConfigSchema } from "./equipment-life-card"
+import { heatConfigSchema, observationHeatConfigSchema } from "./activity-heatmap"
+import { TEXT_DEFAULTS, TEXT_MAX, textConfigSchema } from "./text-card"
+import { CLOCK_DEFAULTS, clockConfigSchema } from "./clock"
 
 export type CardTier = Readonly<{
   name: string
@@ -50,6 +55,11 @@ export const CARD_ICON_NAMES = [
   "ShieldAlert",
   "TrendingUp",
   "ChartPie",
+  "Type",
+  "CalendarClock",
+  "CalendarRange",
+  "Hourglass",
+  "CalendarDays",
 ] as const
 export type CardIconName = (typeof CARD_ICON_NAMES)[number]
 
@@ -67,10 +77,14 @@ export type ChoiceOption = Readonly<{
  * One control in a card's settings dialog, for one key of its configSchema.
  * `item`: pick one item of `itemType`, or all (unset). `number`: a whole
  * number in [min, max]. `choice`: one of `options`; with `allLabel` it may also
- * be unset ("all").
+ * be unset ("all"). `text`: multi-line plain text, at most `maxLength`
+ * characters, kept as typed (with `tokens`, the dialog adds the Text card's
+ * token help). `toggle`: on or off.
  */
 export type ConfigField = Readonly<
   | { key: string; kind: "item"; label: string; help?: string; itemType: ConfigItemType; allLabel: string; noun: string }
+  // One asset of any of these types, stored as "TYPE:id" (lib/dashboard/asset-pick.ts); unset is everything.
+  | { key: string; kind: "asset"; label: string; help?: string; itemTypes: readonly ConfigItemType[]; allLabel: string; noun: string }
   | {
       key: string
       kind: "number"
@@ -84,8 +98,23 @@ export type ConfigField = Readonly<
       unit: string
       /** Not shown while this key is set (a limit means nothing for one item). */
       hiddenWhenSet?: string
+      /** Shown only while the choice at `key` has this value ("Last X months" on a period choice). */
+      showWhen?: { key: string; value: string }
     }
   | { key: string; kind: "choice"; label: string; help?: string; options: readonly ChoiceOption[]; allLabel?: string }
+  | {
+      key: string
+      kind: "text"
+      label: string
+      help?: string
+      maxLength: number
+      /** Visible lines of the textarea. */
+      rows: number
+      default: string
+      /** Offer the {token} help, chips and preview (lib/dashboard/text-template.ts). */
+      tokens?: boolean
+    }
+  | { key: string; kind: "toggle"; label: string; help?: string; default: boolean }
 >
 
 export type CardTypeDef = {
@@ -123,8 +152,11 @@ const upcomingConfig = z.object({
   limit: limit.optional(),
 })
 
-/** `range` sets the period of the headline and totals only; the trend chart always spans 12 months. */
-const spendingConfig = z.object({ range: z.enum(["ytd", "12m"]).optional() })
+/** `range` sets the period: this year, or the last `months` (1 to 60) calendar months. The trend chart shows those months (12 for this year). "12m" is an older config's last 12 months. */
+const spendingConfig = z.object({
+  range: z.enum(["ytd", "12m", "months"]).optional(),
+  months: z.number().int().min(1).max(60).optional(),
+})
 
 const noConfig = z.object({})
 
@@ -146,7 +178,21 @@ const RANGE_FIELD: ConfigField = {
   options: [
     { value: "ytd", label: "This year" },
     { value: "12m", label: "Last 12 months" },
+    { value: "months", label: "Last X months" },
   ],
+}
+
+/** The month count that goes with RANGE_FIELD's "Last X months". */
+const SPEND_MONTHS_FIELD: ConfigField = {
+  key: "months",
+  kind: "number",
+  label: "Months",
+  help: "How many months back, ending with this one.",
+  min: 1,
+  max: 60,
+  default: 12,
+  unit: "months",
+  showWhen: { key: "range", value: "months" },
 }
 
 function upcomingFields(windowLabel: string, windowDefault: number): ConfigField[] {
@@ -456,26 +502,345 @@ const DEFS: CardTypeDef[] = [
     ],
     configSchema: spendingConfig,
     defaultConfig: { range: "ytd" },
-    configFields: [{ ...RANGE_FIELD, help: "Sets the total and the comparison. The chart always shows the last 12 months." }],
+    configFields: [{ ...RANGE_FIELD, help: "Sets the total, the comparison and the months the chart shows (12 for this year)." }, SPEND_MONTHS_FIELD],
   },
   {
     id: "spending-breakdown",
     label: "Spending Breakdown",
     description: "Where the money goes, by category.",
     icon: "ChartPie",
-    min: { w: 2, h: 2 },
+    min: { w: 1, h: 1 },
     max: { w: 12, h: 6 },
     large: { w: 4, h: 3 },
     phone: { w: 2, h: 3 },
     tiers: [
-      { name: "top", minW: 2, minH: 2 },
-      // Four columns: at three the title and the bar labels truncate.
+      // 1x1: the top category alone. Anything bigger shows every category, condensed:
+      { name: "top", minW: 1, minH: 1 },
+      // one row tall, two or more wide: one bar split by share, labelled inside;
+      { name: "slices", minW: 2, minH: 1 },
+      // narrower or shorter than the ranked look: a row per category with its bar behind its text.
+      // (Beside "slices" rather than above it: one column wide, two rows tall.)
+      { name: "rows", minW: 1, minH: 2 },
+      // Four columns and three rows: the full ranked bars.
       { name: "ranked", minW: 4, minH: 3 },
       { name: "composition", minW: 6, minH: 3 },
     ],
     configSchema: spendingConfig,
     defaultConfig: { range: "ytd" },
-    configFields: [RANGE_FIELD],
+    configFields: [RANGE_FIELD, SPEND_MONTHS_FIELD],
+  },
+  {
+    // What is coming, forward-looking: the Costs page's planned spend (reminders
+    // with an estimated cost) over the next 6 or 12 months. A number at the
+    // smallest sizes, then bars by month, stacked by asset type, then the
+    // biggest items (lib/dashboard/planned-spend.ts decides what the room earns).
+    id: "planned-spend",
+    label: "Planned Spend",
+    description: "What is coming up and when, from your reminders' estimated costs.",
+    icon: "CalendarRange",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 6 },
+    large: { w: 4, h: 3 },
+    phone: { w: 2, h: 3 },
+    tiers: [
+      { name: "number", minW: 1, minH: 1 },
+      { name: "strip", minW: 2, minH: 1 },
+      { name: "bars", minW: 2, minH: 2 },
+      { name: "stacked", minW: 3, minH: 3 },
+      { name: "list", minW: 3, minH: 4 },
+      { name: "split", minW: 6, minH: 4 },
+    ],
+    configSchema: plannedConfigSchema,
+    defaultConfig: { months: 12 },
+    configFields: [
+      {
+        key: "months",
+        kind: "number",
+        label: "Look ahead",
+        help: "The Costs page shows 12 months.",
+        min: 1,
+        max: 24,
+        default: 12,
+        unit: "months",
+      },
+    ],
+  },
+  {
+    // How worn out the equipment is: each item's age against its expected life
+    // (lib/dashboard/equipment-life-card.ts). A count at the smallest sizes,
+    // then a status bar, then one bullet bar per item (the end of life is the
+    // marker; past it, the bar runs on), then the cost of replacing what is
+    // nearing the end. Equipment without an expected life or a start date is
+    // left out and counted.
+    id: "equipment-life",
+    label: "Equipment Life",
+    description: "How old your equipment is against how long it should last.",
+    icon: "Hourglass",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 8 },
+    large: { w: 4, h: 3 },
+    phone: { w: 2, h: 3 },
+    tiers: [
+      { name: "number", minW: 1, minH: 1 },
+      { name: "strip", minW: 2, minH: 1 },
+      { name: "bullets", minW: 2, minH: 2 },
+      { name: "detailed", minW: 3, minH: 3 },
+      { name: "wide", minW: 6, minH: 3 },
+    ],
+    configSchema: lifeConfigSchema,
+    defaultConfig: { show: "all" },
+    configFields: [
+      {
+        key: "show",
+        kind: "choice",
+        label: "Show",
+        help: "Equipment needs an install or purchase date and an expected life to appear.",
+        options: [
+          { value: "all", label: "All equipment" },
+          { value: "attention", label: "Only what is nearing the end" },
+        ],
+      },
+    ],
+  },
+  {
+    // When service happened: a calendar of the last 6 or 12 months, a square a
+    // day, darker the more records (lib/dashboard/activity-heatmap.ts). A count
+    // at the smallest sizes, then a small recent calendar, then the whole
+    // range with month and weekday labels, then the numbers behind it.
+    id: "activity",
+    label: "Service Activity",
+    description: "A calendar of the days service was recorded, to see the rhythm of the year.",
+    icon: "CalendarDays",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 6 },
+    large: { w: 6, h: 3 },
+    phone: { w: 2, h: 3 },
+    tiers: [
+      { name: "number", minW: 1, minH: 1 },
+      // One row tall, two or more columns wide: the calendar fills the whole card.
+      { name: "flat", minW: 2, minH: 1 },
+      // One column wide and at least two rows tall: the calendar turned to run down the card, filling it.
+      { name: "column", minW: 1, minH: 2 },
+      { name: "calendar", minW: 2, minH: 2 },
+      { name: "labeled", minW: 4, minH: 3 },
+      { name: "insights", minW: 6, minH: 3 },
+    ],
+    configSchema: heatConfigSchema,
+    defaultConfig: { months: 12 },
+    configFields: [
+      {
+        key: "asset",
+        kind: "asset",
+        label: "Asset",
+        help: "Count the records of one property, vehicle or piece of equipment. People's visits have their own card.",
+        itemTypes: ["PROPERTY", "VEHICLE", "EQUIPMENT"],
+        allLabel: "Everything",
+        noun: "asset",
+      },
+      {
+        key: "months",
+        kind: "number",
+        label: "Period",
+        help: "Counts service records by the day they are dated, for this many months back.",
+        min: 1,
+        max: 36,
+        default: 12,
+        unit: "months",
+      },
+    ],
+  },
+  {
+    // The Activity calendar for people's visits and expenses (their service
+    // records), for everyone or one person. Same looks as Activity.
+    id: "visits-heatmap",
+    label: "Health Visits & Expenses",
+    description: "A calendar of the days health visits and expenses were recorded, for everyone or one person.",
+    icon: "CalendarDays",
+    requires: "health",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 6 },
+    large: { w: 6, h: 3 },
+    phone: { w: 2, h: 3 },
+    tiers: [
+      { name: "number", minW: 1, minH: 1 },
+      // One row tall, two or more columns wide: the calendar fills the whole card.
+      { name: "flat", minW: 2, minH: 1 },
+      // One column wide and at least two rows tall: the calendar turned to run down the card, filling it.
+      { name: "column", minW: 1, minH: 2 },
+      { name: "calendar", minW: 2, minH: 2 },
+      { name: "labeled", minW: 4, minH: 3 },
+      { name: "insights", minW: 6, minH: 3 },
+    ],
+    configSchema: observationHeatConfigSchema,
+    defaultConfig: { months: 12 },
+    configFields: [
+      {
+        key: "itemId",
+        kind: "item",
+        label: "Person",
+        help: "Count the visits of one person.",
+        itemType: "PERSON",
+        allLabel: "All people",
+        noun: "person",
+      },
+      {
+        key: "months",
+        kind: "number",
+        label: "Period",
+        help: "Counts visits by the day they are dated, for this many months back.",
+        min: 1,
+        max: 36,
+        default: 12,
+        unit: "months",
+      },
+    ],
+  },
+  {
+    // The Activity calendar for health observations (what was noticed about a
+    // person, and when), for everyone or one person. Same looks as Activity.
+    id: "observations-heatmap",
+    label: "Health Observations",
+    description: "A calendar of the days health observations were logged, for everyone or one person.",
+    icon: "CalendarDays",
+    requires: "health",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 6 },
+    large: { w: 6, h: 3 },
+    phone: { w: 2, h: 3 },
+    tiers: [
+      { name: "number", minW: 1, minH: 1 },
+      // One row tall, two or more columns wide: the calendar fills the whole card.
+      { name: "flat", minW: 2, minH: 1 },
+      // One column wide and at least two rows tall: the calendar turned to run down the card, filling it.
+      { name: "column", minW: 1, minH: 2 },
+      { name: "calendar", minW: 2, minH: 2 },
+      { name: "labeled", minW: 4, minH: 3 },
+      { name: "insights", minW: 6, minH: 3 },
+    ],
+    configSchema: observationHeatConfigSchema,
+    defaultConfig: { months: 12 },
+    configFields: [
+      {
+        key: "itemId",
+        kind: "item",
+        label: "Person",
+        help: "Count the observations of one person.",
+        itemType: "PERSON",
+        allLabel: "All people",
+        noun: "person",
+      },
+      {
+        key: "months",
+        kind: "number",
+        label: "Period",
+        help: "Counts observations by the day they happened, for this many months back.",
+        min: 1,
+        max: 36,
+        default: 12,
+        unit: "months",
+      },
+    ],
+  },
+  {
+    // Not backed by a list: its loader resolves only the {tokens} its text uses.
+    // One look at every size; the view fits the text to the card.
+    id: "text",
+    label: "Text",
+    description: "Free text with live values like your name or today's date.",
+    icon: "Type",
+    min: { w: 1, h: 1 },
+    max: { w: 12, h: 4 },
+    large: { w: 4, h: 1 },
+    phone: { w: 2, h: 1 },
+    tiers: [{ name: "text", minW: 1, minH: 1 }],
+    configSchema: textConfigSchema,
+    defaultConfig: { ...TEXT_DEFAULTS },
+    configFields: [
+      {
+        key: "text",
+        kind: "text",
+        label: "Text",
+        help: "Plain text. Line breaks are kept.",
+        maxLength: TEXT_MAX,
+        rows: 4,
+        default: TEXT_DEFAULTS.text,
+        tokens: true,
+      },
+      {
+        key: "style",
+        kind: "choice",
+        label: "Style",
+        options: [
+          { value: "h1", label: "Heading 1" },
+          { value: "h2", label: "Heading 2" },
+          { value: "h3", label: "Heading 3" },
+          { value: "h4", label: "Heading 4" },
+          { value: "body", label: "Body" },
+          { value: "small", label: "Small" },
+          { value: "muted", label: "Muted" },
+        ],
+      },
+      {
+        key: "align",
+        kind: "choice",
+        label: "Align",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      {
+        key: "border",
+        kind: "toggle",
+        label: "Border",
+        help: "Off: no card around the text; it sits on the page.",
+        default: TEXT_DEFAULTS.border,
+      },
+    ],
+  },
+  {
+    // Not backed by data: the time is the viewer's device time, formatted by
+    // Settings > Regional (12 or 24 hour, date format), so the card offers no
+    // format of its own. It carries the "Edit dashboard" button for admins.
+    // Its looks (lib/dashboard/clock-layout.ts): the time alone in one column,
+    // the time over the date from two, an analog face from two rows.
+    id: "clock",
+    label: "Clock",
+    description: "The time and date, with the Edit dashboard button.",
+    icon: "CalendarClock",
+    min: { w: 1, h: 1 },
+    max: { w: 4, h: 4 },
+    large: { w: 2, h: 1 },
+    phone: { w: 2, h: 1 },
+    tiers: [
+      { name: "time", minW: 1, minH: 1 },
+      { name: "standard", minW: 2, minH: 1 },
+      { name: "face", minW: 2, minH: 2 },
+    ],
+    configSchema: clockConfigSchema,
+    defaultConfig: { ...CLOCK_DEFAULTS },
+    configFields: [
+      {
+        key: "showSeconds",
+        kind: "toggle",
+        label: "Show seconds",
+        help: "Time format (12 or 24 hour) and date format follow Settings > Regional.",
+        default: CLOCK_DEFAULTS.showSeconds,
+      },
+      { key: "showDate", kind: "toggle", label: "Show the date", help: "Under the time.", default: CLOCK_DEFAULTS.showDate },
+      {
+        key: "face",
+        kind: "choice",
+        label: "Clock face",
+        help: "Automatic shows the analog face once the card is two rows tall.",
+        options: [
+          { value: "auto", label: "Automatic" },
+          { value: "always", label: "Whenever it fits" },
+          { value: "never", label: "Never (digital only)" },
+        ],
+      },
+    ],
   },
 ]
 
@@ -505,12 +870,15 @@ export function configFieldsFor(typeId: string): readonly ConfigField[] {
 
 /** How the "+ Add card" picker groups the catalog, in order. */
 export const CARD_GROUPS: readonly Readonly<{ label: string; types: readonly string[] }>[] = Object.freeze([
-  Object.freeze({ label: "Assets", types: Object.freeze(["properties", "vehicles", "people", "equipment", "rooms"]) }),
+  // First: the cards people reach for to label or introduce the rest, and the clock beside them.
+  Object.freeze({ label: "Text & time", types: Object.freeze(["text", "clock"]) }),
+  Object.freeze({ label: "Assets", types: Object.freeze(["properties", "vehicles", "people", "equipment", "rooms", "equipment-life"]) }),
   Object.freeze({
     label: "Maintenance & warranties",
-    types: Object.freeze(["reminders", "due-maintenance", "records", "expiring-warranties", "active-warranties"]),
+    types: Object.freeze(["reminders", "due-maintenance", "records", "expiring-warranties", "active-warranties", "activity"]),
   }),
-  Object.freeze({ label: "Money", types: Object.freeze(["spending-trend", "spending-breakdown"]) }),
+  Object.freeze({ label: "Money", types: Object.freeze(["spending-trend", "spending-breakdown", "planned-spend"]) }),
+  Object.freeze({ label: "Health", types: Object.freeze(["visits-heatmap", "observations-heatmap"]) }),
   Object.freeze({ label: "Inbox", types: Object.freeze(["intake"]) }),
 ])
 
@@ -631,24 +999,34 @@ export function phoneSizePresets(def: CardTypeDef): PhoneSizePreset[] {
 
 // ---- Default layout ---------------------------------------------------------
 
-// Today's dashboard on the 12-column grid. Top four rows: Properties and
-// Vehicles as hero tiles (3 wide each), People over Equipment (4 wide), and a
-// narrow column of Records, Active Warranties and Due (2 wide). Below, the four
-// list cards side by side, 3 wide each. Card ids are the type ids: one of each.
-type Slot = { type: string; x: number; y: number; w: number; h: number }
+// The default dashboard on the 12-column grid. First row: the greeting, a
+// borderless H1 Text card (it replaced the page's own header), and the Clock
+// in the top-right two cells. Next four rows: Properties and Vehicles as hero
+// tiles (3 wide each), People over Equipment (4 wide), and a narrow column on
+// the right of Service Activity (a flat calendar), Records and the Spending
+// Breakdown. Below: Intake and Reminders, Planned Spend over Expiring
+// Warranties, and Spending Trend. Card ids are the type ids (one of each),
+// except the greeting's. The phone layout is derived from this.
+type Slot = { type: string; x: number; y: number; w: number; h: number; id?: string; config?: Record<string, unknown> }
+
+/** The default greeting: what the page header used to say, now a card the admin can edit or remove. */
+const GREETING_CONFIG = Object.freeze({ text: "Welcome back, {user}", style: "h1", align: "left", border: false })
 
 const DEFAULT_SLOTS: readonly Slot[] = [
-  { type: "properties", x: 0, y: 0, w: 3, h: 4 },
-  { type: "vehicles", x: 3, y: 0, w: 3, h: 4 },
-  { type: "people", x: 6, y: 0, w: 4, h: 2 },
-  { type: "equipment", x: 6, y: 2, w: 4, h: 2 },
-  { type: "records", x: 10, y: 0, w: 2, h: 1 },
-  { type: "active-warranties", x: 10, y: 1, w: 2, h: 1 },
-  { type: "due-maintenance", x: 10, y: 2, w: 2, h: 2 },
-  { type: "intake", x: 0, y: 4, w: 3, h: 4 },
-  { type: "reminders", x: 3, y: 4, w: 3, h: 4 },
-  { type: "expiring-warranties", x: 6, y: 4, w: 3, h: 4 },
-  { type: "spending-trend", x: 9, y: 4, w: 3, h: 4 },
+  { type: "text", id: "greeting", config: GREETING_CONFIG, x: 0, y: 0, w: 10, h: 1 },
+  { type: "clock", x: 10, y: 0, w: 2, h: 1 },
+  { type: "properties", x: 0, y: 1, w: 3, h: 4 },
+  { type: "vehicles", x: 3, y: 1, w: 3, h: 4 },
+  { type: "people", x: 6, y: 1, w: 4, h: 2 },
+  { type: "equipment", x: 6, y: 3, w: 4, h: 2 },
+  { type: "records", x: 10, y: 2, w: 2, h: 1 },
+  { type: "intake", x: 0, y: 5, w: 3, h: 4 },
+  { type: "reminders", x: 3, y: 5, w: 3, h: 4 },
+  { type: "expiring-warranties", x: 6, y: 7, w: 3, h: 2 },
+  { type: "spending-trend", x: 9, y: 5, w: 3, h: 4 },
+  { type: "activity", x: 10, y: 1, w: 2, h: 1 },
+  { type: "spending-breakdown", x: 10, y: 3, w: 2, h: 2, config: { range: "months", months: 12 } },
+  { type: "planned-spend", x: 6, y: 5, w: 3, h: 2 },
 ]
 
 export function defaultLayout(features: Features): DashboardLayout {
@@ -663,10 +1041,11 @@ export function defaultLayout(features: Features): DashboardLayout {
   const large: Placement[] = []
   for (const s of slots) {
     const def = cardType(s.type)!
-    cards.push({ id: s.type, type: s.type, config: { ...def.defaultConfig } })
+    const id = s.id ?? s.type
+    cards.push({ id, type: s.type, config: { ...(s.config ?? def.defaultConfig) } })
     // With Health off, Equipment has the column to itself, as it does today.
     const p = s.type === "equipment" && !people ? { ...s, y: freed.y, h: freed.h + s.h } : s
-    large.push({ id: s.type, x: p.x, y: p.y, w: p.w, h: p.h })
+    large.push({ id, x: p.x, y: p.y, w: p.w, h: p.h })
   }
   return { format: LAYOUT_FORMAT, cards, large, phone: null }
 }

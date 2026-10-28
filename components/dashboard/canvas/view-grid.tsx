@@ -7,6 +7,7 @@ import type { CanvasCardData } from "@/lib/dashboard/card-data"
 import { collapseHidden, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
 import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
+import { isBareCard } from "@/lib/dashboard/text-card"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
 import { CARD_VIEWS } from "@/components/dashboard/cards"
@@ -175,7 +176,7 @@ function CanvasCard({
         } as React.CSSProperties
       }
     >
-      <CardFrame title={cardTitle(card.type)} failed={card.status === "error"} busy={isBusy(card)}>
+      <CardFrame title={cardTitle(card.type)} failed={card.status === "error"} busy={isBusy(card)} bare={isBareCard(card)}>
         {largeTier === phoneTier ? (
           <CardView card={card} tier={largeTier} size={largeSize} mode="large" editing={false} />
         ) : (

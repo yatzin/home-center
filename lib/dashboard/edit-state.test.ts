@@ -126,7 +126,8 @@ describe("editReducer: phone mode", () => {
     })
     expect(s1.layout.large).toEqual(s0.layout.large)
     expect(s1.layout.phone).not.toBeNull()
-    expect(placement(s1.layout.phone, "vehicles")).toMatchObject({ y: 0 })
+    // Vehicles swaps places with Properties (the greeting stays first).
+    expect(placement(s1.layout.phone, "vehicles")).toMatchObject({ y: placement(derived, "properties")!.y })
     expect(placement(s1.layout.phone, "properties")!).toMatchObject({
       y: placement(derived, "vehicles")!.y,
     })
@@ -138,7 +139,7 @@ describe("editReducer: phone mode", () => {
     const s0 = start("phone")
     const s1 = editReducer(s0, {
       type: "moveOrder",
-      id: "properties",
+      id: "greeting",
       delta: -1,
     })
     expect(s1).toBe(s0)
@@ -215,11 +216,11 @@ describe("editReducer: phone moveOrder skips hidden cards", () => {
       ...initialEditState(defaultLayout(ALL_ON), 1, HEALTH_OFF),
       mode: "phone" as const,
     }
-    // People (health) is derived last; spending-trend is the last visible card.
-    expect(editReducer(s0, { type: "moveOrder", id: "spending-trend", delta: 1 })).toBe(s0)
+    // The derived order is row by row: Expiring Warranties (the lowest row) is the last visible card.
+    expect(editReducer(s0, { type: "moveOrder", id: "expiring-warranties", delta: 1 })).toBe(s0)
     const s1 = editReducer(s0, {
       type: "moveOrder",
-      id: "spending-trend",
+      id: "expiring-warranties",
       delta: -1,
     })
     expect(s1.layout.phone).not.toBeNull()

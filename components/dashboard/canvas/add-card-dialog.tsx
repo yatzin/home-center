@@ -1,7 +1,7 @@
 "use client"
 
 // "+ Add card": the card catalog, grouped (Assets, Maintenance & warranties,
-// Money, Inbox). A dialog on larger screens, a full-height sheet on phones.
+// Money, Inbox, Text & time). A dialog on larger screens, a full-height sheet on phones.
 // Each entry shows what the card is (icon, name, description), a tiny
 // schematic of what it shows at the size it is added at, and what it grows
 // into when made bigger. Only types whose feature is on are offered; adding
@@ -34,8 +34,26 @@ const TIER_LABELS: Record<string, string> = {
   chart: "Chart",
   bars: "Monthly bars",
   top: "Top category",
+  slices: "Share bar",
+  rows: "Compact ranking",
   ranked: "Ranked",
   composition: "Composition",
+  number: "Total",
+  strip: "Total + strip",
+  stacked: "By type",
+  bullets: "Life bars",
+  flat: "Wide calendar",
+  column: "Tall calendar",
+  calendar: "Calendar",
+  labeled: "Labeled calendar",
+  insights: "Calendar + stats",
+  wide: "Bars + costs",
+  split: "Chart + list",
+  text: "Text",
+  // The Clock card: the time, then the date with it, then the analog face.
+  time: "Time",
+  standard: "Date",
+  face: "Face",
 }
 // A dated list's looks (by look, not tier name: Spending Trend has a "headline" tier too).
 const LOOK_LABELS: Record<string, string> = {
@@ -55,19 +73,37 @@ const growthLabel = (def: CardTypeDef) =>
     .filter((label, i, all) => i === 0 || all[i - 1] !== label)
     .join(" → ")
 
-type Schematic = "number" | "photos" | "list" | "chart" | "bars" | "columns" | "carousel"
+type Schematic = "number" | "photos" | "list" | "chart" | "bars" | "columns" | "carousel" | "text" | "clock"
 
 const SCHEMATICS: Record<string, Schematic> = {
   count: "number",
   headline: "number",
   top: "number",
+  slices: "bars",
+  rows: "bars",
   thumbnails: "photos",
   chart: "chart",
   bars: "chart",
+  number: "number",
+  strip: "chart",
+  stacked: "chart",
+  bullets: "bars",
+  flat: "chart",
+  column: "chart",
+  calendar: "chart",
+  labeled: "chart",
+  insights: "chart",
+  detailed: "bars",
+  wide: "bars",
+  split: "chart",
   breakdown: "bars",
   ranked: "bars",
   composition: "bars",
   grouped: "columns",
+  text: "text",
+  time: "clock",
+  standard: "clock",
+  face: "clock",
 }
 
 /** A tiny, token-coloured sketch of what the card shows when added. */
@@ -80,7 +116,26 @@ function Preview({ def }: { def: CardTypeDef }) {
       aria-hidden
       className="relative flex h-14 w-18 shrink-0 flex-col gap-1 overflow-hidden rounded-lg border-t-2 border-t-primary bg-card p-1.5 ring-1 ring-border"
     >
-      <div className={cn("h-1 w-7 rounded-full", ink)} />
+      {kind !== "text" && kind !== "clock" && <div className={cn("h-1 w-7 rounded-full", ink)} />}
+      {kind === "text" && (
+        // A heading line over two lines of text: a card that is just text.
+        <div className="flex flex-1 flex-col justify-center gap-1">
+          <div className="h-2 w-12 rounded-sm bg-foreground/60" />
+          <div className={cn("h-1 w-14 rounded-full", ink)} />
+          <div className={cn("h-1 w-9 rounded-full", ink)} />
+        </div>
+      )}
+      {kind === "clock" && (
+        // A big time over a date line, the Edit button in the corner.
+        <div className="relative flex flex-1 flex-col justify-center gap-1">
+          <div className="absolute top-0 right-0 size-2 rounded-[2px] ring-1 ring-muted-foreground/40" />
+          <div className="flex items-end gap-0.5">
+            <div className="h-3.5 w-9 rounded-sm bg-foreground/60" />
+            <div className={cn("h-1 w-1.5 rounded-full", ink)} />
+          </div>
+          <div className={cn("h-1 w-11 rounded-full", ink)} />
+        </div>
+      )}
       {kind === "number" && (
         <div className="flex flex-1 flex-col justify-center gap-1">
           <div className="h-3 w-8 rounded-sm bg-foreground/60" />
@@ -172,8 +227,14 @@ function CardTypeOption({ def, count, onPick }: { def: CardTypeDef; count: numbe
         </p>
         <div id={`${id}-more`} className="text-[11px] text-muted-foreground">
           <p className="mt-1 truncate">
-            <span className="sr-only">Shows more as it grows: </span>
-            {growthLabel(def)}
+            {def.tiers.length > 1 ? (
+              <>
+                <span className="sr-only">Shows more as it grows: </span>
+                {growthLabel(def)}
+              </>
+            ) : (
+              "Fits any size"
+            )}
           </p>
           {count > 0 && (
             <p className="mt-1.5 inline-flex rounded-full bg-muted px-1.5 py-0.5 leading-none text-muted-foreground">
@@ -219,9 +280,10 @@ export function AddCardDialog({
         initialFocus={(type) => (type === "touch" ? true : (listRef.current?.querySelector<HTMLElement>("button") ?? true))}
         finalFocus={() => finalFocus() ?? true}
         className={cn(
-          "flex flex-col gap-0 p-0 sm:max-h-[min(46rem,calc(100dvh-4rem))] sm:max-w-2xl",
-          // Phones: a full-height sheet rising from the bottom.
-          "max-sm:inset-0 max-sm:h-dvh max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:data-open:slide-in-from-bottom-6 max-sm:data-open:zoom-in-100",
+          // overflow-hidden: the card list below is the one scroller; the dialog's own overflow-y-auto would add a second.
+          "flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(46rem,calc(100dvh-4rem))] sm:max-w-2xl lg:max-w-4xl",
+          // Phones: a full-height sheet rising from the bottom (max-h-none: the base 100svh-2rem cap would shorten it and scroll).
+          "max-sm:inset-0 max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:data-open:slide-in-from-bottom-6 max-sm:data-open:zoom-in-100",
         )}
       >
         <DialogHeader className="shrink-0 border-b border-border/60 px-5 pt-5 pb-4 max-sm:pt-[max(1.25rem,env(safe-area-inset-top))]">
@@ -244,7 +306,7 @@ export function AddCardDialog({
               <h3 id={`${headingId}-${i}`} className="px-1 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 {g.label}
               </h3>
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {g.types.map((def) => (
                   <li key={def.id}>
                     <CardTypeOption def={def} count={counts.get(def.id) ?? 0} onPick={() => onPick(def.id)} />

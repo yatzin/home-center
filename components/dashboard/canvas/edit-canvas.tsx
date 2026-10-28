@@ -45,6 +45,7 @@ import {
 } from "lucide-react"
 import { collapseHidden, LARGE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import { isMissingData } from "@/lib/dashboard/card-data"
+import { isBareCard } from "@/lib/dashboard/text-card"
 import { configFieldsFor } from "@/lib/dashboard/card-types"
 import { editReducer, type EditAction, type EditState } from "@/lib/dashboard/edit-state"
 import {
@@ -63,6 +64,7 @@ import { cn } from "@/lib/utils"
 import { CardConfigureProvider } from "@/components/dashboard/cards/card-configure"
 import { CardAdjustMenu, type AdjustGroup } from "./card-adjust-menu"
 import { CardFrame } from "./card-frame"
+import { shouldOpenSettings } from "@/lib/dashboard/open-settings"
 import { CardGear, CardRemoveButton } from "./card-gear"
 import { useDragCancel, inReadingOrder, useKeepInCanvas, useCommit, useEditorSensors, useGestureRef, useLatest } from "./drag-sensors"
 import { GAP, LARGE_MIN_WIDTH, ROW_HEIGHT } from "./grid-metrics"
@@ -536,6 +538,7 @@ function EditableCard({
   // A card whose item is gone stays clickable: its "Choose another" button sits above the drag surface
   // (not while Done is finishing).
   const missing = card.status === "ok" && isMissingData(card.data) && !frozen
+  const bare = isBareCard(card)
 
   const style: React.CSSProperties = {
     ...boxStyle(placement, pitch),
@@ -547,6 +550,12 @@ function EditableCard({
     <div
       ref={setNodeRef}
       data-card-id={card.id}
+      onDoubleClick={(e) => {
+        if (shouldOpenSettings({ target: e.target instanceof Element ? e.target : null, hasSettings: !!onConfigure, disabled: frozen })) {
+          e.preventDefault()
+          onConfigure?.()
+        }
+      }}
       className={cn(
         "group/card absolute",
         isDragging
@@ -564,9 +573,12 @@ function EditableCard({
           busy={isBusy(card)}
           editing
           interactive={missing}
+          bare={bare}
           className={cn(
-            "ring-1 ring-primary/25 transition-shadow duration-200 group-hover/card:ring-primary/45",
-            (isDragging || resizing) && "shadow-xl ring-2 ring-primary/50",
+            bare
+              ? "transition-[outline-color,background-color] duration-200 group-hover/card:outline-primary/70"
+              : "ring-1 ring-primary/25 transition-shadow duration-200 group-hover/card:ring-primary/45",
+            (isDragging || resizing) && (bare ? "outline-primary/70 bg-primary/10" : "shadow-xl ring-2 ring-primary/50"),
           )}
         >
           <CardView card={card} tier={tier} size={size} mode="large" editing />

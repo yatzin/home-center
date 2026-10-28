@@ -8,6 +8,7 @@ import { ownedWhere, type Features } from "@/lib/features"
 import {
   equipmentScopeWhere,
   ownedScopeWhere,
+  personChildScopeWhere,
   personScopeWhere,
   propertyScopeWhere,
   roomScopeWhere,
@@ -21,11 +22,18 @@ import { loadAssetIndex } from "@/lib/assets-server"
 import { assetHref } from "@/lib/assets"
 import { dueCandidateFilter } from "@/lib/maintenance-due"
 import { loadVehicleMileage } from "@/lib/maintenance-due-server"
-import type { AssetType } from "@/app/generated/prisma/client"
+import type { AssetType, Prisma } from "@/app/generated/prisma/client"
 import { listInboxItems } from "@/lib/inbox-server"
 import { inboxReadiness, type InboxReadiness } from "@/lib/inbox-form"
 import { headlineOf, intakeSummary } from "@/lib/intake-ui"
-import { loadCostRecords } from "@/lib/costs-server"
+import { loadCostRecords, loadPlannedSchedules } from "@/lib/costs-server"
+import { forecastSchedules, largestPlanned, mileageNote } from "@/lib/forecast"
+import { localDay } from "@/lib/equipment-life"
+import { observationRating } from "@/lib/day-ratings"
+import { parseAssetPick } from "./asset-pick"
+import { buildHeatDays, heatMonthsOf, heatRangeStart, heatWeeks, keyOf, type HeatDay } from "./activity-heatmap"
+import { lifeProgress, lifeShowOf, rankLife, summarizeLife, type LifeRow, type LifeShow, type LifeSummary } from "./equipment-life-card"
+import { plannedHorizonOf, plannedMonths, plannedStats, type PlannedHorizon } from "./planned-spend"
 import { categoryColor, categoryLabel, cents, type BucketPoint, type CategoryKey } from "@/lib/costs"
 import {
   categoryCounts,
@@ -34,6 +42,8 @@ import {
   spendingSummary,
   spendRangeOf,
   spendTrend,
+  trendMonthsOf,
+  spendThisMonth,
   type SpendRange,
 } from "./spending"
 import type { MaintenanceSchedule, MeterUnit } from "@/app/generated/prisma/client"
@@ -51,12 +61,15 @@ import {
   type Urgency,
 } from "./shaping"
 import { configItemId, configLimit, hiddenByHealth, upcomingConfig } from "./gating"
+import { parseTokens, textNeeds, type TextNeed, type TokenLinks } from "./text-template"
+import { clockTokenValues, dueTokenLinks, dueTokenValues, expiringTokenLinks, expiringTokenValues, readTextConfig, textCardData, userTokenValues, type TextCardData } from "./text-card"
 
 /**
  * `scope`: this device's property filter (loadPropertyScope), or null for All
  * properties. Lists and counts follow it, as the legacy dashboard does.
+ * `userName`: the signed-in user's name (the Text card's {user}), or null.
  */
-export type LoaderContext = { now: Date; features: Features; fmt: Formatter; scope: PropertyScope | null }
+export type LoaderContext = { now: Date; features: Features; fmt: Formatter; scope: PropertyScope | null; userName: string | null }
 export type CardLoader = (config: Record<string, unknown>, ctx: LoaderContext) => Promise<unknown>
 
 export type CardResult =
@@ -345,16 +358,24 @@ const loadWarranties: CardLoader = async (_config, { now, features, scope }): Pr
 
 export type DueCardData = { count: number; items: (CardLine & { overdue: boolean })[] }
 
-const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt, scope }): Promise<DueCardData> => {
-  const [candidates, mileage, index] = await Promise.all([
+/**
+ * The Due Maintenance card's list (due within 30 days, by its own reminder, or
+ * overdue; most urgent first), shared per request by every Due card and every
+ * Text card using an Attention token (the context's objects key the cache).
+ */
+const dueList = cache(async (now: Date, features: Features, scope: PropertyScope | null) => {
+  const [candidates, mileage] = await Promise.all([
     prisma.maintenanceSchedule.findMany({
       where: { AND: [dueCandidateFilter(30, now), ownedWhere(features), ownedScopeWhere(scope)] },
       orderBy: { nextDueDate: "asc" },
     }),
     loadVehicleMileage(),
-    assetIndex(),
   ])
-  const due = dueMaintenance(candidates, mileage, now)
+  return dueMaintenance(candidates, mileage, now)
+})
+
+const loadDueMaintenance: CardLoader = async (_config, { now, features, fmt, scope }): Promise<DueCardData> => {
+  const [due, index] = await Promise.all([dueList(now, features, scope), assetIndex()])
   return {
     count: due.length,
     items: due.slice(0, LIST_LENGTH).map(({ s, due: d }) => ({
@@ -452,19 +473,40 @@ export type ExpiringWarrantiesCardData = {
   items: ExpiringItem[]
 }
 
+/** Warranties ending today through `windowDays` on (by calendar day, UTC midnight like the stored dates), in what the viewer may see. */
+function expiringWhere(today: Date, windowDays: number, features: Features, scope: PropertyScope | null, assetType?: AssetType | null): Prisma.WarrantyWhereInput {
+  return {
+    ...ownedWhere(features),
+    ...ownedScopeWhere(scope),
+    ...(assetType ? { assetType } : {}),
+    expirationDate: { gte: today, lte: new Date(today.getTime() + windowDays * 86400000) },
+  }
+}
+
+/** The Expiring Warranties card's default window, in days (its first row is the Text card's {next_expiring}). */
+const EXPIRING_DEFAULT_DAYS = 60
+
+/**
+ * The warranty that ends soonest in the card's default window: the card's
+ * first row (same filter and order), looked up once per request for the Text
+ * cards' {next_expiring} values and links.
+ */
+const nextExpiringWarranty = cache(async (now: Date, features: Features, scope: PropertyScope | null) =>
+  prisma.warranty.findFirst({
+    where: expiringWhere(warrantyToday(now), EXPIRING_DEFAULT_DAYS, features, scope),
+    orderBy: [{ expirationDate: "asc" }, { id: "asc" }],
+    select: { id: true, productName: true, expirationDate: true, assetType: true, assetId: true },
+  }),
+)
+
 const loadExpiringWarranties: CardLoader = async (config, { now, features, fmt, scope }): Promise<ExpiringWarrantiesCardData> => {
-  const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: 60, limit: 6 })
+  const { windowDays, limit, assetType } = upcomingConfig(config, { windowDays: EXPIRING_DEFAULT_DAYS, limit: 6 })
   if (hiddenByHealth(assetType, features)) return { windowDays, total: 0, hidden: true, items: [] }
   // By calendar day from today (UTC midnight, like the stored dates), as the legacy card.
   const today = warrantyToday(now)
   const [rows, index] = await Promise.all([
     prisma.warranty.findMany({
-      where: {
-        ...ownedWhere(features),
-        ...ownedScopeWhere(scope),
-        ...(assetType ? { assetType } : {}),
-        expirationDate: { gte: today, lte: new Date(today.getTime() + windowDays * 86400000) },
-      },
+      where: expiringWhere(today, windowDays, features, scope, assetType),
       orderBy: [{ expirationDate: "asc" }, { id: "asc" }],
       select: { id: true, productName: true, expirationDate: true, assetType: true, assetId: true },
     }),
@@ -514,10 +556,14 @@ const loadIntake: CardLoader = async (_config, { now, fmt, scope }): Promise<Int
 
 // ---- Spending -------------------------------------------------------------------
 
-/** "in 2026" / "in the last 12 months": what the headline total covers. */
+/** "in 2026" / "in the last 12 months" / "in the last month": what the headline total covers. */
 function periodText(range: SpendRange, now: Date): string {
-  return range === "ytd" ? `in ${now.getFullYear()}` : "in the last 12 months"
+  if (range === "ytd") return `in ${now.getFullYear()}`
+  return range === 1 ? "in the last month" : `in the last ${range} months`
 }
+
+/** "12 months", "1 month": a span of months in a sentence. */
+const monthsPhrase = (n: number) => `${n} ${n === 1 ? "month" : "months"}`
 
 export type SpendingTrendData = {
   /** Any costed record at all; false shows the empty state. */
@@ -530,11 +576,11 @@ export type SpendingTrendData = {
   delta: number | null
   /** The sentence under the headline, already formatted. */
   comparison: string
-  /** Twelve months ending now (always, whatever the range) and the same months a year earlier. */
+  /** The range's months (12 for this year) ending now, and the same months a year earlier. */
   points: BucketPoint[]
   prior: number[]
   priorLabel: string
-  /** Mean monthly spend over the twelve months (only months since the first record). */
+  /** Mean monthly spend over those months (only months since the first record). */
   average: number
 }
 
@@ -542,7 +588,7 @@ const loadSpendingTrend: CardLoader = async (config, { now, fmt, scope }): Promi
   const range = spendRangeOf(config)
   const rows = await costRecords(scope)
   const { total, priorTotal, delta } = spendingSummary(rows, range, now)
-  const { points, prior } = spendTrend(rows, now)
+  const { points, prior } = spendTrend(rows, now, trendMonthsOf(range))
   const lastYear = now.getFullYear() - 1
   return {
     hasCosts: rows.length > 0,
@@ -554,10 +600,10 @@ const loadSpendingTrend: CardLoader = async (config, { now, fmt, scope }): Promi
       delta === null
         ? range === "ytd"
           ? `Nothing recorded by this point in ${lastYear}.`
-          : "Nothing recorded in the 12 months before."
+          : `Nothing recorded in the same ${monthsPhrase(range)} a year earlier.`
         : range === "ytd"
           ? `vs the same point last year (${fmt.money(priorTotal)}).`
-          : `vs the 12 months before (${fmt.money(priorTotal)}).`,
+          : `vs the same ${monthsPhrase(range)} a year earlier (${fmt.money(priorTotal)}).`,
     points,
     prior,
     priorLabel: String(lastYear),
@@ -620,6 +666,330 @@ const loadSpendingBreakdown: CardLoader = async (config, { now, fmt, scope }): P
   }
 }
 
+// ---- Text -----------------------------------------------------------------------
+
+type TokenValues = Record<string, string>
+
+/**
+ * One query group per need, each counting the way its neighbouring card does
+ * (same property filter, same Health gating). Counts only: no lists, no N+1.
+ */
+const NEED_VALUES: Record<TextNeed, (ctx: LoaderContext) => Promise<TokenValues>> = {
+  due: async ({ now, features, fmt, scope }) => dueTokenValues(await dueList(now, features, scope), fmt),
+  warranties: async ({ now, features, fmt, scope }) => {
+    // The Expiring Warranties card's default window: today through 60 days on, by calendar day.
+    const today = warrantyToday(now)
+    const n = await prisma.warranty.count({ where: expiringWhere(today, EXPIRING_DEFAULT_DAYS, features, scope) })
+    return { expiring_warranties: fmt.number(n) }
+  },
+  nextWarranty: async ({ now, features, fmt, scope }) => expiringTokenValues(await nextExpiringWarranty(now, features, scope), fmt),
+  intake: async ({ now, fmt, scope }) => {
+    const { items } = await inboxItems(now, scope)
+    return { intake: fmt.number(intakeSummary(items).count) }
+  },
+  costs: async ({ now, fmt, scope }) => {
+    const rows = await costRecords(scope)
+    return { spend_ytd: fmt.money(spendingSummary(rows, "ytd", now).total), spend_month: fmt.money(spendThisMonth(rows, now)) }
+  },
+  properties: async ({ fmt, scope }) => ({ properties: fmt.number(await prisma.property.count({ where: propertyScopeWhere(scope) })) }),
+  vehicles: async ({ fmt, scope }) => ({ vehicles: fmt.number(await prisma.vehicle.count({ where: vehicleScopeWhere(scope) })) }),
+  equipment: async ({ fmt, scope }) => ({ equipment: fmt.number(await prisma.equipment.count({ where: equipmentScopeWhere(scope) })) }),
+  records: async ({ features, fmt, scope }) => ({
+    records: fmt.number(await prisma.serviceRecord.count({ where: { ...ownedWhere(features), ...ownedScopeWhere(scope) } })),
+  }),
+  // People exist only with Health on: with it off the token is unavailable (empty).
+  people: async ({ features, fmt, scope }): Promise<TokenValues> =>
+    features.health ? { people: fmt.number(await prisma.person.count({ where: personScopeWhere(scope) })) } : {},
+}
+
+/**
+ * The links of the tokens about one item, for the text's tokens that need
+ * them: {next_due} and {next_due_date} open the most urgent reminder's edit
+ * dialog, {next_expiring} and {next_expiring_date} the soonest-ending
+ * warranty's (the same cached lookups as their values; nothing extra is
+ * queried when the text uses none of them).
+ */
+async function itemLinks(used: readonly string[], { now, features, scope }: LoaderContext): Promise<TokenLinks> {
+  const [due, warranty] = await Promise.all([
+    used.includes("next_due") || used.includes("next_due_date") ? dueList(now, features, scope).then(dueTokenLinks) : {},
+    used.includes("next_expiring") || used.includes("next_expiring_date")
+      ? nextExpiringWarranty(now, features, scope).then(expiringTokenLinks)
+      : {},
+  ])
+  return { ...due, ...warranty }
+}
+
+/**
+ * The card's text with its tokens resolved, as plain and link segments
+ * (textCardData) plus the same text as a string. Only the needs the text uses are
+ * queried (none for plain text, {user} or the date), in parallel. A need that
+ * fails leaves its tokens empty (logged) instead of failing the card: the
+ * greeting still greets.
+ */
+const loadText: CardLoader = async (config, ctx): Promise<TextCardData> => {
+  const { text } = readTextConfig(config)
+  const needs = [...textNeeds(text)]
+  const [settled, links] = await Promise.all([
+    Promise.allSettled(needs.map((n) => NEED_VALUES[n](ctx))),
+    // A failed link leaves its value plain text: it never fails the card or empties a value.
+    itemLinks(parseTokens(text).known, ctx).catch((e: unknown): TokenLinks => {
+      console.error("[dashboard] text card links failed to load", e)
+      return {}
+    }),
+  ])
+  const values: TokenValues = { ...userTokenValues(ctx.userName), ...clockTokenValues(ctx.now, ctx.fmt) }
+  settled.forEach((r, i) => {
+    if (r.status === "fulfilled") Object.assign(values, r.value)
+    else console.error(`[dashboard] text card value "${needs[i]}" failed to load`, r.reason)
+  })
+  return textCardData(text, values, links)
+}
+
+// ---- Planned spend ----------------------------------------------------------------
+
+/** Biggest items the largest look can list. */
+const PLANNED_ITEMS = 8
+
+export type PlannedMonthData = {
+  key: string
+  /** "Nov": the short month name; the tooltip and table use fullLabel ("November 2026"). */
+  label: string
+  fullLabel: string
+  total: number
+  count: number
+  parts: { assetType: string; total: number }[]
+}
+
+export type PlannedItemData = {
+  id: string
+  title: string
+  assetName: string
+  /** Formatted: the next date this reminder falls due in the window. */
+  dateText: string
+  /** Planned per occurrence, and how many fall in the window. */
+  each: number
+  count: number
+  total: number
+  /** Its reminder, on the asset's page (as the Costs page links it). */
+  href: string
+}
+
+export type PlannedSpendData = {
+  horizon: PlannedHorizon
+  /** Equal to the Costs page's "Planned, next 12 months" at 12; nothing planned shows the empty state. */
+  hasPlan: boolean
+  total: number
+  /** The first three months of the window: what is close. */
+  soon: number
+  /** Months from the current one, zero-filled. */
+  months: PlannedMonthData[]
+  peakIndex: number
+  /** The soonest planned item. */
+  next: { title: string; assetName: string; dateText: string; cost: number; href: string } | null
+  /** Largest first, by total over the window (the Costs page's ranking). */
+  items: PlannedItemData[]
+  /** Reminders left out because they repeat by mileage; null when none. */
+  mileageNote: string | null
+}
+
+const plannedSchedules = cache((scope: PropertyScope | null) => loadPlannedSchedules({ scope }))
+
+const reminderHref = (type: AssetType, assetId: string, scheduleId: string) =>
+  `${assetHref(type, assetId)}?tab=${type === "PERSON" ? "reminders" : "maintenance"}&open=${scheduleId}`
+
+const loadPlannedSpend: CardLoader = async (config, { now, fmt, scope }): Promise<PlannedSpendData> => {
+  const horizon = plannedHorizonOf(config)
+  const [schedules, index] = await Promise.all([plannedSchedules(scope), assetIndex()])
+  // The same "today" and window the Costs page uses, so the totals are equal.
+  const today = localDay(now)
+  const forecast = forecastSchedules(schedules, today, horizon)
+  const months = plannedMonths(forecast.occurrences, today, horizon)
+  const stats = plannedStats(months)
+  const nameOf = (type: AssetType, id: string) => index.assetName(type, id) ?? "Unknown"
+  const first = forecast.occurrences[0]
+  const monthName = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: "UTC" })
+  return {
+    horizon,
+    hasPlan: forecast.total > 0,
+    total: forecast.total,
+    soon: stats.soon,
+    months: months.map((m) => ({
+      key: m.key,
+      label: monthName.format(m.start),
+      fullLabel: fmt.monthYear(m.start, { utc: true }),
+      total: m.total,
+      count: m.count,
+      parts: m.parts,
+    })),
+    peakIndex: stats.peakIndex,
+    next: first
+      ? {
+          title: first.title,
+          assetName: nameOf(first.assetType, first.assetId),
+          dateText: fmt.dayMonth(first.date, { utc: true }),
+          cost: first.cost,
+          href: reminderHref(first.assetType, first.assetId, first.scheduleId),
+        }
+      : null,
+    items: largestPlanned(forecast.occurrences, PLANNED_ITEMS).map((i) => ({
+      id: i.scheduleId,
+      title: i.title,
+      assetName: nameOf(i.assetType, i.assetId),
+      dateText: fmt.dayMonth(i.next, { utc: true }),
+      each: cents(i.total / i.count),
+      count: i.count,
+      total: i.total,
+      href: reminderHref(i.assetType, i.assetId, i.scheduleId),
+    })),
+    mileageNote: mileageNote(forecast.mileageOnly),
+  }
+}
+
+// ---- Equipment life ---------------------------------------------------------------
+
+/** Most worn items the largest look can draw. */
+const LIFE_ROWS = 12
+
+export type EquipmentLifeData = {
+  show: LifeShow
+  /** Most worn first; with show "attention", only items near or past their life. */
+  rows: LifeRow[]
+  /** Over every tracked item, whatever `show` is. */
+  summary: LifeSummary
+  /** Equipment with no expected life or no install/purchase date: not drawn, but counted so the card can say so. */
+  untracked: number
+}
+
+const loadEquipmentLife: CardLoader = async (config, { now, scope }): Promise<EquipmentLifeData> => {
+  const show = lifeShowOf(config)
+  const today = localDay(now)
+  const items = await prisma.equipment.findMany({
+    where: equipmentScopeWhere(scope),
+    select: { id: true, name: true, installDate: true, purchaseDate: true, expectedLifeYears: true, replacementCost: true },
+  })
+  const tracked: LifeRow[] = []
+  for (const e of items) {
+    const p = lifeProgress(e, today)
+    if (p) tracked.push({ id: e.id, name: e.name, replacementCost: e.replacementCost, ...p })
+  }
+  return {
+    show,
+    rows: rankLife(tracked, show, LIFE_ROWS),
+    summary: summarizeLife(tracked),
+    untracked: items.length - tracked.length,
+  }
+}
+
+// ---- Activity heat map ---------------------------------------------------------------
+
+export type ActivityHeatData = {
+  /** What is counted: service records (not people's), people's visits, or health observations. */
+  kind: "service" | "visit" | "observation"
+  /** The viewer's today as "YYYY-MM-DD" (the server's, in the viewer's regional day), and how many week columns the range spans. */
+  today: string
+  weeks: number
+  months: number
+  /** Days with at least one record in the range (UTC day keys). */
+  days: HeatDay[]
+  /** Records ever (in scope), so an empty range can say whether there is anything at all. */
+  everRecords: number
+  /** The asset or person it is narrowed to; null for everything. */
+  subject: string | null
+  /** Narrowed to something that no longer exists. */
+  missing: boolean
+  /** Where the card and its numbers lead. */
+  href: string
+}
+
+const loadActivityHeat: CardLoader = async (config, { now, scope }): Promise<ActivityHeatData> => {
+  const months = heatMonthsOf(config)
+  const weeks = heatWeeks(months)
+  const today = localDay(now)
+  // People's visits have their own card (a stale person pick counts as gone).
+  const parsed = parseAssetPick(config.asset)
+  const pick = parsed && parsed.type !== "PERSON" ? parsed : null
+  const index = parsed ? await assetIndex() : null
+  const subject = pick ? (index?.assetName(pick.type, pick.id) ?? null) : null
+  const base = { kind: "service" as const, today: keyOf(today), weeks, months, subject, missing: parsed !== null && subject === null }
+  const href = pick && subject ? `${assetHref(pick.type, pick.id)}?tab=service` : "/records"
+  if (base.missing) return { ...base, days: [], everRecords: 0, href }
+  const owned = {
+    ...ownedScopeWhere(scope),
+    ...(pick ? { assetType: pick.type, assetId: pick.id } : { assetType: { not: "PERSON" as const } }),
+  }
+  const [groups, everRecords] = await Promise.all([
+    prisma.serviceRecord.groupBy({
+      by: ["date"],
+      where: { ...owned, date: { gte: heatRangeStart(today, weeks), lte: today } },
+      _count: { _all: true },
+      _sum: { cost: true },
+    }),
+    prisma.serviceRecord.count({ where: owned }),
+  ])
+  return {
+    ...base,
+    days: buildHeatDays(groups.map((g) => ({ date: g.date, count: g._count._all, spend: g._sum.cost ?? 0 }))),
+    everRecords,
+    href,
+  }
+}
+
+// People's visits and expenses by day (their service records; config.itemId: one person). With Health off there is nothing to count.
+const loadVisitHeat: CardLoader = async (config, { now, features, scope }): Promise<ActivityHeatData> => {
+  const months = heatMonthsOf(config)
+  const weeks = heatWeeks(months)
+  const today = localDay(now)
+  const personId = configItemId(config)
+  const person = personId ? await prisma.person.findFirst({ where: { id: personId, ...personScopeWhere(scope) }, select: { name: true } }) : null
+  const base = { kind: "visit" as const, today: keyOf(today), weeks, months, subject: person?.name ?? null, missing: personId !== null && !person }
+  const href = personId && person ? `${assetHref("PERSON", personId)}?tab=visits` : "/assets/people"
+  if (!features.health || base.missing) return { ...base, days: [], everRecords: 0, href }
+  const owned = { ...ownedScopeWhere(scope), assetType: "PERSON" as const, ...(personId ? { assetId: personId } : {}) }
+  const [groups, everRecords] = await Promise.all([
+    prisma.serviceRecord.groupBy({
+      by: ["date"],
+      where: { ...owned, date: { gte: heatRangeStart(today, weeks), lte: today } },
+      _count: { _all: true },
+      _sum: { cost: true },
+    }),
+    prisma.serviceRecord.count({ where: owned }),
+  ])
+  return {
+    ...base,
+    days: buildHeatDays(groups.map((g) => ({ date: g.date, count: g._count._all, spend: g._sum.cost ?? 0 }))),
+    everRecords,
+    href,
+  }
+}
+
+// Health observations by day (config.itemId: one person). With Health off there is nothing to count.
+const loadObservationHeat: CardLoader = async (config, { now, features, scope }): Promise<ActivityHeatData> => {
+  const months = heatMonthsOf(config)
+  const weeks = heatWeeks(months)
+  const today = localDay(now)
+  const personId = configItemId(config)
+  const person = personId ? await prisma.person.findFirst({ where: { id: personId, ...personScopeWhere(scope) }, select: { name: true } }) : null
+  const base = { kind: "observation" as const, today: keyOf(today), weeks, months, subject: person?.name ?? null, missing: personId !== null && !person }
+  const href = personId && person ? `${assetHref("PERSON", personId)}?tab=observations` : "/assets/people"
+  if (!features.health || base.missing) return { ...base, days: [], everRecords: 0, href }
+  const where = { ...personChildScopeWhere(scope), ...(personId ? { personId } : {}) }
+  const [groups, everRecords] = await Promise.all([
+    prisma.observation.groupBy({
+      by: ["date"],
+      where: { ...where, date: { gte: heatRangeStart(today, weeks), lte: today } },
+      _count: { _all: true },
+      _max: { severity: true },
+    }),
+    prisma.observation.count({ where }),
+  ])
+  return {
+    ...base,
+    days: buildHeatDays(groups.map((g) => ({ date: g.date, count: g._count._all, spend: 0, rating: observationRating(g._max.severity) }))),
+    everRecords,
+    href,
+  }
+}
+
 // ---- Registry -----------------------------------------------------------------
 
 /** Card types with a loader. A placed card without one is not rendered yet. */
@@ -637,4 +1007,12 @@ export const LOADERS: Record<string, CardLoader> = {
   intake: loadIntake,
   "spending-trend": loadSpendingTrend,
   "spending-breakdown": loadSpendingBreakdown,
+  "planned-spend": loadPlannedSpend,
+  "equipment-life": loadEquipmentLife,
+  activity: loadActivityHeat,
+  "visits-heatmap": loadVisitHeat,
+  "observations-heatmap": loadObservationHeat,
+  text: loadText,
+  // No data: the time is the viewer's device time, and its formats come from the page's regional settings.
+  clock: async () => null,
 }

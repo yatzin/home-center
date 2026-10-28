@@ -4,7 +4,7 @@ import { defaultLayout, limitsMap } from "./card-types"
 import { reconcile } from "./reconcile"
 import { validateLayout } from "./layout"
 
-const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true, customizedDashboards: true }
+const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true }
 const NO_HEALTH: Features = { ...ALL_ON, health: false }
 
 describe("reconcile", () => {

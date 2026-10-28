@@ -14,20 +14,34 @@ import {
 } from "@/lib/costs"
 import { localDay } from "@/lib/equipment-life"
 
-export type SpendRange = "ytd" | "12m"
+/** "ytd", or a number of calendar months ending with the current one ("12m" in an older config is 12). */
+export type SpendRange = "ytd" | number
 
-/** Months in the trend chart, whatever the headline's range. */
+/** Months in the trend chart for "ytd". A month count sets the chart's months too. */
 export const TREND_MONTHS = 12
 
-export function spendRangeOf(config: Record<string, unknown>): SpendRange {
-  return config.range === "12m" ? "12m" : "ytd"
+export const MIN_SPEND_MONTHS = 1
+export const MAX_SPEND_MONTHS = 60
+
+/** A stored month count, or null when it is missing, fractional or out of range. */
+export function validMonths(v: unknown, min: number, max: number): number | null {
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : null
 }
+
+export function spendRangeOf(config: Record<string, unknown>): SpendRange {
+  if (config.range === "12m") return 12
+  if (config.range === "months") return validMonths(config.months, MIN_SPEND_MONTHS, MAX_SPEND_MONTHS) ?? 12
+  return "ytd"
+}
+
+/** The months the trend chart shows for a range. */
+export const trendMonthsOf = (range: SpendRange): number => (range === "ytd" ? TREND_MONTHS : range)
 
 /**
  * The headline's period, `yearsBack` years earlier. "ytd": 1 January through
- * the end of today. "12m": the twelve calendar months the trend chart shows
- * (the first of the month eleven months ago) through the end of today, so the
- * headline and the chart describe the same months.
+ * the end of today. A month count: that many calendar months, ending with the
+ * current one (the first of the month N-1 months ago) through the end of
+ * today, so the headline and the chart describe the same months.
  */
 export function spendWindow(range: SpendRange, now: Date, yearsBack = 0): DateRange {
   // Record dates are UTC midnight (see lib/costs.ts), so the window is built in UTC from the viewer's local day.
@@ -35,7 +49,7 @@ export function spendWindow(range: SpendRange, now: Date, yearsBack = 0): DateRa
   const y = today.getUTCFullYear() - yearsBack
   const end = new Date(Date.UTC(y, today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999))
   const start =
-    range === "ytd" ? new Date(Date.UTC(y, 0, 1)) : new Date(Date.UTC(y, today.getUTCMonth() - (TREND_MONTHS - 1), 1))
+    range === "ytd" ? new Date(Date.UTC(y, 0, 1)) : new Date(Date.UTC(y, today.getUTCMonth() - (range - 1), 1))
   return { start, end }
 }
 
@@ -81,9 +95,22 @@ export function spendingSummary(rows: CostRow[], range: SpendRange, now: Date) {
   return { total, priorTotal, delta: priorTotal > 0 ? (total - priorTotal) / priorTotal : null }
 }
 
-/** Twelve months ending with the current one, and the same months a year earlier. */
-export function spendTrend(rows: CostRow[], now: Date): { points: BucketPoint[]; prior: number[] } {
-  const points = bucketed(rows, "month", { start: monthsBack(now, TREND_MONTHS), end: localDay(now) })
+/**
+ * Net spend from the first of the current month through the end of today
+ * ("so far", like year-to-date: a record dated later this month is not
+ * counted yet). Record dates are UTC midnight, so the window is built in UTC
+ * from the viewer's local day, as spendWindow does.
+ */
+export function spendThisMonth(rows: CostRow[], now: Date): number {
+  const today = localDay(now)
+  const y = today.getUTCFullYear()
+  const m = today.getUTCMonth()
+  return sum(rowsInWindow(rows, { start: new Date(Date.UTC(y, m, 1)), end: new Date(Date.UTC(y, m, today.getUTCDate(), 23, 59, 59, 999)) }))
+}
+
+/** `months` (12 by default) ending with the current one, and the same months a year earlier. */
+export function spendTrend(rows: CostRow[], now: Date, months = TREND_MONTHS): { points: BucketPoint[]; prior: number[] } {
+  const points = bucketed(rows, "month", { start: monthsBack(now, months), end: localDay(now) })
   return { points, prior: priorPeriod(rows, points, "month") }
 }
 

@@ -1,8 +1,8 @@
 "use client"
 
 // The customizable dashboard on the client. Everyone gets the view; admins
-// also get edit mode (entered from the "Edit dashboard" button in the page
-// header, see edit-context.tsx).
+// also get edit mode (entered from the corner tab in the page's top-right; see
+// edit-context.tsx).
 //
 // Edit state lives in one reducer (lib/dashboard/edit-state.ts), created once
 // from the first props and never reset by later ones: the page's props change

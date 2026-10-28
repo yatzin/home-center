@@ -2,18 +2,17 @@ import { describe, expect, it } from "vitest"
 import { DEFAULT_FEATURES, isHealthPath, ownedWhere } from "./features"
 
 describe("DEFAULT_FEATURES", () => {
-  it("has every optional part on except customized dashboards", () => {
-    expect(DEFAULT_FEATURES).toEqual({ health: true, rooms: true, equipmentTab: true, customizedDashboards: false })
-    expect(DEFAULT_FEATURES.customizedDashboards).toBe(false)
+  it("has every optional part on", () => {
+    expect(DEFAULT_FEATURES).toEqual({ health: true, rooms: true, equipmentTab: true })
   })
 })
 
 describe("ownedWhere", () => {
   it("adds nothing while Health is on", () => {
-    expect(ownedWhere({ health: true, rooms: true, equipmentTab: true, customizedDashboards: false })).toEqual({})
+    expect(ownedWhere({ health: true, rooms: true, equipmentTab: true })).toEqual({})
   })
   it("leaves out people's records while Health is off", () => {
-    expect(ownedWhere({ health: false, rooms: true, equipmentTab: true, customizedDashboards: false })).toEqual({ assetType: { not: "PERSON" } })
+    expect(ownedWhere({ health: false, rooms: true, equipmentTab: true })).toEqual({ assetType: { not: "PERSON" } })
   })
 })
 

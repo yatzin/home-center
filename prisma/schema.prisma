@@ -869,8 +869,6 @@ model FeatureSettings {
   roomsEnabled          Boolean  @default(true)
   /// The Equipment tab on a property and on its rooms.
   equipmentTabEnabled   Boolean  @default(true)
-  /// Admin-editable card dashboard (off: the fixed dashboard).
-  customizedDashboardsEnabled Boolean @default(false)
   /// A property dropdown in the top bar that leaves out everything belonging to other properties. Off by default.
   propertyFilterEnabled Boolean  @default(false)
   updatedAt             DateTime @updatedAt

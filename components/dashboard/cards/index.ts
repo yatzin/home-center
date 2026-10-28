@@ -5,11 +5,16 @@ import type { ComponentType } from "react"
 import { ActiveWarrantiesCard, DueMaintenanceCard, RecordsCard } from "./count-card"
 import { ExpiringWarrantiesCard } from "./expiring-warranties-card"
 import { IntakeView } from "./intake-view"
+import { PlannedSpendCard } from "./planned-spend"
+import { EquipmentLifeCard } from "./equipment-life"
+import { ActivityCard } from "./activity"
 import { RemindersCard } from "./reminders-card"
 import { RoomsCard } from "./rooms-card"
 import { SpendingBreakdownCard } from "./spending-breakdown"
 import { SpendingTrendCard } from "./spending-trend"
 import { EquipmentCard, PeopleCard, PropertiesCard, VehiclesCard } from "./stat-card"
+import { TextCard } from "./text-card"
+import { ClockCard } from "./clock-card"
 import type { CardViewProps } from "./types"
 
 export type { CardViewProps } from "./types"
@@ -28,4 +33,11 @@ export const CARD_VIEWS: Record<string, ComponentType<CardViewProps>> = {
   intake: IntakeView,
   "spending-trend": SpendingTrendCard,
   "spending-breakdown": SpendingBreakdownCard,
+  "planned-spend": PlannedSpendCard,
+  "equipment-life": EquipmentLifeCard,
+  activity: ActivityCard,
+  "visits-heatmap": ActivityCard,
+  "observations-heatmap": ActivityCard,
+  text: TextCard,
+  clock: ClockCard,
 }

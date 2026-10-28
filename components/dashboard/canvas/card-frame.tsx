@@ -26,6 +26,10 @@ const CardErrorBoundary = catchError((props: { title: string }) => <CardError ti
  * whose loader failed (`failed`). With `editing`, the content is inert (links
  * and buttons inside it cannot be clicked or focused): in edit mode the card
  * is something to arrange, and its edit controls sit on top.
+ *
+ * `bare` (a Text card with its border off): no card at all, the content sits
+ * on the page background. In edit mode it gets a faint dashed outline and
+ * tint, so it can still be found, grabbed and resized.
  */
 export function CardFrame({
   title,
@@ -33,6 +37,7 @@ export function CardFrame({
   editing,
   interactive,
   busy,
+  bare,
   className,
   children,
 }: {
@@ -47,6 +52,8 @@ export function CardFrame({
   interactive?: boolean
   /** Its data is on the way (aria-busy). */
   busy?: boolean
+  /** No card chrome (see above). */
+  bare?: boolean
   className?: string
   children: React.ReactNode
 }) {
@@ -61,15 +68,31 @@ export function CardFrame({
       <CardErrorBoundary title={title}>{children}</CardErrorBoundary>
     </Suspense>
   )
+  const content = editing ? (
+    <div inert={!interactive} className="h-full min-h-0 select-none">
+      {body}
+    </div>
+  ) : (
+    body
+  )
+  if (bare) {
+    // Not a labelled group: the text speaks for itself (a greeting is just the page's heading).
+    return (
+      <div
+        aria-busy={busy || undefined}
+        className={cn(
+          "relative h-full min-h-0 rounded-xl text-sm text-foreground",
+          editing && "outline-1 -outline-offset-1 outline-primary/40 outline-dashed bg-primary/5",
+          className,
+        )}
+      >
+        {content}
+      </div>
+    )
+  }
   return (
     <Card role="group" aria-label={title} aria-busy={busy || undefined} className={cn("relative h-full min-h-0 gap-0 border-t-2 border-t-primary py-0", className)}>
-      {editing ? (
-        <div inert={!interactive} className="h-full min-h-0 select-none">
-          {body}
-        </div>
-      ) : (
-        body
-      )}
+      {content}
     </Card>
   )
 }

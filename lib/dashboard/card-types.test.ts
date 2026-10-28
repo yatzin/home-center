@@ -20,8 +20,9 @@ import {
 import { LARGE_COLS, LAYOUT_FORMAT, PHONE_COLS, repairLayout, validateLayout } from "./layout"
 import { assetLook } from "./avatar-layout"
 import { datedLook } from "./dated-list-layout"
+import { resolvePhoneLayout } from "./resolve-phone"
 
-const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true, customizedDashboards: true }
+const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true }
 
 const IDS = [
   "properties",
@@ -37,21 +38,28 @@ const IDS = [
   "expiring-warranties",
   "spending-trend",
   "spending-breakdown",
+  "text",
+  "clock",
+  "planned-spend",
+  "equipment-life",
+  "activity",
+  "visits-heatmap",
+  "observations-heatmap",
 ]
 
 const within = (s: { w: number; h: number }, d: CardTypeDef) =>
   d.min.w <= s.w && s.w <= d.max.w && d.min.h <= s.h && s.h <= d.max.h
 
 describe("CARD_TYPES", () => {
-  it("has exactly the thirteen first-round ids, each once", () => {
+  it("has exactly the catalog's ids (the first round, Text and Clock), each once", () => {
     const ids = CARD_TYPES.map((d) => d.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect([...ids].sort()).toEqual([...IDS].sort())
   })
 
-  it("gates People on health and Rooms on rooms, nothing else", () => {
+  it("gates People and the health calendars on health and Rooms on rooms, nothing else", () => {
     const gated = Object.fromEntries(CARD_TYPES.filter((d) => d.requires).map((d) => [d.id, d.requires]))
-    expect(gated).toEqual({ people: "health", rooms: "rooms" })
+    expect(gated).toEqual({ people: "health", rooms: "rooms", "visits-heatmap": "health", "observations-heatmap": "health" })
   })
 
   it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s has sane sizes", (_id, d) => {
@@ -64,14 +72,20 @@ describe("CARD_TYPES", () => {
   })
 
   it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s has ascending tiers starting at its minimum", (_id, d) => {
-    expect(d.tiers.length).toBeGreaterThanOrEqual(2)
+    // Text has one look at every size; every other card shows more as it grows.
+    const single = d.id === "text"
+    expect(d.tiers.length).toBeGreaterThanOrEqual(single ? 1 : 2)
     expect(d.tiers[0]).toMatchObject({ minW: d.min.w, minH: d.min.h })
     // Avatar looks (asset cards) are picked by shape, not by size order: they
     // come first, and the sized tiers after them ascend as everywhere else.
     const looks = d.tiers.filter((t) => t.look)
-    const sized = d.tiers.filter((t) => !t.look)
+    // A "column" tier (the calendar cards) or "rows" tier (the spending breakdown) is the look for a narrow, tall card: it
+    // sits beside the wide-and-short "flat" look rather than above it, so it is left
+    // out of the ordering check (and must be one column wide, two rows tall).
+    const sized = d.tiers.filter((t) => !t.look && t.name !== "column" && t.name !== "rows")
+    for (const branch of d.tiers.filter((t) => t.name === "column" || t.name === "rows")) expect(branch).toMatchObject({ minW: 1, minH: 2 })
     expect(d.tiers.slice(0, looks.length)).toEqual(looks)
-    expect(sized.length).toBeGreaterThanOrEqual(looks.length > 0 ? 1 : 2)
+    expect(sized.length).toBeGreaterThanOrEqual(looks.length > 0 || single ? 1 : 2)
     for (let i = 1; i < sized.length; i++) {
       const a = sized[i - 1]
       const b = sized[i]
@@ -216,8 +230,14 @@ describe("tierOf", () => {
     // Three rows leave the trend chart too little height: the headline only.
     expect(at("spending-trend", 3, 3)).toBe("headline")
     expect(at("spending-trend", 3, 4)).toBe("chart")
-    // Three columns truncate the breakdown's title and bar labels: top category only.
-    expect(at("spending-breakdown", 3, 3)).toBe("top")
+    // Smaller than the ranked bars, the breakdown still shows every category, condensed.
+    expect(at("spending-breakdown", 1, 1)).toBe("top")
+    expect(at("spending-breakdown", 2, 1)).toBe("slices")
+    expect(at("spending-breakdown", 12, 1)).toBe("slices")
+    expect(at("spending-breakdown", 1, 2)).toBe("rows")
+    expect(at("spending-breakdown", 1, 6)).toBe("rows")
+    expect(at("spending-breakdown", 3, 3)).toBe("rows")
+    expect(at("spending-breakdown", 4, 2)).toBe("rows")
     expect(at("spending-breakdown", 4, 3)).toBe("ranked")
   })
 })
@@ -259,6 +279,7 @@ describe("tierOf in phone mode", () => {
     ["expiring-warranties", "full"],
     ["spending-trend", "chart"],
     ["spending-breakdown", "ranked"],
+    ["text", "text"],
   ])("%s's phone default size shows its %s tier", (id, tier) => {
     expect(name(id, cardType(id)!.phone)).toBe(tier)
   })
@@ -503,20 +524,23 @@ describe("defaultLayout", () => {
     }
   })
 
-  it("contains every element of today's dashboard, in order, and no Rooms", () => {
+  it("contains the greeting and the clock, then the default cards, in order, and no Rooms", () => {
     const l = defaultLayout(ALL_ON)
     expect(l.cards.map((c) => c.type)).toEqual([
+      "text",
+      "clock",
       "properties",
       "vehicles",
       "people",
       "equipment",
       "records",
-      "active-warranties",
-      "due-maintenance",
       "intake",
       "reminders",
       "expiring-warranties",
       "spending-trend",
+      "activity",
+      "spending-breakdown",
+      "planned-spend",
     ])
   })
 
@@ -526,30 +550,48 @@ describe("defaultLayout", () => {
     expect(l.cards.map((c) => c.type)).toContain("equipment")
   })
 
-  it("puts the hero tiles and stacks on top and the four lower cards in a row below", () => {
+  it("places every default card where the dashboard has it", () => {
     const l = defaultLayout(ALL_ON)
-    const at = new Map(l.cards.map((c) => [c.type, l.large.find((p) => p.id === c.id)!]))
-    const top = ["properties", "vehicles", "people", "equipment", "records", "active-warranties", "due-maintenance"]
-    const bottom = ["intake", "reminders", "expiring-warranties", "spending-trend"]
-    const topBottom = Math.max(...top.map((t) => at.get(t)!.y + at.get(t)!.h))
-    for (const t of bottom) expect(at.get(t)!.y).toBe(topBottom)
-    expect(bottom.map((t) => at.get(t)!.x)).toEqual([0, 3, 6, 9])
-    // Properties then Vehicles side by side; People above Equipment in one column.
-    expect(at.get("properties")!.x).toBeLessThan(at.get("vehicles")!.x)
-    expect(at.get("people")!.x).toBe(at.get("equipment")!.x)
-    expect(at.get("people")!.y).toBeLessThan(at.get("equipment")!.y)
-    // The top block has no holes: its cards (which never overlap) tile it exactly.
-    const area = top.reduce((sum, t) => sum + at.get(t)!.w * at.get(t)!.h, 0)
-    expect(area).toBe(LARGE_COLS * topBottom)
+    const at = (id: string) => l.large.find((p) => p.id === id)
+    const expected: Record<string, [number, number, number, number]> = {
+      greeting: [0, 0, 10, 1],
+      clock: [10, 0, 2, 1],
+      properties: [0, 1, 3, 4],
+      vehicles: [3, 1, 3, 4],
+      people: [6, 1, 4, 2],
+      equipment: [6, 3, 4, 2],
+      activity: [10, 1, 2, 1],
+      records: [10, 2, 2, 1],
+      "spending-breakdown": [10, 3, 2, 2],
+      intake: [0, 5, 3, 4],
+      reminders: [3, 5, 3, 4],
+      "planned-spend": [6, 5, 3, 2],
+      "expiring-warranties": [6, 7, 3, 2],
+      "spending-trend": [9, 5, 3, 4],
+    }
+    for (const [id, [x, y, w, h]] of Object.entries(expected)) expect(at(id)).toEqual({ id, x, y, w, h })
+    // The top block (below the greeting row) has no holes: its cards tile 12 columns by 4 rows exactly.
+    const top = l.large.filter((p) => p.y >= 1 && p.y < 5)
+    expect(top.reduce((sum, p) => sum + p.w * p.h, 0)).toBe(LARGE_COLS * 4)
+    // The lower block does too: 12 columns by 4 rows.
+    const bottom = l.large.filter((p) => p.y >= 5)
+    expect(bottom.reduce((sum, p) => sum + p.w * p.h, 0)).toBe(LARGE_COLS * 4)
+  })
+
+  it("keeps the Service Activity calendar flat and the breakdown on the last 12 months", () => {
+    const l = defaultLayout(ALL_ON)
+    expect(l.cards.find((c) => c.id === "activity")?.config).toEqual({ months: 12 })
+    expect(l.cards.find((c) => c.id === "spending-breakdown")?.config).toEqual({ range: "months", months: 12 })
+    expect(l.cards.find((c) => c.id === "planned-spend")?.config).toEqual({ months: 12 })
   })
 
   it("gives Equipment the whole column when People is gone", () => {
     const l = defaultLayout({ ...ALL_ON, health: false })
     const eq = l.large.find((p) => l.cards.find((c) => c.id === p.id)!.type === "equipment")!
     const prop = l.large.find((p) => l.cards.find((c) => c.id === p.id)!.type === "properties")!
-    expect(eq.y).toBe(0)
+    expect(eq.y).toBe(prop.y)
     expect(eq.h).toBe(prop.h)
-    const area = l.large.filter((p) => p.y < prop.h).reduce((sum, p) => sum + p.w * p.h, 0)
+    const area = l.large.filter((p) => p.y >= prop.y && p.y < prop.y + prop.h).reduce((sum, p) => sum + p.w * p.h, 0)
     expect(area).toBe(LARGE_COLS * prop.h)
   })
 
@@ -557,10 +599,13 @@ describe("defaultLayout", () => {
     const a = defaultLayout(ALL_ON)
     expect(defaultLayout(ALL_ON)).toEqual(a)
     expect(new Set(a.cards.map((c) => c.id)).size).toBe(a.cards.length)
-    for (const c of a.cards) expect(c.config).toEqual(cardType(c.type)!.defaultConfig)
+    // The greeting is a Text card with its own text, and the breakdown has its own period; every other card has its type's defaults.
+    for (const c of a.cards.filter((c) => c.id !== "greeting" && c.id !== "spending-breakdown")) expect(c.config).toEqual(cardType(c.type)!.defaultConfig)
     // Mutating one result does not leak into the next.
-    a.cards[0].config.limit = 99
-    expect(defaultLayout(ALL_ON).cards[0].config.limit).not.toBe(99)
+    a.cards[2].config.limit = 99
+    expect(defaultLayout(ALL_ON).cards[2].config.limit).not.toBe(99)
+    a.cards[0].config.text = "changed"
+    expect(defaultLayout(ALL_ON).cards[0].config.text).toBe("Welcome back, {user}")
   })
 })
 
@@ -570,12 +615,22 @@ describe("configFieldsFor", () => {
     return (d.configSchema as unknown as z.ZodObject<z.ZodRawShape>).shape
   }
   /** The schema under ZodOptional/ZodDefault wrappers. */
-  const inner = (s: z.ZodTypeAny): z.ZodTypeAny => (s instanceof z.ZodOptional ? inner(s.unwrap()) : s)
+  const inner = (s: z.ZodTypeAny): z.ZodTypeAny =>
+    s instanceof z.ZodOptional ? inner(s.unwrap()) : s instanceof z.ZodDefault ? inner(s.removeDefault()) : s
+
+  const LEGACY_KEYS: Record<string, string[]> = {
+    "planned-spend": ["horizon"],
+    activity: ["range"],
+    "visits-heatmap": ["range"],
+    "observations-heatmap": ["range"],
+  }
 
   it.each(CARD_TYPES.map((d) => [d.id, d] as const))("%s describes every config key exactly once", (_id, d) => {
     const keys = configFieldsFor(d.id).map((f) => f.key)
     expect(new Set(keys).size).toBe(keys.length)
-    expect([...keys].sort()).toEqual(Object.keys(shapeOf(d)).sort())
+    // An older config's key stays valid in the schema without a field of its own.
+    const legacy = LEGACY_KEYS[d.id] ?? []
+    expect([...keys].sort()).toEqual(Object.keys(shapeOf(d)).filter((k) => !legacy.includes(k)).sort())
   })
 
   it("returns [] for types without config and for unknown types", () => {
@@ -591,6 +646,10 @@ describe("configFieldsFor", () => {
       if (f.kind === "item") {
         expect(s).toBeInstanceOf(z.ZodString)
         expect(d.configSchema.safeParse({ [f.key]: "abc" }).success).toBe(true)
+      } else if (f.kind === "asset") {
+        expect(s).toBeInstanceOf(z.ZodString)
+        expect(d.configSchema.safeParse({ [f.key]: "EQUIPMENT:abc" }).success).toBe(true)
+        expect(d.configSchema.safeParse({ [f.key]: "abc" }).success).toBe(false)
       } else if (f.kind === "number") {
         expect(s).toBeInstanceOf(z.ZodNumber)
         // The field's bounds are exactly the schema's.
@@ -599,6 +658,15 @@ describe("configFieldsFor", () => {
         expect(d.configSchema.safeParse({ [f.key]: f.min - 1 }).success).toBe(false)
         expect(d.configSchema.safeParse({ [f.key]: f.max + 1 }).success).toBe(false)
         expect(f.default >= f.min && f.default <= f.max).toBe(true)
+      } else if (f.kind === "text") {
+        expect(s).toBeInstanceOf(z.ZodString)
+        // The field's cap is exactly the schema's; its default is valid.
+        expect(d.configSchema.safeParse({ [f.key]: "x".repeat(f.maxLength) }).success).toBe(true)
+        expect(d.configSchema.safeParse({ [f.key]: "x".repeat(f.maxLength + 1) }).success).toBe(false)
+        expect(d.configSchema.safeParse({ [f.key]: f.default }).success).toBe(true)
+      } else if (f.kind === "toggle") {
+        expect(s).toBeInstanceOf(z.ZodBoolean)
+        expect(d.configSchema.safeParse({ [f.key]: f.default }).success).toBe(true)
       } else {
         expect(s).toBeInstanceOf(z.ZodEnum)
         // Every option is a schema value, and every schema value is offered.
@@ -645,6 +713,10 @@ describe("groupCardTypes", () => {
     }
   })
 
+  it("lists the Text & time group first", () => {
+    expect(groupCardTypes(CARD_TYPES)[0].label).toBe("Text & time")
+  })
+
   it("leaves out empty groups", () => {
     const groups = groupCardTypes(CARD_TYPES.filter((d) => d.id === "intake"))
     expect(groups).toHaveLength(1)
@@ -656,13 +728,13 @@ describe("groupCardTypes", () => {
     const ids = groupCardTypes(availableCardTypes(off)).flatMap((g) => g.types.map((t) => t.id))
     expect(ids).not.toContain("people")
     expect(ids).not.toContain("rooms")
-    expect(ids).toHaveLength(11)
+    expect(ids).toHaveLength(16)
   })
 
   it("puts a type with no group in a trailing Other group", () => {
     const stray = { ...CARD_TYPES[0], id: "stray" }
     const groups = groupCardTypes([stray, CARD_TYPES[0]])
-    expect(groups.map((g) => g.label)).toEqual([CARD_GROUPS[0].label, "Other"])
+    expect(groups.map((g) => g.label)).toEqual(["Assets", "Other"])
     expect(groups[1].types[0].id).toBe("stray")
   })
 })
@@ -814,5 +886,230 @@ describe("phoneSizePresets", () => {
     const presets = phoneSizePresets(withLimits({ w: 4, h: 2 }, { w: 12, h: 8 }, { w: 2, h: 3 }))
     expect(presets.every((p) => p.w === PHONE_COLS)).toBe(true)
     expect(presets[0]).toMatchObject({ name: "Small", h: 2 })
+  })
+})
+
+describe("text card", () => {
+  const def = cardType("text")!
+
+  it("is an ungated, non-data card with one look", () => {
+    expect(def).toMatchObject({ label: "Text", icon: "Type" })
+    expect(def.requires).toBeUndefined()
+    expect(def.description).toMatch(/name|date/)
+    expect(def.tiers).toEqual([{ name: "text", minW: 1, minH: 1 }])
+  })
+
+  it("is 1x1 to 12x4, added at 4x1 (2x1 on phones)", () => {
+    expect(def.min).toEqual({ w: 1, h: 1 })
+    expect(def.max).toEqual({ w: 12, h: 4 })
+    expect(def.large).toEqual({ w: 4, h: 1 })
+    expect(def.phone).toEqual({ w: 2, h: 1 })
+    expect(limitsMap().get("text")).toEqual({ min: { w: 1, h: 1 }, max: { w: 12, h: 4 }, default: { w: 4, h: 1 } })
+  })
+
+  it("shows its one tier at every size, in either layout", () => {
+    for (let w = 1; w <= 12; w++) {
+      for (let h = 1; h <= 4; h++) {
+        expect(tierOf(def, { w, h })).toBe(0)
+        if (w <= PHONE_COLS) expect(tierOf(def, { w, h }, "phone")).toBe(0)
+      }
+    }
+  })
+
+  it("defaults to body text greeting the user, with the card's border", () => {
+    expect(def.defaultConfig).toEqual({ text: "Hello, {user}", style: "body", align: "left", border: true })
+  })
+
+  it("has a text field, a style select, an alignment and a border switch", () => {
+    const fields = configFieldsFor("text")
+    expect(fields.map((f) => [f.key, f.kind])).toEqual([
+      ["text", "text"],
+      ["style", "choice"],
+      ["align", "choice"],
+      ["border", "toggle"],
+    ])
+    const text = fields[0]
+    expect(text.kind === "text" && text.maxLength).toBe(500)
+    expect(text.kind === "text" && text.tokens).toBe(true)
+    const style = fields[1]
+    expect(style.kind === "choice" && style.options.map((o) => o.value)).toEqual(["h1", "h2", "h3", "h4", "body", "small", "muted"])
+    expect(style.kind === "choice" && style.allLabel).toBeFalsy()
+  })
+
+  it("is in the picker's Text group", () => {
+    const groups = groupCardTypes(CARD_TYPES)
+    expect(groups.find((g) => g.types.some((t) => t.id === "text"))?.label).toBe("Text & time")
+  })
+
+  it("phone presets: half-width Small, then full width", () => {
+    expect(phoneSizePresets(def)).toEqual([
+      { name: "Small", w: 1, h: 1 },
+      { name: "Medium", w: 2, h: 1 },
+      { name: "Large", w: 2, h: 3 },
+    ])
+  })
+
+  it("validates its config on save: text length, enums, border; unknown keys dropped", () => {
+    const base = defaultLayout(ALL_ON)
+    const withText = (config: Record<string, unknown>) => ({
+      ...base,
+      cards: base.cards.map((c) => (c.id === "greeting" ? { ...c, config } : c)),
+    })
+    expect(invalidCardConfig(withText({ text: "Hi", style: "h3", align: "right", border: true }))).toBeNull()
+    expect(invalidCardConfig(withText({ text: "x".repeat(501) }))).toMatch(/Text/)
+    expect(invalidCardConfig(withText({ text: "   " }))).toMatch(/Text/)
+    expect(invalidCardConfig(withText({ style: "h7" }))).toMatch(/Text/)
+    expect(invalidCardConfig(withText({ align: "middle" }))).toMatch(/Text/)
+    expect(invalidCardConfig(withText({ border: 0 }))).toMatch(/Text/)
+    const out = normalizeCardConfigs(withText({ text: "Hi", junk: "<script>" }))
+    expect(out.cards.find((c) => c.id === "greeting")!.config).toEqual({ text: "Hi", style: "body", align: "left", border: true })
+  })
+
+  it("a layout with Text cards at its limits is valid; beyond them it is not (and repair clamps)", () => {
+    const l = {
+      format: LAYOUT_FORMAT,
+      cards: [
+        { id: "a", type: "text", config: {} },
+        { id: "b", type: "text", config: {} },
+      ],
+      large: [
+        { id: "a", x: 0, y: 0, w: 1, h: 1 },
+        { id: "b", x: 0, y: 1, w: 12, h: 4 },
+      ],
+      phone: [
+        { id: "a", x: 0, y: 0, w: 1, h: 1 },
+        { id: "b", x: 0, y: 1, w: 2, h: 4 },
+      ],
+    }
+    expect(validateLayout(l, limitsMap())).toBeNull()
+    const tall = { ...l, large: [l.large[0], { id: "b", x: 0, y: 1, w: 12, h: 5 }] }
+    expect(validateLayout(tall, limitsMap())).toMatch(/outside its card size limits/)
+    expect(repairLayout(tall, limitsMap()).large[1]).toMatchObject({ w: 12, h: 4 })
+  })
+})
+
+describe("defaultLayout: the greeting", () => {
+  it.each([
+    ["all on", ALL_ON],
+    ["Health off", { ...ALL_ON, health: false }],
+    ["Rooms off", { ...ALL_ON, rooms: false }],
+  ])("starts with a one-row, borderless H1 greeting beside the clock (%s)", (_name, f) => {
+    const l = defaultLayout(f)
+    expect(l.cards[0]).toEqual({
+      id: "greeting",
+      type: "text",
+      config: { text: "Welcome back, {user}", style: "h1", align: "left", border: false },
+    })
+    expect(l.large.find((p) => p.id === "greeting")).toEqual({ id: "greeting", x: 0, y: 0, w: 10, h: 1 })
+    // The clock takes the top-right two cells; nothing else shares the greeting's row.
+    expect(l.large.find((p) => p.id === "clock")).toEqual({ id: "clock", x: 10, y: 0, w: 2, h: 1 })
+    expect(l.large.filter((p) => p.id !== "greeting" && p.id !== "clock").every((p) => p.y >= 1)).toBe(true)
+    expect(validateLayout(l, limitsMap())).toBeNull()
+    expect(invalidCardConfig(l)).toBeNull()
+    expect(normalizeCardConfigs(l)).toEqual(l)
+    expect(repairLayout(l, limitsMap())).toEqual(l)
+  })
+
+  it("moves every other default card down one row, as it was before", () => {
+    const at = (f: Features, id: string) => defaultLayout(f).large.find((p) => p.id === id)
+    expect(at(ALL_ON, "properties")).toEqual({ id: "properties", x: 0, y: 1, w: 3, h: 4 })
+    expect(at(ALL_ON, "people")).toEqual({ id: "people", x: 6, y: 1, w: 4, h: 2 })
+    expect(at(ALL_ON, "equipment")).toEqual({ id: "equipment", x: 6, y: 3, w: 4, h: 2 })
+    expect(at(ALL_ON, "records")).toEqual({ id: "records", x: 10, y: 2, w: 2, h: 1 })
+    expect(at(ALL_ON, "intake")).toEqual({ id: "intake", x: 0, y: 5, w: 3, h: 4 })
+    expect(at(ALL_ON, "spending-trend")).toEqual({ id: "spending-trend", x: 9, y: 5, w: 3, h: 4 })
+    // Health off: Equipment takes People's freed slot too.
+    expect(at({ ...ALL_ON, health: false }, "equipment")).toEqual({ id: "equipment", x: 6, y: 1, w: 4, h: 4 })
+  })
+})
+
+describe("the Clock card", () => {
+  const def = cardType("clock")!
+
+  it("is 1x1 to 4x4, two cells wide by default on both grids", () => {
+    expect(def).toMatchObject({ label: "Clock", icon: "CalendarClock" })
+    expect(def.requires).toBeUndefined()
+    expect(def.min).toEqual({ w: 1, h: 1 })
+    expect(def.max).toEqual({ w: 4, h: 4 })
+    expect(def.large).toEqual({ w: 2, h: 1 })
+    expect(def.phone).toEqual({ w: 2, h: 1 })
+  })
+
+  it("shows the time, then the date with it, then the face", () => {
+    expect(def.tiers.map((t) => t.name)).toEqual(["time", "standard", "face"])
+    expect(tierOf(def, { w: 1, h: 1 })).toBe(0)
+    expect(tierOf(def, { w: 2, h: 1 })).toBe(1)
+    expect(tierOf(def, { w: 4, h: 1 })).toBe(1)
+    expect(tierOf(def, { w: 2, h: 2 })).toBe(2)
+    expect(tierOf(def, { w: 4, h: 4 })).toBe(2)
+    // A half-width phone card counts as two large columns.
+    expect(tierOf(def, { w: 1, h: 1 }, "phone")).toBe(1)
+  })
+
+  it("offers seconds, the date and the face, and no 12/24 hour setting (Settings > Regional has it)", () => {
+    const fields = configFieldsFor("clock")
+    expect(fields.map((f) => [f.key, f.kind])).toEqual([
+      ["showSeconds", "toggle"],
+      ["showDate", "toggle"],
+      ["face", "choice"],
+    ])
+    expect(fields.some((f) => /hour|12|24/i.test(f.key))).toBe(false)
+    expect(fields[0].help).toContain("Settings > Regional")
+    expect(def.defaultConfig).toEqual({ showSeconds: false, showDate: true, face: "auto" })
+  })
+
+  it("validates its config on the server like every card", () => {
+    const l = defaultLayout(ALL_ON)
+    const withClock = (config: Record<string, unknown>) => ({
+      ...l,
+      cards: l.cards.map((c) => (c.type === "clock" ? { ...c, config } : c)),
+    })
+    expect(invalidCardConfig(withClock({ face: "sometimes" }))).toBe("The Clock card's settings are not valid.")
+    expect(invalidCardConfig(withClock({ hour12: true }))).toBeNull()
+    const clock = normalizeCardConfigs(withClock({ hour12: true, showSeconds: true })).cards.find((c) => c.type === "clock")!
+    expect(clock.config).toEqual({ showSeconds: true, showDate: true, face: "auto" })
+  })
+
+  it("is in the picker's first group, after Text", () => {
+    expect(groupCardTypes(CARD_TYPES)[0].types.map((t) => t.id)).toEqual(["text", "clock"])
+  })
+
+  it.each([
+    ["all on", ALL_ON],
+    ["Health off", { ...ALL_ON, health: false }],
+    ["Rooms off", { ...ALL_ON, rooms: false }],
+  ])("comes right after the greeting on phones, full width (%s)", (_name, f) => {
+    const phone = resolvePhoneLayout(defaultLayout(f), f)
+    const sorted = [...phone].sort((a, b) => a.y - b.y || a.x - b.x)
+    expect(sorted[0].id).toBe("greeting")
+    expect(sorted[1]).toEqual({ id: "clock", x: 0, y: sorted[0].h, w: PHONE_COLS, h: 1 })
+  })
+
+  it("phone presets: half-width small, full width, then a face", () => {
+    expect(phoneSizePresets(def)).toEqual([
+      { name: "Small", w: 1, h: 1 },
+      { name: "Medium", w: 2, h: 1 },
+      { name: "Large", w: 2, h: 3 },
+    ])
+  })
+})
+
+describe("calendar cards' column look", () => {
+  const names = (id: string, w: number, h: number, mode: "large" | "phone" = "large") => {
+    const def = cardType(id)!
+    return def.tiers[tierOf(def, { w, h }, mode)].name
+  }
+  it.each(["activity", "visits-heatmap", "observations-heatmap"])("%s: one column wide and two or more rows tall is the column look", (id) => {
+    for (const h of [2, 3, 4, 6]) expect(names(id, 1, h)).toBe("column")
+    expect(names(id, 1, 1)).toBe("number")
+    expect(names(id, 2, 1)).toBe("flat")
+    expect(names(id, 3, 1)).toBe("flat")
+    expect(names(id, 12, 1)).toBe("flat")
+    expect(names(id, 2, 2)).toBe("calendar")
+    expect(names(id, 4, 3)).toBe("labeled")
+    expect(names(id, 6, 3)).toBe("insights")
+  })
+  it("a one-column phone card is two columns wide to the tiers, so it gets the calendar", () => {
+    expect(names("activity", 1, 3, "phone")).toBe("calendar")
   })
 })

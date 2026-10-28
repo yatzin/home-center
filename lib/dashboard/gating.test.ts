@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { configItemId, configLimit, hiddenByHealth, upcomingConfig } from "./gating"
 
-const features = (health: boolean) => ({ health, rooms: true, equipmentTab: true, customizedDashboards: true })
+const features = (health: boolean) => ({ health, rooms: true, equipmentTab: true })
 
 describe("hiddenByHealth", () => {
   it("hides person-owned rows when Health is off", () => {

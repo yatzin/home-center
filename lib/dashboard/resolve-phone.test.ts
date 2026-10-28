@@ -4,7 +4,7 @@ import { cardType, defaultLayout, limitsMap } from "./card-types"
 import { LAYOUT_FORMAT, PHONE_COLS, validateLayout, type DashboardLayout, type Placement } from "./layout"
 import { resolvePhoneLayout } from "./resolve-phone"
 
-const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true, customizedDashboards: true }
+const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true }
 const NO_HEALTH: Features = { ...ALL_ON, health: false }
 
 const ids = (ps: readonly Placement[]) => ps.map((p) => p.id).sort()
@@ -135,5 +135,19 @@ describe("resolvePhoneLayout", () => {
     const before = JSON.stringify(layout)
     resolvePhoneLayout(layout, NO_HEALTH)
     expect(JSON.stringify(layout)).toBe(before)
+  })
+})
+
+describe("resolvePhoneLayout: the default greeting", () => {
+  it.each([
+    ["all on", ALL_ON],
+    ["Health off", NO_HEALTH],
+  ])("derives the greeting first, full width and one row (%s)", (_name, f) => {
+    const layout = defaultLayout(f)
+    const phone = resolvePhoneLayout(layout, f)
+    expect(readingOrder(phone)[0]).toBe("greeting")
+    expect(phone.find((p) => p.id === "greeting")).toEqual({ id: "greeting", x: 0, y: 0, w: PHONE_COLS, h: 1 })
+    expect(phone.filter((p) => p.id !== "greeting").every((p) => p.y >= 1)).toBe(true)
+    expect(isValidPhone(layout, phone)).toBeNull()
   })
 })

@@ -112,6 +112,17 @@ export function createFormatter(r: Regional) {
     return hm(t.getHours(), t.getMinutes())
   }
 
+  /** The local time in pieces, for a clock: "2:07" or "14:07", the seconds "09", and "PM" (null in 24-hour time). */
+  const timeParts = (d: When) => {
+    const t = toDate(d)
+    const h = t.getHours()
+    return {
+      hm: r.hour12 ? `${h % 12 || 12}:${pad(t.getMinutes())}` : `${pad(h)}:${pad(t.getMinutes())}`,
+      seconds: pad(t.getSeconds()),
+      period: r.hour12 ? (h < 12 ? "AM" : "PM") : null,
+    }
+  }
+
   return {
     currency: r.currency,
     currencySymbol,
@@ -139,6 +150,9 @@ export function createFormatter(r: Regional) {
     dayMonth,
     monthYear,
     time,
+    timeParts,
+    /** 12-hour time (Settings > Regional). */
+    hour12: r.hour12,
     /** A stored "HH:MM" wall-clock time. */
     clock: (hhmm: string | null | undefined) => {
       if (!hhmm) return ""

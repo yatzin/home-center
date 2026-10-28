@@ -39,21 +39,21 @@ function Status({ status, phone }: { status: SaveStatus; phone: boolean }) {
   switch (status.kind) {
     case "pending":
       return (
-        <span className={cn(base, "text-muted-foreground")}>
+        <span className={cn(base, "text-background/70")}>
           <Loader2 className="size-3.5 shrink-0 motion-safe:animate-spin" aria-hidden />
           Saving…
         </span>
       )
     case "saved":
       return (
-        <span className={cn(base, "text-muted-foreground")}>
+        <span className={cn(base, "text-background/70")}>
           <Check className="size-3.5 shrink-0" aria-hidden />
           <Label phone={phone} long="All changes saved" short="Saved" />
         </span>
       )
     case "error":
       return (
-        <span className={cn(base, "text-destructive")}>
+        <span className={cn(base, "font-medium text-background")}>
           <CircleAlert className="size-3.5 shrink-0" aria-hidden />
           <span className="line-clamp-2">{status.message}</span>
         </span>
@@ -63,7 +63,7 @@ function Status({ status, phone }: { status: SaveStatus; phone: boolean }) {
       return null
     default:
       return (
-        <span className={cn(base, "text-muted-foreground")}>
+        <span className={cn(base, "text-background/70")}>
           <Label phone={phone} long="Changes save automatically" short="Saves as you go" />
         </span>
       )
@@ -105,7 +105,7 @@ export function EditBar({
         aria-label="Dashboard editing"
         data-edit-bar
         className={cn(
-          "pointer-events-auto flex max-w-full items-center select-none gap-2 rounded-2xl border border-border bg-popover/95 text-popover-foreground shadow-lg ring-1 ring-foreground/5 backdrop-blur-md motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2",
+          "pointer-events-auto flex max-w-full items-center select-none gap-2 rounded-2xl border border-background/20 bg-foreground text-background shadow-xl ring-1 ring-foreground/10 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2",
           phone ? "w-full gap-1 p-1.5 pl-3" : "py-1.5 pr-1.5 pl-3.5",
         )}
       >
@@ -114,7 +114,7 @@ export function EditBar({
         </div>
         <Button
           variant="ghost"
-          className={cn("pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
+          className={cn("text-background hover:bg-background/15 hover:text-background aria-expanded:bg-background/15 aria-expanded:text-background pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
           size="sm"
           onClick={() => setConfirming(true)}
           disabled={resetting || finishing}
@@ -126,7 +126,7 @@ export function EditBar({
         </Button>
         <Button
           variant="outline"
-          className={cn("pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
+          className={cn("border-background/50 bg-transparent text-background hover:bg-background/15 hover:text-background pointer-coarse:h-11 pointer-coarse:min-w-11", phone && "h-11 min-w-11")}
           size="sm"
           onClick={onAddCard}
           disabled={!onAddCard || finishing}
@@ -140,7 +140,7 @@ export function EditBar({
           size="sm"
           onClick={onDone}
           disabled={finishing}
-          className={cn("min-w-16 pointer-coarse:h-11", phone && "h-11 min-w-20")}
+          className={cn("min-w-16 bg-background text-foreground hover:bg-background/85 pointer-coarse:h-11", phone && "h-11 min-w-20")}
           data-edit-done
         >
           {finishing ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : null}

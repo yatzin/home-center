@@ -1,18 +1,20 @@
 "use client"
 
 // One control of the card settings dialog, chosen by the field's kind
-// (lib/dashboard/card-types.ts ConfigField): an item picker, a whole number
-// with its unit, or a choice (segmented for two or three options, otherwise a
-// select). A card type gets its settings by declaring fields; there is no
+// (lib/dashboard/card-types.ts ConfigField): an item picker (one type, or any asset, grouped), a whole number
+// with its unit, a choice (segmented for two or three options, otherwise a
+// select), multi-line text (text-field.tsx) or an on/off checkbox. A card type gets its settings by declaring fields; there is no
 // per-type form code. Values are strings; "" means "all".
 
 import type { Control } from "react-hook-form"
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { ConfigField } from "@/lib/dashboard/card-types"
 import { offeredOptions, type ConfigFormContext, type ConfigFormValues } from "@/lib/dashboard/config-form"
+import { assetPickValue } from "@/lib/dashboard/asset-pick"
 import { cn } from "@/lib/utils"
+import { TextFieldControl } from "./text-field"
 
 /** Base UI's select cannot hold "", so "all" travels as this inside it. */
 const ALL = "__all__"
@@ -20,6 +22,8 @@ const toSelect = (v: string) => (v === "" ? ALL : v)
 const fromSelect = (v: unknown) => (v === ALL || v == null ? "" : String(v))
 
 const TOUCH = "pointer-coarse:h-11"
+
+const ASSET_GROUP_LABELS = { PROPERTY: "Properties", VEHICLE: "Vehicles", EQUIPMENT: "Equipment", PERSON: "People" } as const
 
 export function ConfigFieldControl({
   field,
@@ -66,6 +70,75 @@ export function ConfigFieldControl({
                 </SelectContent>
               </Select>
               {help}
+              {message}
+            </FormItem>
+          )
+        }
+
+        if (field.kind === "asset") {
+          const groups = field.itemTypes.map((type) => ({ type, label: ASSET_GROUP_LABELS[type], options: ctx.items?.[type] ?? [] })).filter((g) => g.options.length > 0)
+          const nameOf = (v: string) => {
+            if (v === ALL) return field.allLabel
+            const found = groups.flatMap((g) => g.options.map((o) => ({ value: assetPickValue(g.type, o.id), name: o.name }))).find((o) => o.value === v)
+            return found?.name ?? `Choose a ${field.noun}`
+          }
+          return (
+            <FormItem>
+              <FormLabel id={labelId}>{field.label}</FormLabel>
+              <Select value={toSelect(input.value)} onValueChange={(v) => input.onChange(fromSelect(v))}>
+                <FormControl>
+                  <SelectTrigger aria-labelledby={`${labelId} ${labelId}-value`} className={cn("w-full", TOUCH)} onBlur={input.onBlur} ref={input.ref}>
+                    <SelectValue id={`${labelId}-value`}>{(v: string) => <span className={cn(fieldState.invalid && "text-destructive")}>{nameOf(v)}</span>}</SelectValue>
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={ALL} className={TOUCH}>
+                    {field.allLabel}
+                  </SelectItem>
+                  {groups.map((g) => (
+                    <SelectGroup key={g.type}>
+                      <SelectSeparator />
+                      <SelectLabel>{g.label}</SelectLabel>
+                      {g.options.map((o) => (
+                        <SelectItem key={o.id} value={assetPickValue(g.type, o.id)} className={TOUCH}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              {help}
+              {message}
+            </FormItem>
+          )
+        }
+
+        if (field.kind === "text") {
+          return <TextFieldControl field={field} ctx={ctx} input={input} fieldState={fieldState} />
+        }
+
+        if (field.kind === "toggle") {
+          return (
+            <FormItem>
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-medium select-none pointer-coarse:min-h-11">
+                <input
+                  type="checkbox"
+                  name={input.name}
+                  ref={input.ref}
+                  checked={input.value === "true"}
+                  onChange={(e) => input.onChange(String(e.target.checked))}
+                  onBlur={input.onBlur}
+                  aria-describedby={field.help ? `${labelId}-help` : undefined}
+                  className="size-4 accent-primary"
+                />
+                {field.label}
+              </label>
+              {field.help && (
+                <p id={`${labelId}-help`} className="text-xs text-muted-foreground">
+                  {field.help}
+                </p>
+              )}
               {message}
             </FormItem>
           )

@@ -94,6 +94,30 @@ describe("time", () => {
     expect(fmt().clock(null)).toBe("")
   })
   it("dateTime", () => expect(fmt({ dateFormat: "ISO", hour12: false }).dateTime(d)).toBe("2026-01-05 14:07"))
+  it("timeParts splits the time for a clock face (12h)", () => {
+    const at = new Date(2026, 0, 5, 14, 7, 9)
+    expect(fmt().timeParts(at)).toEqual({ hm: "2:07", seconds: "09", period: "PM" })
+    expect(fmt().timeParts(new Date(2026, 0, 5, 0, 0, 0))).toEqual({ hm: "12:00", seconds: "00", period: "AM" })
+    expect(fmt().timeParts(new Date(2026, 0, 5, 12, 30, 59))).toEqual({ hm: "12:30", seconds: "59", period: "PM" })
+  })
+  it("timeParts (24h): two-digit hours, no period", () => {
+    expect(fmt({ hour12: false }).timeParts(new Date(2026, 0, 5, 9, 5, 0))).toEqual({ hm: "09:05", seconds: "00", period: null })
+    expect(fmt({ hour12: false }).timeParts(new Date(2026, 0, 5, 23, 59, 59))).toEqual({ hm: "23:59", seconds: "59", period: null })
+  })
+  it("timeParts agrees with time()", () => {
+    for (const hour12 of [true, false]) {
+      const f = fmt({ hour12 })
+      for (let h = 0; h < 24; h++) {
+        const at = new Date(2026, 2, 8, h, 41)
+        const p = f.timeParts(at)
+        expect([p.hm, p.period].filter(Boolean).join(" ")).toBe(f.time(at))
+      }
+    }
+  })
+  it("exposes hour12", () => {
+    expect(fmt().hour12).toBe(true)
+    expect(fmt({ hour12: false }).hour12).toBe(false)
+  })
 })
 
 describe("currencies", () => {

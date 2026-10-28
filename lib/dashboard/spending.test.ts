@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest"
 import type { CostRow } from "@/lib/costs"
-import { chartable, monthlyAverage, spendDelta, spendingByCategory, spendingSummary, spendTrend, spendWindow } from "./spending"
+import {
+  chartable,
+  monthlyAverage,
+  spendDelta,
+  spendingByCategory,
+  spendingSummary,
+  spendRangeOf,
+  spendThisMonth,
+  spendTrend,
+  spendWindow,
+  trendMonthsOf,
+  validMonths,
+} from "./spending"
 
 // Record dates are UTC midnight (as stored); NOW is the viewer's local clock. The cost helpers bucket by UTC fields.
 const NOW = new Date(2026, 9, 22, 12, 0, 0) // 22 Oct 2026
@@ -21,7 +33,7 @@ const row = (date: Date, cost: number, category: CostRow["category"] = "REPAIR")
 describe("spendingByCategory", () => {
   it("returns [] for no rows", () => {
     expect(spendingByCategory([], "ytd", NOW)).toEqual([])
-    expect(spendingByCategory([], "12m", NOW)).toEqual([])
+    expect(spendingByCategory([], 12, NOW)).toEqual([])
   })
 
   it("totals each category, largest first", () => {
@@ -70,7 +82,7 @@ describe("spendingByCategory", () => {
       row(new Date(Date.UTC(2026, 9, 22)), 4, "REPAIR"), // today: in
       row(new Date(Date.UTC(2026, 9, 25)), 8, "REPAIR"), // future: out
     ]
-    expect(spendingByCategory(rows, "12m", NOW)).toEqual([{ category: "REPAIR", total: 6 }])
+    expect(spendingByCategory(rows, 12, NOW)).toEqual([{ category: "REPAIR", total: 6 }])
     // The same rows under ytd only see 2026.
     expect(spendingByCategory(rows, "ytd", NOW)).toEqual([{ category: "REPAIR", total: 4 }])
   })
@@ -95,7 +107,7 @@ describe("spendingByCategory", () => {
 describe("spendWindow", () => {
   it("shifts the same window back a year", () => {
     expect(spendWindow("ytd", NOW, 1)).toEqual({ start: new Date(Date.UTC(2025, 0, 1)), end: new Date(Date.UTC(2025, 9, 22, 23, 59, 59, 999)) })
-    expect(spendWindow("12m", NOW, 1)).toEqual({ start: new Date(Date.UTC(2024, 10, 1)), end: new Date(Date.UTC(2025, 9, 22, 23, 59, 59, 999)) })
+    expect(spendWindow(12, NOW, 1)).toEqual({ start: new Date(Date.UTC(2024, 10, 1)), end: new Date(Date.UTC(2025, 9, 22, 23, 59, 59, 999)) })
   })
 })
 
@@ -107,12 +119,12 @@ describe("spendingSummary", () => {
 
   it("has no delta when nothing was spent in the earlier window", () => {
     expect(spendingSummary([row(new Date(Date.UTC(2026, 2, 1)), 150)], "ytd", NOW)).toEqual({ total: 150, priorTotal: 0, delta: null })
-    expect(spendingSummary([], "12m", NOW)).toEqual({ total: 0, priorTotal: 0, delta: null })
+    expect(spendingSummary([], 12, NOW)).toEqual({ total: 0, priorTotal: 0, delta: null })
   })
 
   it("12m compares with the twelve months before", () => {
     const rows = [row(new Date(Date.UTC(2024, 11, 1)), 200), row(new Date(Date.UTC(2026, 0, 1)), 100)]
-    expect(spendingSummary(rows, "12m", NOW)).toEqual({ total: 100, priorTotal: 200, delta: -0.5 })
+    expect(spendingSummary(rows, 12, NOW)).toEqual({ total: 100, priorTotal: 200, delta: -0.5 })
   })
 })
 
@@ -176,5 +188,66 @@ describe("monthlyAverage", () => {
 
   it("is 0 with no rows", () => {
     expect(monthlyAverage(spendTrend([], NOW).points, [], NOW)).toBe(0)
+  })
+})
+
+describe("spendThisMonth", () => {
+  it("sums the current calendar month through today (like year-to-date, not later-dated rows)", () => {
+    const rows = [
+      row(new Date(Date.UTC(2026, 8, 30)), 999), // last month
+      row(new Date(Date.UTC(2026, 9, 1)), 40), // first of the month
+      row(new Date(Date.UTC(2026, 9, 22)), 2.5), // today
+      row(new Date(Date.UTC(2026, 9, 23)), 500), // tomorrow: not yet
+      row(new Date(Date.UTC(2025, 9, 10)), 77), // same month last year
+    ]
+    expect(spendThisMonth(rows, NOW)).toBe(42.5)
+  })
+
+  it("is 0 with nothing spent, and nets refunds like the other totals", () => {
+    expect(spendThisMonth([], NOW)).toBe(0)
+    expect(spendThisMonth([row(new Date(Date.UTC(2026, 9, 2)), 100), row(new Date(Date.UTC(2026, 9, 3)), -30)], NOW)).toBe(70)
+  })
+})
+
+describe("a period of X months", () => {
+  it("reads the range: this year, an older 12m, or a valid month count (else 12)", () => {
+    expect(spendRangeOf({})).toBe("ytd")
+    expect(spendRangeOf({ range: "ytd", months: 5 })).toBe("ytd")
+    expect(spendRangeOf({ range: "12m" })).toBe(12)
+    expect(spendRangeOf({ range: "months", months: 3 })).toBe(3)
+    expect(spendRangeOf({ range: "months", months: 60 })).toBe(60)
+    for (const months of [0, 61, 2.5, "6", null, undefined]) expect(spendRangeOf({ range: "months", months })).toBe(12)
+  })
+
+  it("validMonths takes whole numbers in range only", () => {
+    expect(validMonths(1, 1, 36)).toBe(1)
+    expect(validMonths(36, 1, 36)).toBe(36)
+    expect(validMonths(37, 1, 36)).toBeNull()
+    expect(validMonths(0, 1, 36)).toBeNull()
+    expect(validMonths(1.5, 1, 36)).toBeNull()
+    expect(validMonths("3", 1, 36)).toBeNull()
+  })
+
+  it("the window is that many calendar months ending with this one, and a year earlier on request", () => {
+    expect(spendWindow(3, NOW)).toEqual({ start: new Date(Date.UTC(2026, 7, 1)), end: new Date(Date.UTC(2026, 9, 22, 23, 59, 59, 999)) })
+    expect(spendWindow(1, NOW).start).toEqual(new Date(Date.UTC(2026, 9, 1)))
+    expect(spendWindow(14, NOW).start).toEqual(new Date(Date.UTC(2025, 8, 1)))
+    expect(spendWindow(3, NOW, 1)).toEqual({ start: new Date(Date.UTC(2025, 7, 1)), end: new Date(Date.UTC(2025, 9, 22, 23, 59, 59, 999)) })
+  })
+
+  it("counts only the records inside it", () => {
+    const row = (date: Date, cost: number): CostRow => ({ date, cost, category: "REPAIR" }) as CostRow
+    const rows = [row(new Date(Date.UTC(2026, 7, 1)), 10), row(new Date(Date.UTC(2026, 6, 31)), 99), row(new Date(Date.UTC(2026, 9, 22)), 5)]
+    expect(spendingByCategory(rows, 3, NOW)).toEqual([{ category: "REPAIR", total: 15 }])
+    expect(spendingSummary(rows, 3, NOW).total).toBe(15)
+  })
+
+  it("the trend chart shows those months (12 for this year)", () => {
+    expect(trendMonthsOf("ytd")).toBe(12)
+    expect(trendMonthsOf(3)).toBe(3)
+    expect(spendTrend([], NOW).points).toHaveLength(12)
+    expect(spendTrend([], NOW, 3).points).toHaveLength(3)
+    expect(spendTrend([], NOW, 3).prior).toHaveLength(3)
+    expect(spendTrend([], NOW, 30).points).toHaveLength(30)
   })
 })

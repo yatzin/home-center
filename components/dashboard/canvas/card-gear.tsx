@@ -23,7 +23,7 @@ export function CardGear({
       type="button"
       data-gear
       aria-label={`${cardTitle} settings`}
-      title="Card settings"
+      title="Card settings. You can also double-click a card."
       onClick={onClick}
       disabled={disabled}
       className={cn(

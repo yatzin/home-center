@@ -1,6 +1,8 @@
 "use client"
 
 import { useFormat } from "@/components/regional-provider"
+import { useStripOpenParam } from "@/components/strip-open-param"
+import { findOpenRow } from "@/lib/deep-link"
 import { Fragment, useCallback, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -62,11 +64,13 @@ export function WarrantyList({ warranties: initialWarranties, assetId, assetType
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [prevOpenId, setPrevOpenId] = useState<string | undefined>(undefined)
+  const [linkOpens, setLinkOpens] = useState(0)
   if (openId !== prevOpenId) {
     setPrevOpenId(openId)
-    const match = openId ? initialWarranties.find((w) => w.id === openId) : undefined
-    if (match) { setEditing(match); setDialogOpen(true) }
+    const match = findOpenRow(initialWarranties, openId)
+    if (match) { setEditing(match); setDialogOpen(true); setLinkOpens((n) => n + 1) }
   }
+  useStripOpenParam(linkOpens)
 
   if (initialWarranties !== prevInitialWarranties) {
     setPrevInitialWarranties(initialWarranties)

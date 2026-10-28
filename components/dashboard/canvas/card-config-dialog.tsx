@@ -89,7 +89,7 @@ function ConfigForm({
 
   // "Choose another": say straight away that the configured item is gone.
   useEffect(() => {
-    const gone = configFieldsFor(card.type).filter((f) => f.kind === "item" && defaults[f.key] !== "")
+    const gone = configFieldsFor(card.type).filter((f) => (f.kind === "item" || f.kind === "asset") && defaults[f.key] !== "")
     if (gone.length > 0) void form.trigger(gone.map((f) => f.key))
   }, [card.type, defaults, form])
 

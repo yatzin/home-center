@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useStripOpenParam } from "@/components/strip-open-param"
+import { findOpenRow } from "@/lib/deep-link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -96,11 +98,13 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [prevOpenId, setPrevOpenId] = useState<string | undefined>(undefined)
+  const [linkOpens, setLinkOpens] = useState(0)
   if (openId !== prevOpenId) {
     setPrevOpenId(openId)
-    const match = openId ? initialSchedules.find((s) => s.id === openId) : undefined
-    if (match) { setEditing(match); setFormOpen(true) }
+    const match = findOpenRow(initialSchedules, openId)
+    if (match) { setEditing(match); setFormOpen(true); setLinkOpens((n) => n + 1) }
   }
+  useStripOpenParam(linkOpens)
 
   if (initialSchedules !== prevInitialSchedules) {
     setPrevInitialSchedules(initialSchedules)
