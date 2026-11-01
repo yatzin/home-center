@@ -6,7 +6,29 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { attachmentDir } from "@/lib/attachment-location"
 import { removeUploadDir } from "@/lib/upload-fs"
-import { searchIndex } from "@/lib/documents/indexer-server"
+import { reindexMovedDocuments, searchIndex } from "@/lib/documents/indexer-server"
+import { cleanAttachmentName } from "@/lib/attachment-name"
+
+/** Changes the name shown for a file. The stored file is untouched; the search index picks up the new name. */
+export async function renameAttachment(id: string, newName: string): Promise<{ error: string } | { success: true; name: string }> {
+  const session = await auth()
+  if (!session) redirect("/login")
+
+  const attachment = await prisma.attachment.findUnique({ where: { id }, select: { id: true, originalName: true } })
+  if (!attachment) return { error: "Not found" }
+  const cleaned = cleanAttachmentName(newName, attachment.originalName)
+  if ("error" in cleaned) return cleaned
+  if (cleaned.name !== attachment.originalName) {
+    await prisma.attachment.update({ where: { id }, data: { originalName: cleaned.name } })
+    // Best effort, like delete: reconcile() covers a miss.
+    await reindexMovedDocuments([id]).catch(() => {})
+    revalidatePath("/records")
+    revalidatePath("/warranties")
+    revalidatePath("/insurance")
+    revalidatePath("/assets", "layout")
+  }
+  return { success: true, name: cleaned.name }
+}
 
 export async function deleteAttachment(id: string) {
   const session = await auth()

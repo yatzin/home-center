@@ -15,7 +15,9 @@ import { ownedScopeWhere, type PropertyScope } from "@/lib/property-filter"
 export async function loadCostRecords(filter?: {
   assetId?: string
   assetType?: AssetType
-  /** Property filter; ignored when assetId names one asset. */
+  /** Exactly these assets (overrides assetId and assetType), e.g. a property plus its equipment. */
+  assets?: { assetType: AssetType; assetId: string }[]
+  /** Property filter; ignored when assetId or assets name the assets. */
   scope?: PropertyScope | null
 }): Promise<CostRow[]> {
   const features = await loadFeatures()
@@ -23,9 +25,13 @@ export async function loadCostRecords(filter?: {
   const rows = await prisma.serviceRecord.findMany({
     where: {
       cost: { not: null },
-      ...(filter?.assetId ? { assetId: filter.assetId } : ownedScopeWhere(filter?.scope ?? null)),
-      // With Health off, people's visits drop out of every total.
-      ...(filter?.assetType ? { assetType: filter.assetType } : ownedWhere(features)),
+      ...(filter?.assets
+        ? { OR: filter.assets.map(({ assetType, assetId }) => ({ assetType, assetId })) }
+        : {
+            ...(filter?.assetId ? { assetId: filter.assetId } : ownedScopeWhere(filter?.scope ?? null)),
+            // With Health off, people's visits drop out of every total.
+            ...(filter?.assetType ? { assetType: filter.assetType } : ownedWhere(features)),
+          }),
     },
     select: {
       id: true,

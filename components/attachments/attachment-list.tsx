@@ -3,9 +3,10 @@
 import { useRef, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Paperclip, Trash2, Upload, FileText, Image } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Check, Paperclip, Pencil, Trash2, Upload, FileText, Image, X } from "lucide-react"
 import { toast } from "sonner"
-import { deleteAttachment } from "@/lib/actions/attachments"
+import { deleteAttachment, renameAttachment } from "@/lib/actions/attachments"
 import { uploadFile } from "@/lib/upload-client"
 import { useDropZone } from "@/components/drop/drop-provider"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,8 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
   const [attachments, setAttachments] = useState(initial)
   const [uploading, setUploading] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function upload(files: File[]) {
@@ -73,6 +76,22 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
       await deleteAttachment(id)
       setAttachments((prev) => prev.filter((a) => a.id !== id))
       toast.success("Attachment removed.")
+    })
+  }
+
+  function startRename(a: Attachment) {
+    setRenamingId(a.id)
+    setDraft(a.originalName)
+  }
+
+  function saveRename(a: Attachment) {
+    if (draft.trim() === a.originalName) { setRenamingId(null); return }
+    startTransition(async () => {
+      const r = await renameAttachment(a.id, draft)
+      if ("error" in r) { toast.error(r.error); return }
+      setAttachments((prev) => prev.map((x) => (x.id === a.id ? { ...x, originalName: r.name } : x)))
+      setRenamingId(null)
+      toast.success("Renamed.")
     })
   }
 
@@ -117,15 +136,50 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
             return (
               <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                 <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 truncate hover:underline"
-                >
-                  {a.originalName}
-                </a>
-                <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
+                {renamingId === a.id ? (
+                  <>
+                    <Input
+                      autoFocus
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); saveRename(a) }
+                        if (e.key === "Escape") setRenamingId(null)
+                      }}
+                      disabled={isPending}
+                      aria-label={`New name for "${a.originalName}"`}
+                      className="h-7 flex-1"
+                    />
+                    <button type="button" onClick={() => saveRename(a)} disabled={isPending} aria-label="Save name" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => setRenamingId(null)} disabled={isPending} aria-label="Cancel rename" className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 truncate hover:underline"
+                    >
+                      {a.originalName}
+                    </a>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
+                    <button
+                      type="button"
+                      onClick={() => startRename(a)}
+                      disabled={isPending}
+                      aria-label={`Rename "${a.originalName}"`}
+                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(a.id, a.originalName)}

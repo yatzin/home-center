@@ -871,7 +871,9 @@ model FeatureSettings {
   equipmentTabEnabled   Boolean  @default(true)
   /// A property dropdown in the top bar that leaves out everything belonging to other properties. Off by default.
   propertyFilterEnabled Boolean  @default(false)
-  updatedAt             DateTime @updatedAt
+  /// A property's Cost panel also counts the service costs of its equipment, not just records logged on the property.
+  propertyEquipmentCostsEnabled Boolean @default(true)
+  updatedAt            DateTime @updatedAt
 }
 
 /// The admin-edited card layout of the dashboard (one row). `data` is the JSON

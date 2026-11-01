@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { updateFeatureSettings } from "@/lib/actions/feature-settings"
 
-type Values = { healthEnabled: boolean; roomsEnabled: boolean; equipmentTabEnabled: boolean; propertyFilterEnabled: boolean }
+type Values = { healthEnabled: boolean; roomsEnabled: boolean; equipmentTabEnabled: boolean; propertyFilterEnabled: boolean; propertyEquipmentCostsEnabled: boolean }
 
-const FEATURE_NAMES = { healthEnabled: "Health", roomsEnabled: "Rooms", equipmentTabEnabled: "Equipment tab", propertyFilterEnabled: "Property filter" } as const
+const FEATURE_NAMES = { healthEnabled: "Health", roomsEnabled: "Rooms", equipmentTabEnabled: "Equipment tab", propertyFilterEnabled: "Property filter", propertyEquipmentCostsEnabled: "Equipment in property costs" } as const
 
 export function FeatureSettings({ initial }: { initial: Values }) {
   const [values, setValues] = useState(initial)
@@ -27,7 +27,7 @@ export function FeatureSettings({ initial }: { initial: Values }) {
         return
       }
       // One switch changes per save: say which, and which way.
-      const changed = (["healthEnabled", "roomsEnabled", "equipmentTabEnabled", "propertyFilterEnabled"] as const).find((k) => next[k] !== previous[k])
+      const changed = (["healthEnabled", "roomsEnabled", "equipmentTabEnabled", "propertyFilterEnabled", "propertyEquipmentCostsEnabled"] as const).find((k) => next[k] !== previous[k])
       if (changed) toast.success(`${FEATURE_NAMES[changed]} turned ${next[changed] ? "on" : "off"}.`)
     })
   }
@@ -36,6 +36,7 @@ export function FeatureSettings({ initial }: { initial: Values }) {
   const roomsOn = values.roomsEnabled
   const equipmentTabOn = values.equipmentTabEnabled
   const propertyFilterOn = values.propertyFilterEnabled
+  const equipmentCostsOn = values.propertyEquipmentCostsEnabled
 
   return (
     <div className="space-y-6">
@@ -115,6 +116,32 @@ export function FeatureSettings({ initial }: { initial: Values }) {
         <p className="ml-6 text-xs text-muted-foreground">
           Turned off, the Equipment tab disappears from properties and from the room window. Equipment itself is
           untouched and still reachable from the Equipment page.
+        </p>
+      </CardContent>
+    </Card>
+
+    <Card className="py-5">
+      <CardHeader className="px-5">
+        <CardTitle className="flex items-center gap-2">
+          Equipment in property costs
+          {equipmentCostsOn ? <Badge variant="secondary">On</Badge> : <Badge variant="outline">Off</Badge>}
+        </CardTitle>
+        <CardDescription>What a property&apos;s Cost panel adds up.</CardDescription>
+      </CardHeader>
+      <CardContent className="px-5 space-y-2">
+        <Label help="features.property-equipment-costs" className="leading-normal">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={equipmentCostsOn}
+            disabled={pending}
+            onChange={(e) => save({ ...values, propertyEquipmentCostsEnabled: e.target.checked })}
+          />
+          Include equipment service costs in a property&apos;s total
+        </Label>
+        <p className="ml-6 text-xs text-muted-foreground">
+          On, the property&apos;s Cost panel counts service costs of its equipment as well as records logged on the
+          property. Turned off, only the property&apos;s own records count. Nothing is deleted.
         </p>
       </CardContent>
     </Card>
