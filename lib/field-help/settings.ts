@@ -140,12 +140,12 @@ export const SETTINGS_HELP: FieldHelpMap = {
   },
   "repeat.mode": {
     title: "Repeat reminders",
-    what: "How often you are reminded about the same due item. A new due date always starts fresh.",
-    use: "This applies to the bell, email and push. Checks run on the schedule an admin sets.",
+    what: "How often you are reminded about the same due item. Each check decides whether to remind you again. A new due date starts fresh: completing it, changing its date or a snooze ending.",
+    use: "Applies to the bell, email and push. Opening or reading a reminder changes nothing. To stop one, dismiss it, or complete or snooze a maintenance reminder. Email follows your email setting.",
     values: [
-      { label: "Coming up, and on the due date", effect: "Two reminders per item: a heads-up when it enters its warning window, then one on the due date." },
-      { label: "Only once", effect: "One reminder per item, then nothing until it has a new due date." },
-      { label: "Every check until dismissed", effect: "A read item comes back on every check until you dismiss it. Very noisy unless checks are a day or more apart." },
+      { label: "Coming up, and on the due date", effect: "A heads-up when it enters its warning window, then one on the due date. Dismissing the first doesn't cancel the second." },
+      { label: "Only once", effect: "One reminder per item, none on the due date, until it gets a new due date." },
+      { label: "Every check until dismissed", effect: "Sent again every check, even once seen, until you dismiss, complete or snooze it. Very noisy unless checks are a day or more apart." },
     ],
   },
 
@@ -154,6 +154,11 @@ export const SETTINGS_HELP: FieldHelpMap = {
     title: "Check every",
     what: "How many minutes pass between checks for due items. It sets when reminders are created, emailed and pushed.",
     use: "0 turns checks off. The lowest is 5. Blank uses NOTIFY_INTERVAL_MINUTES, or 360 (6 hours). People on Every check until dismissed get reminded on every check.",
+  },
+  "notify.debug": {
+    title: "Debug logs",
+    what: "Adds a line to the server log after every check that sends nothing, saying what was waiting and why.",
+    use: "Shows how many items are open in the bell, whether push and email are on, and how many items await each. Off by default: it is one line per check.",
   },
   "push.type": {
     title: "Service",

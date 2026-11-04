@@ -7,6 +7,7 @@ export const NOTIFICATION_SETTINGS_ID = "singleton"
 
 export type NotificationConfig = {
   interval: { minutes: number; source: IntervalSource }
+  debug: boolean
   push: {
     enabled: boolean
     type: PushType
@@ -30,6 +31,7 @@ export async function loadNotificationConfig(): Promise<NotificationConfig> {
 
   return {
     interval: effectiveInterval(row?.intervalMinutes, process.env.NOTIFY_INTERVAL_MINUTES),
+    debug: row?.debugLogging ?? false,
     push: {
       enabled: row?.pushEnabled ?? false,
       type,

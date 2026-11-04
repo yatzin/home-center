@@ -327,7 +327,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     model: "notification", label: "Notification", plural: "notifications",
     description: "The signed-in user's own reminders and alerts.",
     nameField: "title", searchFields: ["title", "message"], keys: [],
-    fields: { type: enumOf(NotificationType), title: s, message: s, isRead: bool, createdAt: date },
+    fields: { type: enumOf(NotificationType), title: s, message: s, createdAt: date },
     relations: {},
     defaultSort: { field: "createdAt", dir: "desc" },
     href: () => "/notifications",

@@ -48,6 +48,18 @@ export async function updateNotificationInterval(data: { intervalMinutes: string
   return { success: true }
 }
 
+export async function updateNotificationDebug(enabled: boolean) {
+  await requireAdmin()
+  if (typeof enabled !== "boolean") return { error: "Invalid input." }
+  await prisma.notificationSettings.upsert({
+    where: { id: NOTIFICATION_SETTINGS_ID },
+    create: { id: NOTIFICATION_SETTINGS_ID, debugLogging: enabled },
+    update: { debugLogging: enabled },
+  })
+  revalidatePath("/settings")
+  return { success: true }
+}
+
 const pushSchema = z.object({
   enabled: z.boolean(),
   type: z.string(),

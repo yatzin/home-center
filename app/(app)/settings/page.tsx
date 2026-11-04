@@ -150,6 +150,7 @@ export default async function SettingsPage({
                     fallbackMinutes={effectiveInterval(null, process.env.NOTIFY_INTERVAL_MINUTES).minutes}
                     source={notify[0].interval.source}
                     untilDismissedPeople={notify[2]}
+                    debugLogging={notify[0].debug}
                   />
                   <PushSettings
                     // The URL and token are never sent, only whether they're stored.

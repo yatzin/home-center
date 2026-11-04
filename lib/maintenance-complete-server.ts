@@ -30,6 +30,6 @@ export function scheduleCompletionWrites(schedule: MaintenanceSchedule, complete
 export function dismissScheduleNotifications(scheduleId: string, now: Date = new Date()) {
   return prisma.notification.updateMany({
     where: { relatedEntityType: "MaintenanceSchedule", relatedEntityId: scheduleId, dismissedAt: null },
-    data: { isRead: true, dismissedAt: now },
+    data: { dismissedAt: now },
   })
 }

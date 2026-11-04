@@ -155,7 +155,6 @@ A containerized web application for households to track houses and vehicles: ser
 | type | enum | `MAINTENANCE_DUE`, `WARRANTY_EXPIRING`, `CUSTOM` |
 | title | string | |
 | message | string | |
-| isRead | boolean | |
 | relatedEntityId | string? | |
 | relatedEntityType | string? | |
 | createdAt | DateTime | |

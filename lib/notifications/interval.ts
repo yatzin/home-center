@@ -52,12 +52,12 @@ export function checksPerDay(minutes: number) {
 }
 
 /**
- * Warning for "Every check until dismissed". That mode raises a read item again
+ * Warning for "Every check until dismissed". That mode raises an open item again
  * on every check, so the interval decides how loud it is. Null only when
  * checks are off or run less than once a day.
  */
 export function untilDismissedWarning(minutes: number): string | null {
   if (minutes === 0 || minutes > DAY_MINUTES) return null
   const per = checksPerDay(minutes)!
-  return `You will likely be spammed. Checks run every ${describeInterval(minutes)}, so each item you've read comes back up to ${per} ${per === 1 ? "time" : "times"} a day until you dismiss it, in the bell, by email and by push.`
+  return `You will likely be spammed. Checks run every ${describeInterval(minutes)}, so each item you haven't dismissed comes back up to ${per} ${per === 1 ? "time" : "times"} a day until you dismiss it, in the bell, by email and by push.`
 }

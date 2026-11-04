@@ -18,6 +18,6 @@ export async function raiseBackupAlert(cycleKey: string, title: string, message:
 export async function resolveBackupAlerts(): Promise<void> {
   await prisma.notification.updateMany({
     where: { relatedEntityType: BACKUP_ENTITY, dismissedAt: null },
-    data: { isRead: true, dismissedAt: new Date() },
+    data: { dismissedAt: new Date() },
   })
 }

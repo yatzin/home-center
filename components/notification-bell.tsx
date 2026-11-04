@@ -21,15 +21,13 @@ import { CompleteDialog } from "@/components/maintenance/complete-dialog"
 import { SkipItem, useReminderActions } from "@/components/maintenance/snooze-menu"
 import { SNOOZE_OPTIONS } from "@/lib/maintenance-due"
 import type { NotificationReminder } from "@/lib/notification-reminders"
-import { dismissNotification, markAllNotificationsRead, markNotificationRead } from "@/lib/actions/notifications"
-import { cn } from "@/lib/utils"
+import { dismissNotification } from "@/lib/actions/notifications"
 
 type NotificationItem = {
   id: string
   type: string
   title: string
   message: string
-  isRead: boolean
   createdAt: Date
   href: string
   /** Set on a maintenance notification whose reminder can be completed or snoozed from here. */
@@ -62,15 +60,7 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
     setItems(notifications)
   }
 
-  const unreadCount = items.filter((n) => !n.isRead).length
-
-  function markRead(id: string) {
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
-    startTransition(async () => {
-      await markNotificationRead(id)
-      router.refresh()
-    })
-  }
+  const count = items.length
 
   function dismiss(id: string) {
     setItems((prev) => prev.filter((n) => n.id !== id))
@@ -80,22 +70,9 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
     })
   }
 
-  function dismissAll() {
-    setItems((prev) => prev.map((n) => ({ ...n, isRead: true })))
-    startTransition(async () => {
-      await markAllNotificationsRead()
-      router.refresh()
-    })
-  }
-
   // Completing or snoozing dismisses the notification on the server too.
   function handled(id: string) {
     setItems((prev) => prev.filter((n) => n.id !== id))
-  }
-
-  function openItem(n: NotificationItem) {
-    setOpen(false)
-    if (!n.isRead) markRead(n.id)
   }
 
   return (
@@ -103,26 +80,21 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground"
-          aria-label={`${unreadCount} unread notifications`}
+          aria-label={`${count} notifications`}
         >
           <Bell className="h-4 w-4 transition-transform duration-150 group-hover:scale-110" />
-          {unreadCount > 0 && (
+          {count > 0 && (
             <Badge
               variant="destructive"
               className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] font-semibold leading-none flex items-center justify-center ring-2 ring-card"
             >
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {count > 99 ? "99+" : count}
             </Badge>
           )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-sm font-semibold">Notifications</span>
-            {unreadCount > 0 && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={dismissAll}>
-                Mark all read
-              </Button>
-            )}
           </div>
           <DropdownMenuSeparator className="m-0" />
           <div className="max-h-96 overflow-y-auto p-1">
@@ -137,12 +109,12 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
                 return (
                   <div
                     key={n.id}
-                    className={cn("flex items-start gap-2.5 rounded-md p-2.5 text-sm hover:bg-muted/60", !n.isRead && "bg-primary/5")}
+                    className="flex items-start gap-2.5 rounded-md p-2.5 text-sm hover:bg-muted/60"
                   >
                     <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
-                      <Link href={n.href} onClick={() => openItem(n)} className="block">
-                        <p className={cn("font-medium leading-snug", !n.isRead && "text-foreground")}>{n.title}</p>
+                      <Link href={n.href} onClick={() => setOpen(false)} className="block">
+                        <p className="font-medium leading-snug">{n.title}</p>
                         <p className="text-muted-foreground text-xs mt-0.5 leading-snug">{n.message}</p>
                         <p className="text-muted-foreground/70 text-[11px] mt-1">{fmt.dateTime(n.createdAt)}</p>
                       </Link>
@@ -154,7 +126,7 @@ export function NotificationBell({ notifications }: { notifications: Notificatio
                         onComplete={() => { setOpen(false); setCompleting(n.reminder!) }}
                         onHandled={() => handled(n.id)}
                       />
-                    ) : !n.isRead && (
+                    ) : (
                       <Button
                         variant="ghost"
                         size="sm"
