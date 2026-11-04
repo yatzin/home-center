@@ -1,5 +1,7 @@
 import { strToU8, zipSync } from "fflate"
-import { createCanvas } from "@napi-rs/canvas"
+import { createRequire } from "node:module"
+import path from "node:path"
+import { createCanvas, GlobalFonts } from "@napi-rs/canvas"
 
 // Tiny but valid files, built in memory so no binaries are committed. Test
 // helpers only — imported from *.test.ts, never from app code.
@@ -89,6 +91,23 @@ export function textPdf(pages: string[]): Buffer {
 }
 
 /** Black text on white, as PNG or JPEG. */
+// The OCR fixtures draw text with canvas, which uses whatever fonts the machine has. A bare CI
+// runner may have none that covers letters (digits only came back), so use a font that ships
+// inside the installed Next package and fall back to the system one if it can't be found.
+const OCR_FONT = "HCTestSans"
+let ocrFontReady: boolean | undefined
+function ocrFontFamily(): string {
+  if (ocrFontReady === undefined) {
+    try {
+      const nextDir = path.dirname(createRequire(import.meta.url).resolve("next/package.json"))
+      ocrFontReady = !!GlobalFonts.registerFromPath(path.join(nextDir, "dist/compiled/@vercel/og/Geist-Regular.ttf"), OCR_FONT)
+    } catch {
+      ocrFontReady = false
+    }
+  }
+  return ocrFontReady ? OCR_FONT : "sans-serif"
+}
+
 export function textImage(text: string, type: "image/png" | "image/jpeg" = "image/png"): { data: Buffer; width: number; height: number } {
   const width = 900
   const height = 200
@@ -97,7 +116,7 @@ export function textImage(text: string, type: "image/png" | "image/jpeg" = "imag
   g.fillStyle = "white"
   g.fillRect(0, 0, width, height)
   g.fillStyle = "black"
-  g.font = "40px sans-serif"
+  g.font = `56px ${ocrFontFamily()}`
   g.fillText(text, 20, 110)
   return { data: type === "image/png" ? canvas.toBuffer("image/png") : canvas.toBuffer("image/jpeg"), width, height }
 }
