@@ -14,7 +14,7 @@ export const restorePaths = (): RestorePaths => ({
   dbPath: dbPathFromUrl(process.env.DATABASE_URL), uploadDir: uploadDir(), restoreDir: restoreDir(), searchIndexPath: searchIndexFile(),
 })
 
-type CarriedSecrets = { mailPasswordEnc: string | null; llmApiKeyEnc: string | null; pushUrlEnc?: string | null; pushTokenEnc?: string | null }
+type CarriedSecrets = { mailPasswordEnc: string | null; llmApiKeyEnc: string | null; pushUrlEnc?: string | null; pushTokenEnc?: string | null; paperlessTokenEnc?: string | null }
 
 /** Moves carried secrets (already encrypted under this server's key) into the settings rows, then deletes the file. Never logs them. */
 async function reWrapSecrets(dir: string): Promise<void> {
@@ -25,7 +25,7 @@ async function reWrapSecrets(dir: string): Promise<void> {
   try {
     secrets = JSON.parse(text) as CarriedSecrets
   } catch {
-    console.error("[restore] the carried secrets file is unreadable; discarding it. Re-enter the mail password, AI key and push URL in Settings.")
+    console.error("[restore] the carried secrets file is unreadable; discarding it. Re-enter the mail password, AI key, push URL and Paperless token in Settings.")
   }
   // Upserts are repeatable and the file goes only after they succeed, so a crash in between just redoes them.
   if (secrets?.mailPasswordEnc) await prisma.mailSettings.upsert({ where: { id: SETTINGS_ID }, create: { id: SETTINGS_ID, passwordEnc: secrets.mailPasswordEnc }, update: { passwordEnc: secrets.mailPasswordEnc } })
@@ -37,6 +37,7 @@ async function reWrapSecrets(dir: string): Promise<void> {
     }
     await prisma.notificationSettings.upsert({ where: { id: "singleton" }, create: { id: "singleton", ...push }, update: push })
   }
+  if (secrets?.paperlessTokenEnc) await prisma.paperlessSettings.upsert({ where: { id: "singleton" }, create: { id: "singleton", apiTokenEnc: secrets.paperlessTokenEnc }, update: { apiTokenEnc: secrets.paperlessTokenEnc } })
   await rm(file, { force: true })
 }
 

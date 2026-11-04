@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -10,6 +11,8 @@ import { deleteAttachment, renameAttachment } from "@/lib/actions/attachments"
 import { uploadFile } from "@/lib/upload-client"
 import { useDropZone } from "@/components/drop/drop-provider"
 import { cn } from "@/lib/utils"
+import { PaperlessPicker } from "@/components/paperless/paperless-picker"
+import { PaperlessBadge } from "@/components/paperless/paperless-badge"
 import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
 
 interface Props {
@@ -34,7 +37,14 @@ function formatBytes(bytes: number) {
 }
 
 export function AttachmentList({ recordId, recordType, attachments: initial, label = "Attachments", emptyText }: Props) {
+  const router = useRouter()
   const [attachments, setAttachments] = useState(initial)
+  // A refresh (after a Paperless import) hands down a new list: take it.
+  const [seen, setSeen] = useState(initial)
+  if (seen !== initial) {
+    setSeen(initial)
+    setAttachments(initial)
+  }
   const [uploading, setUploading] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -104,6 +114,16 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
           <Paperclip className="h-3.5 w-3.5" />
           {label} {attachments.length > 0 && <Badge variant="secondary" className="h-4 px-1.5 text-xs">{attachments.length}</Badge>}
         </div>
+        <div className="flex items-center gap-2">
+        <PaperlessPicker
+          recordType={recordType}
+          recordId={recordId}
+          disabled={uploading}
+          onImported={() => {
+            toast.success("Imported from Paperless.")
+            router.refresh()
+          }}
+        />
         <label>
           <input
             ref={inputRef}
@@ -124,6 +144,7 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
             {uploading ? "Uploading…" : "Attach file"}
           </Button>
         </label>
+        </div>
       </div>
 
       {attachments.length === 0 && emptyText && <p className="text-sm text-muted-foreground">{emptyText}</p>}
@@ -168,6 +189,7 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
                     >
                       {a.originalName}
                     </a>
+                    <PaperlessBadge attachment={a} />
                     <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                     <button
                       type="button"

@@ -45,7 +45,7 @@ function Tile({ spec, item, className, text }: { spec: AssetCardSpec; item: Asse
     return (
       // eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route
       <img
-        src={assetImageSrc(spec.assetType, item.id, item.imageFilename)}
+        src={assetImageSrc(spec.assetType, item.id, item.imageFilename, "thumb")}
         alt={item.name}
         loading="lazy"
         className={cn("object-cover", className)}

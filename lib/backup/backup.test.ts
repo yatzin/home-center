@@ -69,7 +69,7 @@ describe("protected backups", () => {
     const id = await generateX25519Identity()
     const recipient = await identityToRecipient(id)
     const fingerprint = await fingerprintOf(recipient)
-    const out = await createBackup({ ...s, appVersion: "t", protection: { mode: "key", recipient, fingerprint }, secrets: { mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk" } })
+    const out = await createBackup({ ...s, appVersion: "t", protection: { mode: "key", recipient, fingerprint }, secrets: { mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk", paperlessToken: "pl-tok" } })
     expect(out.file).toMatch(/\.hcbackup\.age$/)
     expect(out.sidecar).toMatchObject({ protection: "key", keyFingerprint: fingerprint })
     expect(JSON.stringify(out.sidecar)).not.toContain("smtp-pw")
@@ -79,7 +79,7 @@ describe("protected backups", () => {
     const v = await verifyArchive(plainPath, { workDir: s.workDir })
     expect(v).toMatchObject({ ok: true, manifest: { hasSecrets: true, protection: "key" } })
     const r = await ArchiveReader.open(plainPath)
-    expect(JSON.parse(await r.readText("secrets.json"))).toEqual({ mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk" })
+    expect(JSON.parse(await r.readText("secrets.json"))).toEqual({ mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk", paperlessToken: "pl-tok" })
     await r.close()
     expect(await readdir(s.workDir)).toEqual([]) // no plaintext left behind
   })

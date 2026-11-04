@@ -26,7 +26,11 @@ const nextConfig: NextConfig = {
     "@napi-rs/canvas",
     "@huggingface/transformers",
     "onnxruntime-node",
+    "sharp",
   ],
+  // Dev mode logs server action arguments, which would put the Paperless token
+  // typed into the settings form in the console.
+  logging: { serverFunctions: false },
   experimental: {
     globalNotFound: true,
   },

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { createIndexer, type Indexer } from "./indexer"
 import { openSearchIndex, searchIndexPath, type SearchIndex } from "./index-db"
-import { prismaIndexerStore } from "./store"
+import { PAPERLESS_TEXT, prismaIndexerStore } from "./store"
 import { loadDocumentSettings } from "./settings"
 import { formatIndexStats, type StatusCounts } from "./stats"
 import { MAX_ATTEMPTS, OCR_EXTENSIONS } from "./limits"
@@ -154,7 +154,8 @@ export async function retryFailed(): Promise<void> {
  * existing text stays readable and searchable until each file is re-read.
  */
 export async function reextractAll(): Promise<void> {
-  await prisma.attachmentText.updateMany({ data: { extractorVersion: 0, attempts: 0 } })
+  // Paperless OCR text stays; only the next Paperless check replaces it.
+  await prisma.attachmentText.updateMany({ where: { NOT: PAPERLESS_TEXT }, data: { extractorVersion: 0, attempts: 0 } })
   void reconcileNow("re-extract all")
 }
 
@@ -172,6 +173,8 @@ export async function clearAllText(): Promise<void> {
       error: null, attempts: 0, extractorVersion: 0, extractedAt: null,
     },
   })
+  // A cleared hash makes the next Paperless check copy Paperless's text back in.
+  await prisma.attachment.updateMany({ where: { source: "PAPERLESS" }, data: { paperlessTextHash: null } })
   await (await searchIndex()).clear()
 }
 

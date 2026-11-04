@@ -40,7 +40,7 @@ async function world(protection: "none" | "key" | "password" = "none") {
   }
   const backup = await createBackup({
     dbPath: srcDb, uploadDir: path.join(src, "uploads"), folder: path.join(src, "backups"), workDir: path.join(src, "work"),
-    appVersion: "t", protection: cfg, secrets: { mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk" },
+    appVersion: "t", protection: cfg, secrets: { mailPassword: "smtp-pw", llmApiKey: null, pushUrl: "https://discord.example/hook", pushToken: "tk", paperlessToken: "pl-tok" },
   })
 
   const dst = await tempDir("hc-dst-")
@@ -105,6 +105,7 @@ describe("restore", () => {
       expect(decrypt(enc.mailPasswordEnc)).toBe("smtp-pw")
       expect(decrypt(enc.pushUrlEnc)).toBe("https://discord.example/hook")
       expect(decrypt(enc.pushTokenEnc)).toBe("tk")
+      expect(decrypt(enc.paperlessTokenEnc)).toBe("pl-tok")
     }
   })
 
@@ -160,6 +161,22 @@ describe("restore", () => {
     await createMigratedDb(db)
     const c = openDb(db)
     await c.execute({ sql: `INSERT INTO "MailSettings" (id, passwordEnc, updatedAt) VALUES ('singleton', ?, CURRENT_TIMESTAMP)`, args: [encrypt("pw")] })
+    c.close()
+    await releaseDbHandles()
+    const b = await createBackup({ dbPath: db, uploadDir: path.join(src, "u"), folder: path.join(src, "b"), workDir: path.join(src, "w"), appVersion: "t", protection: { mode: "none" } })
+    const { paths } = await world()
+    expect(await dryRun({ archivePath: b.path, secret: {}, paths, known: await appMigrations() })).toMatchObject({ ok: true, secrets: "same-secret" })
+    process.env.AUTH_SECRET = "a-different-secret"
+    expect(await dryRun({ archivePath: b.path, secret: {}, paths, known: await appMigrations() })).toMatchObject({ ok: true, secrets: "re-enter" })
+    process.env.AUTH_SECRET = "test-secret-for-restore-tests"
+  })
+
+  it("counts a Paperless token when reporting secrets status", async () => {
+    const src = await tempDir()
+    const db = path.join(src, "homecenter.db")
+    await createMigratedDb(db)
+    const c = openDb(db)
+    await c.execute({ sql: `INSERT INTO "PaperlessSettings" (id, apiTokenEnc, updatedAt) VALUES ('singleton', ?, CURRENT_TIMESTAMP)`, args: [encrypt("pl-tok")] })
     c.close()
     await releaseDbHandles()
     const b = await createBackup({ dbPath: db, uploadDir: path.join(src, "u"), folder: path.join(src, "b"), workDir: path.join(src, "w"), appVersion: "t", protection: { mode: "none" } })
