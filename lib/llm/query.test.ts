@@ -181,8 +181,8 @@ describe("compileWhere", () => {
   })
 
   it("never lets the model widen notification scope", () => {
-    expect(compileWhere("notification", [{ field: "isRead", op: "eq", value: "false" }], ctx).where).toEqual({
-      AND: [{ isRead: { equals: false } }, { userId: "u1" }],
+    expect(compileWhere("notification", [{ field: "type", op: "eq", value: "MAINTENANCE_DUE" }], ctx).where).toEqual({
+      AND: [{ type: { equals: "MAINTENANCE_DUE" } }, { userId: "u1" }],
     })
     expect(() => compileWhere("notification", [{ field: "userId", op: "eq", value: "u2" }], ctx)).toThrow(ToolInputError)
     expect(compileWhere("notification", [], ctx).where).toEqual({ AND: [{ userId: "u1" }] })
