@@ -94,6 +94,13 @@ export function newServiceRecordWrites({ row, schedule }: PreparedServiceRecord,
   return [
     prisma.serviceRecord.create({ data: { ...row, ...(id ? { id } : {}) }, select: { id: true } }),
     ...(schedule ? scheduleCompletionWrites(schedule, row.date, row.mileageAtService) : []),
+    // A completed reminder already raises the odometer above; otherwise do it here. Only ever raises it.
+    ...(!schedule && row.assetType === "VEHICLE" && row.mileageAtService != null
+      ? [prisma.vehicle.updateMany({
+          where: { id: row.assetId, OR: [{ currentMileage: null }, { currentMileage: { lt: row.mileageAtService } }] },
+          data: { currentMileage: row.mileageAtService },
+        })]
+      : []),
   ] as const
 }
 

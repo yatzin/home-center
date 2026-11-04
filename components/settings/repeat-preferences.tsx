@@ -31,7 +31,7 @@ export function RepeatPreferences({ repeat, intervalMinutes }: { repeat: Notific
     })
   }
 
-  const hint = REPEAT_OPTIONS.find((o) => o.value === value)?.hint
+  const applies = REPEAT_OPTIONS.find((o) => o.value === value)?.applies
   const spam = value === "UNTIL_DISMISSED" ? untilDismissedWarning(intervalMinutes) : null
 
   return (
@@ -42,8 +42,9 @@ export function RepeatPreferences({ repeat, intervalMinutes }: { repeat: Notific
           <FieldHelp id="repeat.mode" />
         </CardTitle>
         <CardDescription>
-          How often you&apos;re reminded about the same due item, in the bell and by email. A new due
-          date always starts afresh.
+          How often you&apos;re reminded about the same due item, in the bell, by email and by push. A new due
+          date always starts afresh. Reading a reminder changes nothing: dismiss it, or complete or snooze a
+          maintenance reminder, to stop it.
         </CardDescription>
       </CardHeader>
       <CardContent className="px-5">
@@ -61,22 +62,20 @@ export function RepeatPreferences({ repeat, intervalMinutes }: { repeat: Notific
               ))}
             </SelectContent>
           </Select>
-          <span className="text-sm text-muted-foreground">{hint}</span>
+        </div>
+        <div className="mt-3 text-sm">
+          <p className="font-medium">Applies as:</p>
+          <p className="mt-0.5 text-muted-foreground">{applies}</p>
         </div>
         {spam && (
           <div className="mt-3 space-y-2">
             <Warning>{spam}</Warning>
             <Warning>
-              Reading an item doesn&apos;t stop it. Only dismissing it does. If you use email set to &quot;As soon as
-              possible&quot;, every one of these is an email. Most people should pick one of the other two.
+              What to expect: each open item keeps arriving until you act on it. Email follows your email setting, so
+              with &quot;As soon as possible&quot; every repeat is its own email, and push sends every repeat to the
+              shared channel. Most people should pick one of the other two.
             </Warning>
           </div>
-        )}
-        {!spam && value !== "UNTIL_DISMISSED" && (
-          <p className="mt-3 text-xs text-muted-foreground">
-            &quot;Every check until dismissed&quot; repeats a reminder on every check, which is very noisy unless checks are
-            less than once a day apart.
-          </p>
         )}
       </CardContent>
     </Card>

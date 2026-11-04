@@ -10,10 +10,28 @@ export type NotificationRepeat = "ONCE" | "REACHED_AND_DUE" | "UNTIL_DISMISSED"
 /** REACHED: inside the warning window. DUE: on or after the due date. */
 export type Stage = "REACHED" | "DUE"
 
-export const REPEAT_OPTIONS: { value: NotificationRepeat; label: string; hint: string }[] = [
-  { value: "REACHED_AND_DUE", label: "When it's coming up, and on the due date", hint: "Two reminders per item: a heads-up, then one on the day." },
-  { value: "ONCE", label: "Only once", hint: "A single reminder per item." },
-  { value: "UNTIL_DISMISSED", label: "Every check until dismissed", hint: "Comes back on every check after you read it, until you dismiss it. Very noisy: use only if checks run less than once a day." },
+// What each option does, shown under the dropdown as "Applies as:". The first
+// notification comes when an item enters its warning window: a maintenance
+// reminder's own "Remind (days before)", or a fixed window for the rest.
+export const REPEAT_OPTIONS: { value: NotificationRepeat; label: string; applies: string }[] = [
+  {
+    value: "REACHED_AND_DUE",
+    label: "When it's coming up, and on the due date",
+    applies:
+      "Each due item sends 2 notifications. The first comes when it's coming up: a maintenance reminder uses its own \"Remind (days before)\" setting, and other items use fixed windows (7 to 60 days). The second comes on the day it's due. Nothing in between.",
+  },
+  {
+    value: "ONCE",
+    label: "Only once",
+    applies:
+      "Each due item sends 1 notification, the first time a check finds it due: normally when it's coming up (a maintenance reminder uses its own \"Remind (days before)\" setting, and other items use fixed windows of 7 to 60 days), or on the due date if it wasn't noticed earlier. Nothing more until it gets a new due date.",
+  },
+  {
+    value: "UNTIL_DISMISSED",
+    label: "Every check until dismissed",
+    applies:
+      "Each due item sends the same notification again on every check, starting when it's coming up. It stops when you dismiss it, or when you complete or snooze a maintenance reminder.",
+  },
 ]
 
 /** An existing notification for the same person, type and item. */
@@ -21,7 +39,6 @@ export type Prior = {
   id: string
   cycleKey: string | null
   stage: string | null
-  isRead: boolean
   dismissedAt: Date | null
   createdAt: Date
 }
@@ -33,8 +50,8 @@ const SKIP: Decision = { action: "skip" }
 
 export function decide(mode: NotificationRepeat, stage: Stage, cycleKey: string, prior: Prior[]): Decision {
   // Rows written before cycles were tracked can't be matched to a due date.
-  // Keep the old rule for them: an unread one means "already told".
-  if (prior.some((p) => p.cycleKey === null && !p.isRead)) return SKIP
+  // Keep the old rule for them: one that is still open means "already told".
+  if (prior.some((p) => p.cycleKey === null && !p.dismissedAt)) return SKIP
 
   const current = prior.filter((p) => p.cycleKey === cycleKey)
   if (current.length === 0) return CREATE
@@ -47,7 +64,7 @@ export function decide(mode: NotificationRepeat, stage: Stage, cycleKey: string,
     case "UNTIL_DISMISSED": {
       if (current.some((p) => p.dismissedAt)) return SKIP
       const latest = current.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
-      return latest.isRead ? { action: "resurface", id: latest.id } : SKIP
+      return { action: "resurface", id: latest.id }
     }
   }
 }

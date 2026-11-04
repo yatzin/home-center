@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FieldHelp } from "@/components/ui/field-help"
-import { updateNotificationInterval } from "@/lib/actions/notification-settings"
+import { updateNotificationDebug, updateNotificationInterval } from "@/lib/actions/notification-settings"
 import {
   describeInterval,
   intervalWarning,
@@ -33,6 +33,7 @@ export function NotificationSchedule({
   fallbackMinutes,
   source,
   untilDismissedPeople,
+  debugLogging,
 }: {
   /** What is saved in Settings; blank when it falls back to the environment or default. */
   savedMinutes: string
@@ -42,9 +43,11 @@ export function NotificationSchedule({
   source: IntervalSource
   /** How many people use "Every check until dismissed". */
   untilDismissedPeople: number
+  debugLogging: boolean
 }) {
   const [value, setValue] = useState(savedMinutes)
   const [pending, startTransition] = useTransition()
+  const [debug, setDebug] = useState(debugLogging)
 
   // What would be in effect if saved now.
   const typed = value.trim() === "" ? null : Number(value)
@@ -58,6 +61,17 @@ export function NotificationSchedule({
       const result = await updateNotificationInterval({ intervalMinutes: value })
       if (result?.error) toast.error(result.error)
       else toast.success("Check interval saved.")
+    })
+  }
+
+  function toggleDebug(next: boolean) {
+    setDebug(next)
+    startTransition(async () => {
+      const result = await updateNotificationDebug(next)
+      if (result?.error) {
+        setDebug(!next)
+        toast.error(result.error)
+      } else toast.success(next ? "Debug logs on." : "Debug logs off.")
     })
   }
 
@@ -102,6 +116,11 @@ export function NotificationSchedule({
             dismissed&quot;. {repeatWarning}
           </Warning>
         )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={debug} disabled={pending} onChange={(e) => toggleDebug(e.target.checked)} />
+          Debug logs
+          <FieldHelp id="notify.debug" />
+        </label>
       </CardContent>
     </Card>
   )

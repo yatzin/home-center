@@ -17,6 +17,11 @@ export const SYSTEM_HELP: FieldHelpMap = {
     what: "Shows a property's equipment, and each room's, in a tab where you can list and edit it in place.",
     use: "Off removes the tab from properties and from the room window. The equipment itself stays and is still on the Equipment page.",
   },
+  "features.property-equipment-costs": {
+    title: "Include equipment in a property's service costs",
+    what: "A property's Cost panel adds up the service costs of the equipment that belongs to it, in any room, along with the records logged on the property itself.",
+    use: "Off counts only the property's own records. The equipment's own page always shows its own costs. Nothing is deleted.",
+  },
   "features.property-filter": {
     title: "Show a property filter in the top bar",
     what: "Adds a dropdown next to search for picking one property. Each device remembers its own choice.",

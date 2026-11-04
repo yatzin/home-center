@@ -243,7 +243,7 @@ export async function checkAndNotify(): Promise<number> {
   // their own history whether to create, bring one back, or stay quiet.
   const existing = await prisma.notification.findMany({
     where: { relatedEntityId: { in: [...new Set(wanted.map((w) => w.relatedEntityId!))] } },
-    select: { id: true, userId: true, type: true, relatedEntityId: true, cycleKey: true, stage: true, isRead: true, dismissedAt: true, createdAt: true },
+    select: { id: true, userId: true, type: true, relatedEntityId: true, cycleKey: true, stage: true, dismissedAt: true, createdAt: true },
   })
   const history = new Map<string, typeof existing>()
   for (const e of existing) {
@@ -266,10 +266,10 @@ export async function checkAndNotify(): Promise<number> {
       await notificationService.send(w)
       fresh++
     } else if (decision.action === "resurface") {
-      // Back to unread with today's wording, and pending email and push again.
+      // Today's wording, new to the top of the bell, and pending email and push again.
       await prisma.notification.update({
         where: { id: decision.id },
-        data: { title: w.title, message: w.message, stage: w.stage, isRead: false, emailedAt: null, pushedAt: null, createdAt: now },
+        data: { title: w.title, message: w.message, stage: w.stage, emailedAt: null, pushedAt: null, createdAt: now },
       })
       fresh++
     }

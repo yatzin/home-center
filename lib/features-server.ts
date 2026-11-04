@@ -15,7 +15,12 @@ export const loadPropertyFilterEnabled = cache(async (): Promise<boolean> => {
   return (await featureRow())?.propertyFilterEnabled ?? false
 })
 
-export const loadFeatures = cache(async (): Promise<Features> => {
+/** Whether a property's Cost panel counts its equipment's service costs (default on). Shares the row with loadFeatures. */
+export const loadPropertyEquipmentCostsEnabled = cache(async (): Promise<boolean> => {
+  return (await featureRow())?.propertyEquipmentCostsEnabled ?? true
+})
+
+export const loadFeatures =cache(async (): Promise<Features> => {
   const row = await featureRow()
   return {
     health: row?.healthEnabled ?? DEFAULT_FEATURES.health,

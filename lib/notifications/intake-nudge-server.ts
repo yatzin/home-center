@@ -49,8 +49,8 @@ export async function nudgeIntake(now: Date = new Date()): Promise<number> {
         created++
         break
       case "update":
-        // New wording only: read state and email status stay, so a changing
-        // count doesn't bring it back to unread or send another email.
+        // New wording only: email status stays, so a changing count doesn't
+        // send another email.
         await prisma.notification.update({
           where: { id: decision.id },
           data: { title: decision.title, message: decision.message, cycleKey: decision.cycleKey },
@@ -59,7 +59,7 @@ export async function nudgeIntake(now: Date = new Date()): Promise<number> {
       case "resolve":
         // Nothing left to file: it leaves the bell and the pending digest, the
         // same as a maintenance reminder that's been done.
-        await prisma.notification.update({ where: { id: decision.id }, data: { isRead: true, dismissedAt: now } })
+        await prisma.notification.update({ where: { id: decision.id }, data: { dismissedAt: now } })
         break
     }
   }

@@ -1,6 +1,7 @@
 import { TrendChart } from "@/components/charts/trend-chart"
 import { Meter } from "@/components/charts/meter"
 import { loadCostRecords, loadPlannedSchedules } from "@/lib/costs-server"
+import { loadPropertyEquipmentCostsEnabled } from "@/lib/features-server"
 import { prisma } from "@/lib/prisma"
 import { costPerYearOwned, nextDueMeter, warrantyMeter, type StatusMeter, type Tone } from "@/lib/asset-status"
 import {
@@ -37,12 +38,17 @@ export async function AssetCostPanel({
   ownedSince?: Date | null
   /// Vehicles only. Its presence is what turns on the cost-per-unit row.
   meterUnit?: MeterUnit
-  /// A property's equipment: their reminders count toward its planned figure. History stays the asset's own.
+  /// A property's equipment: their reminders count toward its planned figure, and (Settings → Features) their service costs toward its history.
   equipmentIds?: string[]
 }) {
   const fmt = await getFormat()
+  const withEquipment = !!equipmentIds?.length && (await loadPropertyEquipmentCostsEnabled())
   const [rows, plannedSchedules] = await Promise.all([
-    loadCostRecords({ assetId, assetType }),
+    loadCostRecords(
+      withEquipment
+        ? { assets: [{ assetType, assetId }, ...equipmentIds!.map((id) => ({ assetType: "EQUIPMENT" as const, assetId: id }))] }
+        : { assetId, assetType }
+    ),
     loadPlannedSchedules({
       assets: [{ assetType, assetId }, ...(equipmentIds ?? []).map((id) => ({ assetType: "EQUIPMENT" as const, assetId: id }))],
     }),
