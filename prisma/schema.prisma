@@ -119,6 +119,33 @@ enum InsuranceKind {
   PROPERTY_OTHER
 }
 
+/// Where an attachment's file came from.
+enum AttachmentSource {
+  LOCAL
+  /// Imported from Paperless-ngx.
+  PAPERLESS
+}
+
+/// State of an attachment's link back to its Paperless-ngx document.
+enum PaperlessLinkStatus {
+  OK
+  /// The document no longer exists in Paperless-ngx.
+  MISSING
+}
+
+/// Who may use the Paperless-ngx import.
+enum PaperlessAccess {
+  EVERYONE
+  ADMIN
+}
+
+/// How often the Paperless-ngx update check runs.
+enum PaperlessSchedule {
+  OFF
+  DAILY
+  WEEKLY
+}
+
 enum AttachmentRecordType {
   SERVICE
   WARRANTY
@@ -579,7 +606,7 @@ model ServiceRecord {
 
   /// Null once the author's account is deleted; the record stays.
   createdById String?
-  createdBy   User?  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   /// The room the work was done in, if any.
   roomId String?
@@ -665,7 +692,7 @@ model Attachment {
   uploadedAt   DateTime             @default(now())
 
   uploadedById String?
-  uploadedBy   User?  @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   serviceRecordId String?
   serviceRecord   ServiceRecord? @relation(fields: [serviceRecordId], references: [id], onDelete: Cascade)
@@ -710,6 +737,19 @@ model Attachment {
 
   referencedBySchedules MaintenanceSchedule[] @relation("ScheduleManual")
 
+  /// LOCAL for uploads, PAPERLESS for files imported from Paperless-ngx.
+  source              AttachmentSource     @default(LOCAL)
+  /// Paperless-ngx document id. Only set when source is PAPERLESS.
+  paperlessId         Int?
+  paperlessVersionId  Int?
+  paperlessChecksum   String?
+  /// Hash of the Paperless-ngx text last seen, to detect content changes.
+  paperlessTextHash   String?
+  paperlessLinkStatus PaperlessLinkStatus?
+  paperlessSyncedAt   DateTime?
+  paperlessUpdatedAt  DateTime?
+
+  @@index([paperlessId])
   @@index([roomId])
   @@index([assetType, assetId])
   @@index([inboxItemId])
@@ -858,22 +898,41 @@ model DocumentSettings {
   updatedAt       DateTime      @updatedAt
 }
 
+/// Single row (id is always "singleton"). No row = Paperless-ngx import off.
+model PaperlessSettings {
+  id               String            @id @default("singleton")
+  enabled          Boolean           @default(false)
+  baseUrl          String?
+  /// API token, encrypted at rest. Never returned to the client.
+  apiTokenEnc      String?
+  access           PaperlessAccess   @default(EVERYONE)
+  schedule         PaperlessSchedule @default(OFF)
+  /// Local time of day for the check, "HH:mm".
+  time             String            @default("03:30")
+  /// 0 = Sunday. Only used when schedule is WEEKLY.
+  weekday          Int               @default(0)
+  lastCheckedAt    DateTime?
+  lastCheckSummary String?
+  lastCheckError   String?
+  updatedAt        DateTime          @updatedAt
+}
+
 /// Optional parts of the site an admin can switch off. Turning one off hides
 /// it everywhere — nav, pages, search, notifications, the assistant — without
 /// touching its data, so switching it back on brings everything back.
 model FeatureSettings {
-  id                    String   @id @default("singleton")
+  id                            String   @id @default("singleton")
   /// People, providers, health insurance and everything owned by a person.
-  healthEnabled         Boolean  @default(true)
+  healthEnabled                 Boolean  @default(true)
   /// Rooms inside properties: paint, flooring, photos, and what is tagged to them.
-  roomsEnabled          Boolean  @default(true)
+  roomsEnabled                  Boolean  @default(true)
   /// The Equipment tab on a property and on its rooms.
-  equipmentTabEnabled   Boolean  @default(true)
+  equipmentTabEnabled           Boolean  @default(true)
   /// A property dropdown in the top bar that leaves out everything belonging to other properties. Off by default.
-  propertyFilterEnabled Boolean  @default(false)
+  propertyFilterEnabled         Boolean  @default(false)
   /// A property's Cost panel also counts the service costs of its equipment, not just records logged on the property.
-  propertyEquipmentCostsEnabled Boolean @default(true)
-  updatedAt            DateTime @updatedAt
+  propertyEquipmentCostsEnabled Boolean  @default(true)
+  updatedAt                     DateTime @updatedAt
 }
 
 /// The admin-edited card layout of the dashboard (one row). `data` is the JSON

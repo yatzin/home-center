@@ -55,6 +55,7 @@ export async function AssetReport({ data, options = DEFAULT_REPORT_OPTIONS }: { 
               assetId={asset.id}
               imageFilename={asset.imageFilename}
               alt={asset.name}
+              size="full"
               className="aspect-[4/3] w-full rounded-md border"
               // The border is part of the document's furniture, so it has to
               // survive the print pipeline like every other rule here.

@@ -8,6 +8,8 @@ import type { AssetType } from "@/app/generated/prisma/client"
 import { Button } from "@/components/ui/button"
 import { useDropZone } from "@/components/drop/drop-provider"
 import { addFileToInbox } from "./add-to-inbox"
+import { addPaperlessToInbox } from "./add-paperless-to-inbox"
+import { PaperlessPicker } from "@/components/paperless/paperless-picker"
 import { uploadAccept } from "@/lib/inbox-form"
 import { intakeAddedMessage, intakeLabel } from "@/lib/drop-target"
 import { cn } from "@/lib/utils"
@@ -47,6 +49,24 @@ export function InboxDropZone({ variant = "full", asset, className }: Props) {
     router.refresh()
   }
 
+  // One Paperless document becomes its own item, like a dropped file.
+  const picker = (
+    <PaperlessPicker
+      recordType="INBOX"
+      recordId=""
+      importDocument={(documentId) => addPaperlessToInbox(documentId, target)}
+      onImported={() => {
+        if (compact) toast.success(intakeAddedMessage(1), { action: { label: "View", onClick: () => router.push("/intake") } })
+        router.refresh()
+      }}
+      trigger={(open) => (
+        <Button type="button" size="sm" variant="outline" onClick={open}>
+          Choose from Paperless
+        </Button>
+      )}
+    />
+  )
+
   // Drops are routed here by the app-wide DropProvider (which checks the types first).
   const { setElement: setDropElement, over: dropOver } = useDropZone({
     label: intakeLabel(asset ? { assetType: asset.assetType, assetId: asset.assetId, name: asset.name ?? "" } : null),
@@ -84,6 +104,7 @@ export function InboxDropZone({ variant = "full", asset, className }: Props) {
             <Upload />
             Choose files
           </Button>
+          {picker}
           <Button type="button" size="sm" variant="outline" className="md:hidden" onClick={() => cameraRef.current?.click()}>
             <Camera />
             Take photo
@@ -118,6 +139,7 @@ export function InboxDropZone({ variant = "full", asset, className }: Props) {
           <Upload />
           Choose files
         </Button>
+        {picker}
         <Button type="button" variant="outline" className="md:hidden" onClick={() => cameraRef.current?.click()}>
           <Camera />
           Take photo

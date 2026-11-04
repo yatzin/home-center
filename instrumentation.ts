@@ -27,4 +27,7 @@ export async function register() {
 
   const { startBackupScheduler } = await import("@/lib/backup/scheduler-server")
   startBackupScheduler()
+
+  const { startPaperlessScheduler } = await import("@/lib/paperless/scheduler-server")
+  startPaperlessScheduler()
 }

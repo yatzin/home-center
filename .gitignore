@@ -66,3 +66,6 @@ next-env.d.ts
 
 # brainstorm / SDD scratch
 .superpowers/
+
+# local Paperless test token (never commit)
+paperless.txt

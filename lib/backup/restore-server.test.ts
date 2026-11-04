@@ -9,11 +9,11 @@ import { openDb, releaseDbHandles } from "./snapshot"
 vi.setConfig({ testTimeout: 30_000 })
 
 const db = vi.hoisted(() => ({
-  mailUpsert: vi.fn(), llmUpsert: vi.fn(), pushUpsert: vi.fn(), userFind: vi.fn(), userUpdate: vi.fn(), deleteMany: vi.fn(), runFind: vi.fn(), runCreate: vi.fn(),
+  mailUpsert: vi.fn(), llmUpsert: vi.fn(), pushUpsert: vi.fn(), paperlessUpsert: vi.fn(), userFind: vi.fn(), userUpdate: vi.fn(), deleteMany: vi.fn(), runFind: vi.fn(), runCreate: vi.fn(),
 }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    mailSettings: { upsert: db.mailUpsert }, llmSettings: { upsert: db.llmUpsert }, notificationSettings: { upsert: db.pushUpsert },
+    mailSettings: { upsert: db.mailUpsert }, llmSettings: { upsert: db.llmUpsert }, notificationSettings: { upsert: db.pushUpsert }, paperlessSettings: { upsert: db.paperlessUpsert },
     user: { findMany: db.userFind, update: db.userUpdate },
     backupRun: { deleteMany: db.deleteMany, findFirst: db.runFind, create: db.runCreate },
   },
@@ -51,7 +51,7 @@ describe("finalizeRestore", () => {
     dir = path.join(root, "restore")
     await mkdir(dir, { recursive: true })
     await writeFile(path.join(dir, "result.json"), JSON.stringify(result))
-    await writeFile(path.join(dir, "secrets.enc.json"), JSON.stringify({ mailPasswordEnc: "enc-mail", llmApiKeyEnc: "enc-llm", pushUrlEnc: "enc-url", pushTokenEnc: "enc-tok" }))
+    await writeFile(path.join(dir, "secrets.enc.json"), JSON.stringify({ mailPasswordEnc: "enc-mail", llmApiKeyEnc: "enc-llm", pushUrlEnc: "enc-url", pushTokenEnc: "enc-tok", paperlessTokenEnc: "enc-pl" }))
     db.runFind.mockResolvedValue(null)
     db.userFind.mockResolvedValue([{ id: "u1", sessionVersion: 5 }, { id: "u2", sessionVersion: 0 }])
   })
@@ -75,6 +75,7 @@ describe("finalizeRestore", () => {
     expect(db.mailUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: { passwordEnc: "enc-mail" } }))
     expect(db.llmUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: { apiKeyEnc: "enc-llm" } }))
     expect(db.pushUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: { pushUrlEnc: "enc-url", pushTokenEnc: "enc-tok" } }))
+    expect(db.paperlessUpsert).toHaveBeenCalledWith(expect.objectContaining({ update: { apiTokenEnc: "enc-pl" } }))
     expect(existsSync(path.join(dir, "secrets.enc.json"))).toBe(false)
     expect(db.userUpdate).toHaveBeenCalledTimes(2)
     expect(db.runCreate).toHaveBeenCalledTimes(1)

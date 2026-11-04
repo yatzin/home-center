@@ -26,6 +26,8 @@ import packageJson from "@/package.json"
 import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 import { loadRegionalSettings } from "@/lib/regional-server"
 import { RegionalProvider } from "@/components/regional-provider"
+import { PaperlessProvider } from "@/components/paperless/paperless-context"
+import { loadPaperlessUiState } from "@/lib/paperless/ui-state"
 import { PropertyFilter } from "@/components/property-filter"
 import { loadHiddenEntityIds, loadPropertyFilterChoices, loadPropertyScope } from "@/lib/property-filter-server"
 import { notificationScopeWhere } from "@/lib/property-filter"
@@ -34,11 +36,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth()
   if (!session) redirect("/login")
 
-  const [features, regional, scope, propertyChoices] = await Promise.all([
+  const [features, regional, scope, propertyChoices, paperless] = await Promise.all([
     loadFeatures(),
     loadRegionalSettings(),
     loadPropertyScope(),
     loadPropertyFilterChoices(null),
+    loadPaperlessUiState(session.user.role),
   ])
   const [notifications, llm, inbox, captureParser] = await Promise.all([
     prisma.notification.findMany({
@@ -72,6 +75,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <RegionalProvider value={regional}>
+    <PaperlessProvider available={paperless.available} linkBase={paperless.linkBase}>
     <ChatProvider userId={session.user.id} available={llm.available} isAdmin={isAdmin} model={llm.model}>
       <DropProvider healthEnabled={features.health}>
       {/* h-screen first: a browser without svh units would otherwise let the shell grow
@@ -135,6 +139,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </div>
       </DropProvider>
     </ChatProvider>
+    </PaperlessProvider>
     </RegionalProvider>
   )
 }

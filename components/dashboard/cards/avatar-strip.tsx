@@ -74,7 +74,7 @@ function Face({ spec, item, d }: { spec: AssetCardSpec; item: AssetCardItem; d: 
     return (
       // eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route
       <img
-        src={assetImageSrc(spec.assetType, item.id, item.imageFilename)}
+        src={assetImageSrc(spec.assetType, item.id, item.imageFilename, "thumb")}
         alt=""
         loading="lazy"
         style={box}

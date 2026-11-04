@@ -177,7 +177,7 @@ HomeCenter is one container and one data folder, and you own both.
 
 - **Self-hosted:** runs on a Synology, Unraid or any Docker host. Updates never touch your data folder.
 - **On-device processing:** OCR and meaning search run inside the container. Their only network call is an optional model download.
-- **You decide:** the AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest.
+- **You decide:** the AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest. If you turn on Paperless-ngx, the server also contacts the Paperless URL an admin set, and that token is stored encrypted like the assistant key.
 
 <sub>Photos in the screenshots are from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, by various authors, under their individual licenses (mostly CC BY-SA).</sub>
 
@@ -381,6 +381,22 @@ thinking in llama.cpp or vLLM, or `{"reasoning_effort": "low"}` for OpenAI
 reasoning models.
 
 Chats stay in your browser tab and are never stored on the server.
+
+### Paperless-ngx (optional)
+
+Off by default. Sign in as an admin, go to **Settings → Paperless-ngx**, enter
+the server URL and an API token (create one in your Paperless user profile) and
+turn it on. It needs Paperless-ngx with API version 9 or newer. HomeCenter
+contacts only the Paperless server the admin set.
+
+**Choose from Paperless** then appears next to the upload button and in Intake.
+An import copies the file and Paperless's OCR text into HomeCenter and keeps a
+pointer to the document. **Who can import from Paperless** lets everyone who is
+signed in import, or only admins.
+
+A scheduled check (off, daily or weekly, plus **Check now**) replaces a copy when
+its document gets a new version in Paperless, and marks it **Paperless link
+broken** when the document is gone. Your copy is never deleted.
 
 ### Document search (optional)
 

@@ -63,7 +63,7 @@ export function AssetImageUploader({
 
   return (
     <div className="group relative h-48 w-full overflow-hidden rounded-xl border border-border/60 shadow-sm sm:h-56">
-      <AssetImage assetType={assetType} assetId={assetId} imageFilename={imageFilename} alt={alt} className="h-full w-full" />
+      <AssetImage assetType={assetType} assetId={assetId} imageFilename={imageFilename} alt={alt} size="full" className="h-full w-full" />
 
       <input
         ref={inputRef}

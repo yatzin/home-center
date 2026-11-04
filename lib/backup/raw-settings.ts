@@ -54,11 +54,13 @@ export async function readRawSecrets(dbPath: string): Promise<Secrets> {
     const mail = await c.execute(`SELECT passwordEnc FROM "MailSettings" WHERE id = 'singleton'`).catch(emptyIfMissing)
     const llm = await c.execute(`SELECT apiKeyEnc FROM "LlmSettings" WHERE id = 'singleton'`).catch(emptyIfMissing)
     const push = await c.execute(`SELECT pushUrlEnc, pushTokenEnc FROM "NotificationSettings" WHERE id = 'singleton'`).catch(emptyIfMissing)
+    const paperless = await c.execute(`SELECT apiTokenEnc FROM "PaperlessSettings" WHERE id = 'singleton'`).catch(emptyIfMissing)
     const m = mail.rows[0]?.passwordEnc as string | undefined
     const k = llm.rows[0]?.apiKeyEnc as string | undefined
     const pu = push.rows[0]?.pushUrlEnc as string | undefined
     const pt = push.rows[0]?.pushTokenEnc as string | undefined
-    return { mailPassword: m ? decrypt(m) : null, llmApiKey: k ? decrypt(k) : null, pushUrl: pu ? decrypt(pu) : null, pushToken: pt ? decrypt(pt) : null }
+    const pl = paperless.rows[0]?.apiTokenEnc as string | undefined
+    return { mailPassword: m ? decrypt(m) : null, llmApiKey: k ? decrypt(k) : null, pushUrl: pu ? decrypt(pu) : null, pushToken: pt ? decrypt(pt) : null, paperlessToken: pl ? decrypt(pl) : null }
   } finally {
     c.close()
   }

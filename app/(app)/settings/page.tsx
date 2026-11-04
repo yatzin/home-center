@@ -31,6 +31,8 @@ import { loadRegionalSettings } from "@/lib/regional-server"
 import { loadFeatures, loadPropertyEquipmentCostsEnabled, loadPropertyFilterEnabled } from "@/lib/features-server"
 import { DataSettings } from "@/components/settings/data/data-settings"
 import { loadBackupOverview } from "@/lib/backup/overview-server"
+import { PaperlessSettings } from "@/components/settings/paperless-settings"
+import { loadPaperlessSettingsView } from "@/lib/paperless/config"
 import { resolveSection, visibleSections, type SettingsSectionId } from "@/lib/settings-sections"
 
 export default async function SettingsPage({
@@ -50,7 +52,7 @@ export default async function SettingsPage({
   // gating the whole page on ADMIN would leave ordinary users unable to turn
   // their own mail off. resolveSection keeps the admin-only sections from
   // non-admins, and only the open section's data is loaded.
-  const [me, users, recipients, mail, storedMail, llm, docs, features, capture, appearance, backup, regional, notify, propertyFilterEnabled, propertyEquipmentCostsEnabled] = await Promise.all([
+  const [me, users, recipients, mail, storedMail, llm, docs, features, capture, appearance, backup, regional, notify, propertyFilterEnabled, propertyEquipmentCostsEnabled, paperless] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { emailDigest: true, email: true, receivesNotifications: true, notificationRepeat: true },
@@ -98,6 +100,7 @@ export default async function SettingsPage({
       : Promise.resolve(null),
     is("features") ? loadPropertyFilterEnabled() : Promise.resolve(false),
     is("features") ? loadPropertyEquipmentCostsEnabled() : Promise.resolve(true),
+    is("paperless") ? loadPaperlessSettingsView() : Promise.resolve(null),
   ])
   // A signed-in session whose user row is gone — the demo seeder wipes users,
   // so a cookie from before it survives the account it points at. Redirecting
@@ -254,6 +257,25 @@ export default async function SettingsPage({
           )}
 
           {is("data") && backup && <DataSettings initial={backup} />}
+
+          {is("paperless") && paperless && (
+            <PaperlessSettings
+              // The token is never sent, only whether one is stored.
+              initial={{
+                enabled: paperless.enabled,
+                baseUrl: paperless.baseUrl,
+                access: paperless.access,
+                schedule: paperless.schedule,
+                time: paperless.time,
+                weekday: paperless.weekday,
+              }}
+              hasStoredToken={paperless.hasStoredToken}
+              tokenUnreadable={paperless.tokenUnreadable}
+              lastCheckedAt={paperless.lastCheckedAt ? paperless.lastCheckedAt.toISOString() : null}
+              lastCheckSummary={paperless.lastCheckSummary}
+              lastCheckError={paperless.lastCheckError}
+            />
+          )}
 
           {is("users") && <UserManagement users={users} currentUserId={session.user.id} />}
         </div>

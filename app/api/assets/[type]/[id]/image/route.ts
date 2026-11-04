@@ -6,6 +6,7 @@ import path from "path"
 import { randomUUID } from "crypto"
 import { resolveUploadPath } from "@/lib/upload-path"
 import { maxUploadBytes, oversizedBody } from "@/lib/upload-limits"
+import { thumbPathFor } from "@/lib/image-thumb"
 import { extensionForFilename, mimeForFilename } from "@/lib/upload-types"
 
 const VALID_TYPES = ["properties", "vehicles", "equipment", "people"] as const
@@ -27,6 +28,12 @@ async function setImage(type: ValidType, id: string, filename: string | null) {
   if (type === "vehicles") return prisma.vehicle.update({ where: { id }, data: { imageFilename: filename } })
   if (type === "people") return prisma.person.update({ where: { id }, data: { imageFilename: filename } })
   return prisma.equipment.update({ where: { id }, data: { imageFilename: filename } })
+}
+
+async function removeImage(subdir: string, id: string, filename: string) {
+  const file = resolveUploadPath(subdir, id, filename)
+  await rm(file, { force: true })
+  await rm(thumbPathFor(file), { force: true })
 }
 
 export async function POST(
@@ -66,7 +73,7 @@ export async function POST(
   await writeFile(path.join(dirPath, filename), Buffer.from(await file.arrayBuffer()))
 
   if (asset.record.imageFilename) {
-    await rm(resolveUploadPath(asset.subdir, id, asset.record.imageFilename), { force: true })
+    await removeImage(asset.subdir, id, asset.record.imageFilename)
   }
 
   await setImage(type, id, filename)
@@ -90,7 +97,7 @@ export async function DELETE(
   if (!asset?.record) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   if (asset.record.imageFilename) {
-    await rm(resolveUploadPath(asset.subdir, id, asset.record.imageFilename), { force: true })
+    await removeImage(asset.subdir, id, asset.record.imageFilename)
   }
 
   await setImage(type, id, null)

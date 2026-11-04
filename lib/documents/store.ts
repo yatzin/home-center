@@ -9,6 +9,9 @@ import type { IndexerStore } from "./indexer"
 // updateMany everywhere: an attachment deleted while its file was being read
 // must turn the save into a no-op, not an exception.
 
+/** Text rows holding Paperless's own OCR, which local extraction must not overwrite. */
+export const PAPERLESS_TEXT = { status: "DONE", attachment: { source: "PAPERLESS" } } as const
+
 const CLEARED = { method: null, text: null, pageCount: null, charCount: null, truncated: false } as const
 
 export const prismaIndexerStore: IndexerStore = {
@@ -83,7 +86,12 @@ export const prismaIndexerStore: IndexerStore = {
         // attempts counts tries that never succeeded — including ones where the
         // process died mid-file — so a poison file stops being picked up.
         attempts: { lt: MAX_ATTEMPTS },
-        OR: [{ status: "PENDING" }, { status: "FAILED" }, { extractorVersion: { lt: EXTRACTOR_VERSION } }],
+        OR: [
+          { status: "PENDING" },
+          { status: "FAILED" },
+          // Text copied from Paperless is its OCR, not ours: an extractor bump leaves it alone.
+          { extractorVersion: { lt: EXTRACTOR_VERSION }, NOT: PAPERLESS_TEXT },
+        ],
       },
       select: { attachmentId: true },
     })
