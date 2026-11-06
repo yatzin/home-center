@@ -1,0 +1,36 @@
+name: Update badges
+
+# Refreshes docs/badges/pulls.json (the Docker pulls badge in the README and
+# landing page). GHCR has no badge service for pull counts, so
+# scripts/update-pulls-badge.mjs reads the public package page.
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pulls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read the pull count
+        run: node scripts/update-pulls-badge.mjs
+
+      # Pushes made with GITHUB_TOKEN do not start other workflows, so this never
+      # triggers an image build.
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- docs/badges/pulls.json; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/badges/pulls.json
+          git commit -m "Update Docker pulls badge"
+          git push

@@ -3,29 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Self-hosted home maintenance &amp; warranty tracker | HomeCenter</title>
-<meta name="description" content="Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.">
+<title>Self-hosted home maintenance, warranty &amp; records tracker | HomeCenter</title>
+<meta name="description" content="Self-hosted home, vehicle and family records: maintenance, warranties, costs, insurance, searchable documents and verified backups. Runs in Docker. Free for noncommercial use.">
 <link rel="canonical" href="https://yatzin.github.io/home-center/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="HomeCenter">
 <meta property="og:url" content="https://yatzin.github.io/home-center/">
-<meta property="og:title" content="HomeCenter: self-hosted home maintenance &amp; warranty tracker">
-<meta property="og:description" content="Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.">
-<meta property="og:image" content="https://yatzin.github.io/home-center/screenshots/1.Dashboard.png">
-<meta property="og:image:width" content="1919">
-<meta property="og:image:height" content="938">
-<meta property="og:image:alt" content="HomeCenter dashboard with properties, vehicles, reminders, expiring warranties and spending">
+<meta property="og:title" content="HomeCenter: self-hosted home maintenance, warranty &amp; records tracker">
+<meta property="og:description" content="Self-hosted home, vehicle and family records: maintenance, warranties, costs, insurance, searchable documents and verified backups. Runs in Docker. Free for noncommercial use.">
+<meta property="og:image" content="https://yatzin.github.io/home-center/screenshots/01-dashboard.png">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="833">
+<meta property="og:image:alt" content="HomeCenter dashboard with properties, vehicles, people and equipment tiles, reminders, expiring warranties, intake and spending">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HomeCenter: self-hosted home maintenance, warranty &amp; records tracker">
+<meta name="twitter:description" content="Self-hosted home, vehicle and family records: maintenance, warranties, costs, insurance, searchable documents and verified backups. Runs in Docker. Free for noncommercial use.">
+<meta name="twitter:image" content="https://yatzin.github.io/home-center/screenshots/01-dashboard.png">
+<meta name="twitter:image:alt" content="HomeCenter dashboard with properties, vehicles, people and equipment tiles, reminders, expiring warranties, intake and spending">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "HomeCenter",
-  "description": "Free, self-hosted app for home and vehicle maintenance, warranties, costs, documents and family health records. Runs in Docker on your NAS or server.",
+  "description": "Self-hosted home, vehicle and family records: maintenance, warranties, costs, insurance, searchable documents and verified backups. Runs in Docker. Free for noncommercial use.",
   "url": "https://yatzin.github.io/home-center/",
-  "image": "https://yatzin.github.io/home-center/screenshots/1.Dashboard.png",
+  "image": "https://yatzin.github.io/home-center/screenshots/01-dashboard.png",
+  "softwareVersion": "3.1.0",
   "applicationCategory": "LifestyleApplication",
   "operatingSystem": "Linux, Docker",
+  "isAccessibleForFree": true,
   "license": "https://github.com/yatzin/home-center/blob/main/LICENSE",
   "sameAs": "https://github.com/yatzin/home-center",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
@@ -38,10 +44,18 @@
   "mainEntity": [
     {
       "@type": "Question",
+      "name": "Is it open source?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Source-available. HomeCenter is released under the PolyForm Noncommercial License 1.0.0: it is free for noncommercial use, and you can read the code and run it on your own hardware. It is not an OSI-approved open source licence, and commercial use is not covered."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "Does it need an internet connection?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model."
+        "text": "No. HomeCenter runs on your local network. It goes online only for things you turn on: email and push reminders, a cloud AI provider, Paperless-ngx on another host, or downloading a larger search model."
       }
     },
     {
@@ -57,7 +71,15 @@
       "name": "How do I back it up?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Back up the data folder. It holds the database, uploaded files and downloaded models. Copy it while the container is stopped, or use your NAS's snapshots. Keep your AUTH_SECRET as well, because the saved mail password and API key can't be decrypted without it."
+        "text": "In the app. Under Settings, Data and backups, an admin can run Back up now or set a daily or weekly schedule; the newest 14 are kept by default. Each backup is one file with the database and every upload, and it is verified after it is written. You can leave it unprotected, use a recovery key, or use a password zip. Restore from the same page: a dry run shows what would change first, and a staged restore can be cancelled before the restart. You can also make an offline export with a viewer. Mount a second disk or NAS share at /backups, and keep your AUTH_SECRET."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it work with Paperless-ngx?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Add your Paperless-ngx URL and token under Settings, then use Choose from Paperless when attaching a file or in Intake. Import is one-way, into HomeCenter. You can schedule a daily or weekly sync, and a badge flags a link that no longer resolves."
       }
     },
     {
@@ -73,7 +95,15 @@
       "name": "Can everyone in the house have their own login?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders."
+        "text": "Yes. An admin adds users under Settings, Users as admin or standard. Everyone sees the same household records. Admins also manage features, regional settings, mail, the assistant, Paperless-ngx and backups, and each person chooses their own email and push reminders. Forgotten passwords can be reset by email once a mail server is set up."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I use it on my phone?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Open it in the phone's browser and install it from Settings, Install. The dashboard has a phone layout."
       }
     },
     {
@@ -81,7 +111,7 @@
       "name": "How is health data protected?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely."
+        "text": "It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself is not encrypted, so protect the data folder and your backups like any other private files. The assistant cannot read health documents unless an admin allows it, and you can hide the Health section entirely."
       }
     }
   ]
@@ -155,7 +185,7 @@
     box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 6px 20px -6px rgba(29,78,216,.8);
   }
   .nav-links { display: flex; gap: 4px; margin-left: auto; }
-  .nav-links a { padding: 8px 12px; border-radius: 8px; font-size: 14px; color: var(--muted); transition: color .2s, background .2s; }
+  .nav-links a { padding: 8px 9px; border-radius: 8px; font-size: 14px; color: var(--muted); transition: color .2s, background .2s; }
   .nav-links a:hover { color: var(--fg); background: rgba(255,255,255,.05); }
 
   .btn {
@@ -233,8 +263,12 @@
   .frame-bar { display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; background: #262626; border-bottom: 1px solid var(--border); }
   .frame-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3c3c3c; }
   .frame-bar span { margin-left: 12px; font-size: 12px; color: var(--faint); font-family: var(--font-mono); }
-  .shot { position: relative; aspect-ratio: 1918 / 935; overflow: hidden; background: var(--bg); cursor: zoom-in; }
+  .shot { position: relative; aspect-ratio: 1600 / 833; overflow: hidden; background: var(--bg); cursor: zoom-in; }
   .shot img { width: 100%; height: 100%; object-fit: cover; object-position: top left; }
+  .shot.r1083 { aspect-ratio: 1600 / 1083; }
+  .shot.r1583 { aspect-ratio: 1600 / 1583; }
+  .shot.phone { aspect-ratio: 430 / 900; }
+  .phone-frame { max-width: 300px; margin-inline: auto; }
 
   .placeholder {
     cursor: default; display: grid; place-items: center; text-align: center;
@@ -567,15 +601,16 @@
     <nav class="nav-links" aria-label="Sections">
       <a href="#demos">Demos</a>
       <a href="#features">Features</a>
+      <a href="#dashboards">Dashboards</a>
       <a href="#home">Home</a>
       <a href="#health">Health</a>
       <a href="#costs">Costs</a>
-      <a href="#search">Search</a>
+      <a href="#backups">Backups</a>
       <a href="#new">New</a>
       <a href="#install">Install</a>
       <a href="#faq">FAQ</a>
     </nav>
-    <a class="btn sm primary" href="#install">Install<span class="hide-sm">in 5 minutes</span></a>
+    <a class="btn sm primary" href="#install" style="white-space:nowrap">Install<span class="hide-sm"> in 5 min</span></a>
     <a class="btn sm gh" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>GitHub</a>
   </div>
 </header>
@@ -586,20 +621,20 @@
   <section class="hero">
     <div class="glow a"></div><div class="glow b"></div>
     <div class="wrap">
-      <span class="pill reveal"><b>Self-hosted</b> Open source · MIT · Docker</span>
+      <p class="reveal" style="--d:.05s;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:14px auto 22px;max-width:760px"><a href="https://github.com/yatzin/home-center/stargazers" target="_blank" rel="noopener"><img src="https://img.shields.io/github/stars/yatzin/home-center?style=flat&amp;logo=github&amp;label=GitHub%20stars" alt="GitHub stars" height="20"></a><a href="https://github.com/yatzin/home-center/pkgs/container/homecenter" target="_blank" rel="noopener"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyatzin%2Fhome-center%2Fmain%2Fdocs%2Fbadges%2Fpulls.json&amp;style=flat&amp;logo=docker&amp;logoColor=white" alt="Docker pulls" height="20"></a><a href="https://github.com/yatzin/home-center/blob/main/LICENSE" target="_blank" rel="noopener"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License: PolyForm Noncommercial 1.0.0" height="20"></a><img src="https://img.shields.io/badge/version-3.1.0-informational" alt="Version 3.1.0" height="20"><img src="https://img.shields.io/badge/self--hosted-Docker-2496ED" alt="Self-hosted" height="20"><img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555" alt="amd64 and arm64" height="20"><img src="https://img.shields.io/badge/cloud-none-success" alt="No cloud" height="20"><a href="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml" target="_blank" rel="noopener"><img src="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg" alt="Docker image build" height="20"></a><a href="https://github.com/yatzin/home-center/commits/main" target="_blank" rel="noopener"><img src="https://img.shields.io/github/last-commit/yatzin/home-center" alt="Last commit" height="20"></a></p>
       <h1 class="reveal" style="--d:.08s">Every repair, warranty and receipt for your home, cars and family, <span class="grad">on your own server.</span></h1>
-      <p class="lead reveal" style="--d:.16s">Service history, costs and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, and it all runs in one Docker container.</p>
+      <p class="lead reveal" style="--d:.16s">Service history, costs, insurance and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, backups are built in, and it all runs in one Docker container.</p>
       <div class="cta reveal" style="--d:.24s">
         <a class="btn primary" href="#install">Install with Docker <svg class="icon"><use href="#i-arrow"/></svg></a>
         <a class="btn" href="#demos"><svg class="icon"><use href="#i-play"/></svg>Watch the demos</a>
       </div>
-      <p class="hero-meta reveal" style="--d:.3s">Free and open source. No cloud service, no subscription, and logins stay on your server.</p>
+      <p class="hero-meta reveal" style="--d:.3s">Free for noncommercial use (PolyForm Noncommercial 1.0.0). No cloud service, no subscription, and logins stay on your server.</p>
 
       <div class="stage reveal" style="--d:.36s">
         <div class="hero-shot" id="heroShot">
           <div class="frame">
             <div class="frame-bar"><i></i><i></i><i></i><span>homecenter.local:3000</span></div>
-            <div class="shot" data-caption="Dashboard"><img src="screenshots/1.Dashboard.png" alt="HomeCenter dashboard showing properties, vehicles, people, equipment, reminders, expiring warranties and spending" fetchpriority="high"></div>
+            <div class="shot" data-caption="Dashboard"><img src="screenshots/01-dashboard.png" alt="HomeCenter dashboard with photo tiles for properties, vehicles, people and equipment, plus reminders, expiring warranties, intake, planned spend and spending" fetchpriority="high"></div>
           </div>
         </div>
       </div>
@@ -613,6 +648,7 @@
         <li><svg class="icon"><use href="#i-check"/></svg>No third-party sign-in</li>
         <li><svg class="icon"><use href="#i-check"/></svg>OCR and search run on-device</li>
         <li><svg class="icon"><use href="#i-check"/></svg>Works with local AI models</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>Verified backups built in</li>
       </ul>
     </div>
   </div>
@@ -622,39 +658,59 @@
     <div class="wrap">
       <div class="head center reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-play"/></svg>See it in action</span>
-        <h2>Six short walkthroughs</h2>
-        <p>Recorded on the demo data. Every page is reached by a click, so you can follow along.</p>
+        <h2>Ten short walkthroughs</h2>
+        <p>Recorded on the demo data, version 3.1.0. Each one runs about a minute or less.</p>
       </div>
       <div class="demos">
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/tour.mp4" data-title="A quick tour" data-desc="A house, a truck and a person, tab by tab" style="--d:0.00s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/tour.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">1:03</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/tour.mp4" data-title="A quick tour" data-desc="The dashboard, a house with its rooms, a truck, insurance, a person and costs" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/tour.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">1:06</span></span>
           <h3>A quick tour</h3>
-          <p>A house, a truck and a person, tab by tab</p>
+          <p>The dashboard, a house with its rooms, a truck, insurance, a person and costs</p>
         </button>
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/ask-ai-warranty.mp4" data-title="Ask the assistant" data-desc="From a question to the warranty PDF that answers it" style="--d:0.06s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/ask-ai-warranty.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:38</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/dashboards-your-way.mp4" data-title="Dashboards your way" data-desc="Edit the dashboard: drag, resize, add cards, switch theme" style="--d:0.06s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/dashboards-your-way.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:43</span></span>
+          <h3>Dashboards your way</h3>
+          <p>Edit the dashboard: drag, resize, add cards, switch theme</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/ask-ai-warranty.mp4" data-title="Ask the assistant" data-desc="From a question to the warranty answer" style="--d:0.12s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/ask-ai-warranty.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:26</span></span>
           <h3>Ask the assistant</h3>
-          <p>From a question to the warranty PDF that answers it</p>
+          <p>From a question to the warranty answer</p>
         </button>
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/reminder-to-done.mp4" data-title="Reminder to done" data-desc="An overdue filter change, completed, next date set" style="--d:0.12s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/reminder-to-done.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:32</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/reminder-to-done.mp4" data-title="Reminder to done" data-desc="An overdue reminder, completed, next date set" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/reminder-to-done.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:40</span></span>
           <h3>Reminder to done</h3>
-          <p>An overdue filter change, completed, next date set</p>
+          <p>An overdue reminder, completed, next date set</p>
         </button>
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/costs-to-receipt.mp4" data-title="Costs to receipt" data-desc="From the spending chart to the $2,340 invoice" style="--d:0.00s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/costs-to-receipt.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:33</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/costs-to-receipt.mp4" data-title="Costs to receipt" data-desc="From the spending chart to the invoice receipt" style="--d:0.06s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/costs-to-receipt.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:36</span></span>
           <h3>Costs to receipt</h3>
-          <p>From the spending chart to the $2,340 invoice</p>
+          <p>From the spending chart to the invoice receipt</p>
         </button>
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/search-documents.mp4" data-title="Search your paperwork" data-desc="“roof” finds the 30-year shingle warranty" style="--d:0.06s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/search-documents.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:27</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/insurance-and-planning.mp4" data-title="Insurance and planning" data-desc="Insurance, planned spend and equipment life" style="--d:0.12s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/insurance-and-planning.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:38</span></span>
+          <h3>Insurance and planning</h3>
+          <p>Insurance, planned spend and equipment life</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/search-documents.mp4" data-title="Search your paperwork" data-desc="“roof” finds the 30-year shingle warranty" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/search-documents.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:28</span></span>
           <h3>Search your paperwork</h3>
           <p>“roof” finds the 30-year shingle warranty</p>
         </button>
-        <button class="demo-card reveal" type="button" data-video="screenshots/demos/health-summary.mp4" data-title="Health summary" data-desc="Medications, shots and a printable summary" style="--d:0.12s">
-          <span class="demo-thumb"><img src="screenshots/demos/posters/health-summary.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:32</span></span>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/health-summary.mp4" data-title="Health summary" data-desc="Observations, the medication timeline and a printable summary" style="--d:0.06s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/health-summary.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:28</span></span>
           <h3>Health summary</h3>
-          <p>Medications, shots and a printable summary</p>
+          <p>Observations, the medication timeline and a printable summary</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/paperless-import.mp4" data-title="Paperless-ngx import" data-desc="Pull documents in from Paperless-ngx" style="--d:0.12s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/paperless-import.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:47</span></span>
+          <h3>Paperless-ngx import</h3>
+          <p>Pull documents in from Paperless-ngx</p>
+        </button>
+        <button class="demo-card reveal" type="button" data-video="screenshots/demos/backup-and-restore.mp4" data-title="Backup and restore" data-desc="Verified backups, offline export, restore with a dry run" style="--d:0.00s">
+          <span class="demo-thumb"><img src="screenshots/demos/posters/backup-and-restore.jpg" alt="" loading="lazy"><span class="demo-play"><svg class="icon"><use href="#i-play"/></svg></span><span class="demo-dur">0:34</span></span>
+          <h3>Backup and restore</h3>
+          <p>Verified backups, offline export, restore with a dry run</p>
         </button>
       </div>
     </div>
@@ -674,82 +730,123 @@
           <h3><span class="badge"><svg class="icon"><use href="#i-building"/></svg></span>Home</h3>
           <ul>
             <li><svg class="icon"><use href="#i-building"/></svg><span><b>Properties, vehicles &amp; equipment</b> with photos, purchase info and model/serial numbers</span></li>
+            <li><svg class="icon"><use href="#i-building"/></svg><span><b>Rooms</b> with paint and flooring, and a room on each service record</span></li>
             <li><svg class="icon"><use href="#i-wrench"/></svg><span><b>Service records</b> with vendor, cost and category</span></li>
             <li><svg class="icon"><use href="#i-shield-check"/></svg><span><b>Warranties</b> with expiry status at a glance</span></li>
-            <li><svg class="icon"><use href="#i-calendar"/></svg><span><b>Maintenance reminders</b> by date or mileage</span></li>
           </ul>
         </article>
-
+        <article class="tile reveal" style="--d:.06s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-calendar"/></svg></span>Maintenance</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-calendar"/></svg><span><b>Reminders</b> by days, miles, specific months or one-off</span></li>
+            <li><svg class="icon"><use href="#i-chart"/></svg><span><b>Estimated cost</b> on each reminder, rolled into planned spend</span></li>
+            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Manual page link</b> straight to the right page of the PDF</span></li>
+            <li><svg class="icon"><use href="#i-bell"/></svg><span><b>In-app bell, email and push</b> (Discord, ntfy, Telegram or JSON)</span></li>
+          </ul>
+        </article>
+        <article class="tile reveal" style="--d:.12s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-chart"/></svg></span>Money</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-chart"/></svg><span><b>Costs</b> by month, quarter or year, by category, asset and vendor</span></li>
+            <li><svg class="icon"><use href="#i-chart"/></svg><span><b>Planned spend</b> for the next 12 months</span></li>
+            <li><svg class="icon"><use href="#i-wrench"/></svg><span><b>Equipment life</b> and replacement cost, so a new furnace isn't a surprise</span></li>
+            <li><svg class="icon"><use href="#i-dash"/></svg><span><b>Your currency and units</b>, set once under Regional</span></li>
+          </ul>
+        </article>
+        <article class="tile reveal">
+          <h3><span class="badge"><svg class="icon"><use href="#i-shield-plus"/></svg></span>Insurance</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-shield-plus"/></svg><span><b>Home, auto, umbrella, life and renters</b> on one page, plus health coverage</span></li>
+            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Coverages and premium history</b> for every policy</span></li>
+            <li><svg class="icon"><use href="#i-calendar"/></svg><span><b>Renewal reminders</b> before a policy lapses</span></li>
+          </ul>
+        </article>
         <article class="tile reveal" style="--d:.06s">
           <h3><span class="badge"><svg class="icon"><use href="#i-heart"/></svg></span>Health <span class="opt">Optional</span></h3>
           <ul>
             <li><svg class="icon"><use href="#i-users"/></svg><span><b>People</b> with conditions, medications, allergies, immunizations and visits</span></li>
-            <li><svg class="icon"><use href="#i-heart"/></svg><span><b>Observation logs</b> for symptoms and patterns</span></li>
+            <li><svg class="icon"><use href="#i-heart"/></svg><span><b>Observations</b> with a heatmap, and a medication timeline with dose changes</span></li>
             <li><svg class="icon"><use href="#i-steth"/></svg><span><b>Providers</b> with visit counts and spend</span></li>
-            <li><svg class="icon"><use href="#i-shield-plus"/></svg><span><b>Insurance</b> policies, members and deductibles</span></li>
+            <li><svg class="icon"><use href="#i-printer"/></svg><span><b>Printable medical summary</b> with a medication history chart</span></li>
           </ul>
         </article>
-
-        <article class="tile reveal" style="--d:.12s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-chart"/></svg></span>Money</h3>
-          <ul>
-            <li><svg class="icon"><use href="#i-chart"/></svg><span><b>Costs</b> by month, quarter or year</span></li>
-            <li><svg class="icon"><use href="#i-chart"/></svg><span>Breakdowns by <b>asset, category and vendor</b></span></li>
-            <li><svg class="icon"><use href="#i-wrench"/></svg><span><b>Biggest expenses</b> and per-asset cost panels</span></li>
-            <li><svg class="icon"><use href="#i-dash"/></svg><span><b>Dashboard</b> with a 12-month spending chart</span></li>
-          </ul>
-        </article>
-
-        <article class="tile wide reveal">
+        <article class="tile wide reveal" style="--d:.12s">
           <h3><span class="badge"><svg class="icon"><use href="#i-search"/></svg></span>Finding things</h3>
           <ul>
-            <li><svg class="icon"><use href="#i-search"/></svg><span><b>Global search</b> across assets, records and the text of every document, by keyword or by meaning</span></li>
-            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Document indexing</b> for PDF, Word, Excel, PowerPoint, OpenDocument, text, and photos or scans via OCR, all on your server</span></li>
-            <li><svg class="icon"><use href="#i-sparkles"/></svg><span><b>AI assistant</b> that answers questions about your data, using OpenAI, OpenRouter, or a local model in Ollama or LM Studio</span></li>
+            <li><svg class="icon"><use href="#i-search"/></svg><span><b>Global search</b> across assets, records and the text of every document, by keyword or meaning</span></li>
+            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Intake</b>: drop a receipt and HomeCenter suggests the asset and files it</span></li>
+            <li><svg class="icon"><use href="#i-file-search"/></svg><span><b>Paperless-ngx import</b>, plus indexing of PDF, Office, text and scans via on-device OCR</span></li>
+            <li><svg class="icon"><use href="#i-sparkles"/></svg><span><b>Assistant</b> that answers questions and can draft a health observation for you to save</span></li>
           </ul>
         </article>
-
-        <article class="tile reveal" style="--d:.06s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-bell"/></svg></span>Reminders</h3>
-          <ul>
-            <li><svg class="icon"><use href="#i-bell"/></svg><span><b>In-app bell</b> for maintenance, warranties, insurance, refills and immunizations</span></li>
-            <li><svg class="icon"><use href="#i-mail"/></svg><span><b>Email</b> per user: instant, daily or weekly</span></li>
-          </ul>
-        </article>
-
         <article class="tile reveal">
-          <h3><span class="badge"><svg class="icon"><use href="#i-clip"/></svg></span>Records &amp; export</h3>
+          <h3><span class="badge"><svg class="icon"><use href="#i-download"/></svg></span>Your data</h3>
           <ul>
-            <li><svg class="icon"><use href="#i-clip"/></svg><span><b>Attachments</b> for receipts, manuals and photos on any record</span></li>
-            <li><svg class="icon"><use href="#i-printer"/></svg><span><b>Printable reports</b> and medical summaries, ready for PDF</span></li>
-            <li><svg class="icon"><use href="#i-download"/></svg><span><b>One-click zip</b> of an asset's data and files</span></li>
+            <li><svg class="icon"><use href="#i-download"/></svg><span><b>Verified backups</b> on a schedule, with optional protection</span></li>
+            <li><svg class="icon"><use href="#i-download"/></svg><span><b>Restore in the app</b> with a dry run first</span></li>
+            <li><svg class="icon"><use href="#i-printer"/></svg><span><b>Offline export</b>, printable reports and a zip of any asset</span></li>
           </ul>
         </article>
-
-        <article class="tile wide reveal" style="--d:.06s">
+        <article class="tile reveal" style="--d:.06s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-dash"/></svg></span>Make it yours</h3>
+          <ul>
+            <li><svg class="icon"><use href="#i-dash"/></svg><span><b>Customizable dashboards</b> with drag, resize and a card catalog</span></li>
+            <li><svg class="icon"><use href="#i-sun"/></svg><span><b>12 themes</b>, light and dark</span></li>
+            <li><svg class="icon"><use href="#i-toggle"/></svg><span><b>Regional settings</b> for currency, units, date and 12/24h</span></li>
+            <li><svg class="icon"><use href="#i-users"/></svg><span><b>Install on a phone</b> as an app</span></li>
+          </ul>
+        </article>
+        <article class="tile wide reveal" style="--d:.12s">
           <h3><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span>Accounts &amp; security</h3>
           <ul>
             <li><svg class="icon"><use href="#i-lock"/></svg><span><b>Local login</b> with no third-party account; data stays on your hardware</span></li>
-            <li><svg class="icon"><use href="#i-users"/></svg><span><b>Multiple users</b> with admin and standard roles</span></li>
-            <li><svg class="icon"><use href="#i-shield-alert"/></svg><span><b>Sign-in throttling</b> per account and per address; secrets encrypted at rest</span></li>
-            <li><svg class="icon"><use href="#i-sun"/></svg><span><b>Light and dark themes</b>, and optional sections you can switch off</span></li>
+            <li><svg class="icon"><use href="#i-users"/></svg><span><b>Multiple users</b> with admin and standard roles, and password reset by email</span></li>
+            <li><svg class="icon"><use href="#i-shield-alert"/></svg><span><b>Sign-in throttling</b>, and secrets such as mail, API and push tokens encrypted at rest</span></li>
           </ul>
         </article>
       </div>
     </div>
   </section>
 
-  <!-- ── Home ─────────────────────────────────────── -->
-  <section class="block" id="home" style="padding-top:40px">
+  <section class="block" id="dashboards" style="padding-top:40px">
     <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-dash"/></svg>Customizable dashboards</span>
+        <h2>Build the dashboard you open every morning</h2>
+        <p>Start from the default layout, then make it yours. Switch on edit mode, drag and resize cards, and pick new ones from the catalog.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Add a card</b> from the catalog: planned spend, equipment life, spending by category, service activity and more</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Heatmaps</b> for health visits and observations, and a <b>clock</b> and a <b>text card</b> for a greeting</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Per-card settings</b>, and a layout that fits a phone</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Property filter</b> in the header (opt-in) to scope lists, cards and totals to one property</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Your dashboard<span class="bar"></span></button>
+          <button class="tab" role="tab">Edit mode<span class="bar"></span></button>
+          <button class="tab" role="tab">Add a card<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot r1083" data-caption="Customized dashboard"><img src="screenshots/38-dashboard-customized.png" alt="Customized HomeCenter dashboard with a greeting, clock, planned spend, equipment life, spending by category, health observations and services heatmaps, reminders, intake and rooms" loading="lazy"></div>
+          <div class="shot" data-caption="Dashboard edit mode"><img src="screenshots/02-dashboard-edit.png" alt="Dashboard in edit mode with cards ready to drag and resize" loading="lazy"></div>
+          <div class="shot" data-caption="The Add a card picker"><img src="screenshots/03-add-card.png" alt="The Add a card picker showing the card catalog" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="home" style="padding-top:40px">
+    <div class="wrap spot flip">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-building"/></svg>Home</span>
         <h2>Every house, car and appliance, with its whole history</h2>
         <p>Give each thing you own a page: photo, details, and every repair, warranty and reminder attached to it.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Properties</b>: houses, condos, cabins and land</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Rooms</b>: paint and flooring per room, and a room on service records and schedules</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Vehicles</b> with mileage-aware service history</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Equipment</b> linked to the property it lives in</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Equipment</b> with location or room, expected life and replacement cost</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Download all files</b> for any asset as a zip</span></li>
         </ul>
       </div>
@@ -757,55 +854,124 @@
         <div class="tabs" role="tablist">
           <button class="tab" role="tab">Properties<span class="bar"></span></button>
           <button class="tab" role="tab">House<span class="bar"></span></button>
+          <button class="tab" role="tab">Rooms<span class="bar"></span></button>
           <button class="tab" role="tab">Vehicles<span class="bar"></span></button>
-          <button class="tab" role="tab">Vehicle service<span class="bar"></span></button>
+          <button class="tab" role="tab">Vehicle<span class="bar"></span></button>
           <button class="tab" role="tab">Equipment<span class="bar"></span></button>
+          <button class="tab" role="tab">Equipment detail<span class="bar"></span></button>
         </div>
         <div class="frame"><div class="slides">
-          <div class="shot" data-caption="Properties"><img src="screenshots/2.Properties.png" alt="Properties list" loading="lazy"></div>
-          <div class="shot" data-caption="A house and its service records"><img src="screenshots/3.House.png" alt="Maple Street House detail page with service records" loading="lazy"></div>
-          <div class="shot" data-caption="Vehicles"><img src="screenshots/7.Vehicles.png" alt="Vehicles list" loading="lazy"></div>
-          <div class="shot" data-caption="Vehicle service history"><img src="screenshots/8.VehicleService.png" alt="Vehicle service history" loading="lazy"></div>
-          <div class="shot" data-caption="Equipment"><img src="screenshots/9.Equipment.png" alt="Equipment list" loading="lazy"></div>
+          <div class="shot" data-caption="Properties"><img src="screenshots/04-properties.png" alt="Properties grid with photos" loading="lazy"></div>
+          <div class="shot" data-caption="A house and its service history"><img src="screenshots/05-property.png" alt="Maple Street House detail page with its service history" loading="lazy"></div>
+          <div class="shot" data-caption="Rooms: paint and flooring"><img src="screenshots/06-rooms.png" alt="Rooms tab with paint and flooring for each room" loading="lazy"></div>
+          <div class="shot" data-caption="Vehicles"><img src="screenshots/08-vehicles.png" alt="Vehicles grid" loading="lazy"></div>
+          <div class="shot" data-caption="A vehicle and its service history"><img src="screenshots/09-vehicle.png" alt="Work Truck detail page" loading="lazy"></div>
+          <div class="shot" data-caption="Equipment"><img src="screenshots/10-equipment.png" alt="Equipment list" loading="lazy"></div>
+          <div class="shot" data-caption="Equipment detail"><img src="screenshots/11-equipment-detail.png" alt="Gas Furnace detail with expected life, replacement cost and location" loading="lazy"></div>
         </div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── Maintenance & warranties ─────────────────── -->
   <section class="block" id="maintenance" style="padding-top:40px">
-    <div class="wrap spot flip">
+    <div class="wrap spot">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-calendar"/></svg>Maintenance &amp; warranties</span>
-        <h2>Know what's due before it's overdue</h2>
-        <p>Set a reminder once by days or miles. HomeCenter works out the next due date and tells you in time.</p>
+        <h2>Know what's due, and what it will cost</h2>
+        <p>Set a reminder once. HomeCenter works out the next due date, tells you in time, and adds its estimated cost to your planned spend.</p>
         <ul class="checks">
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Date or mileage</b> intervals, with your own lead time</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Date, mileage, specific months or one-off</b>, with your own lead time</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Estimated cost</b> on each reminder</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Manual page link</b> that opens the right page of the PDF</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Skip this time</b>, snooze or pause, and add a starter set of default reminders</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Warranty status</b> at a glance: active, expiring or expired</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Overviews</b> across every asset, sortable and filterable</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Service records</b> log a completion and roll the reminder forward</span></li>
         </ul>
       </div>
       <div class="gallery reveal" style="--d:.1s">
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab">Reminders<span class="bar"></span></button>
+          <button class="tab" role="tab">Property reminders<span class="bar"></span></button>
           <button class="tab" role="tab">All reminders<span class="bar"></span></button>
-          <button class="tab" role="tab">Warranties<span class="bar"></span></button>
           <button class="tab" role="tab">All warranties<span class="bar"></span></button>
-          <button class="tab" role="tab">Service record<span class="bar"></span></button>
         </div>
         <div class="frame"><div class="slides">
-          <div class="shot" data-caption="Maintenance reminders on an asset"><img src="screenshots/6.MaintenanceReminders.png" alt="Maintenance reminders" loading="lazy"></div>
-          <div class="shot" data-caption="Maintenance overview"><img src="screenshots/11.MaintenanceReminderOverview.png" alt="Maintenance reminder overview" loading="lazy"></div>
-          <div class="shot" data-caption="Warranties on an asset"><img src="screenshots/5.Warranties.png" alt="Warranties" loading="lazy"></div>
-          <div class="shot" data-caption="Warranty overview"><img src="screenshots/10.WarrantyOverview.png" alt="Warranty overview" loading="lazy"></div>
-          <div class="shot" data-caption="Service record"><img src="screenshots/4.ServiceRecord.png" alt="Service record" loading="lazy"></div>
+          <div class="shot" data-caption="Property maintenance reminders"><img src="screenshots/07-maintenance-reminders.png" alt="Property maintenance reminders with estimated costs and manual page links" loading="lazy"></div>
+          <div class="shot" data-caption="Maintenance overview"><img src="screenshots/13-maintenance.png" alt="Maintenance reminders overview across every asset" loading="lazy"></div>
+          <div class="shot" data-caption="Warranty overview"><img src="screenshots/12-warranties.png" alt="Warranties overview with expiry status" loading="lazy"></div>
         </div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── Health ───────────────────────────────────── -->
+  <section class="block" id="insurance" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-shield-plus"/></svg>Insurance</span>
+        <h2>All your policies on one page</h2>
+        <p>Home, auto, umbrella, life and renters policies sit next to health coverage, with the numbers you look up at renewal time.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Coverages</b> and <b>premium history</b> for each policy</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Renewal badges</b> and reminders before a policy lapses</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Linked</b> to the person, property or vehicle it covers</span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame">
+          <div class="shot" data-caption="Insurance page"><img src="screenshots/14-insurance.png" alt="Insurance page with auto, home, umbrella and life policies, coverages, premium history and renewals" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="costs" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-chart"/></svg>Costs</span>
+        <h2>See where the money went, and what's coming</h2>
+        <p>Every service record carries a cost. HomeCenter adds them up across the household, then looks ahead using your reminders.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Monthly, quarterly or yearly</b> trends with a rolling average</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Planned spend</b> for the next 12 months, from reminder estimates</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Top <b>assets, categories and vendors</b>, and the biggest expenses</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Shown in <b>your currency</b> and units, set under Regional settings</span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame">
+          <div class="shot" data-caption="Costs and planned spend"><img src="screenshots/15-costs.png" alt="Costs page with a monthly chart by category and planned spend" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="intake" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-clip"/></svg>Intake &amp; Paperless-ngx</span>
+        <h2>Drop a receipt. Pull in your scans.</h2>
+        <p>Drop receipts, photos, PDFs or forwarded emails anywhere. HomeCenter reads the date, vendor and total, suggests the asset and files it as a service record.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Intake</b> offers to complete the matching reminder too</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Receipt reading</b> with the built-in parser or an optional local AI model</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Paperless-ngx</b>: choose documents from Paperless when you attach a file or use Intake</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>One-way import</b> with a daily or weekly sync and a Check now button</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>A <b>Paperless link broken</b> badge tells you when a document has gone</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Intake<span class="bar"></span></button>
+          <button class="tab" role="tab">Choose from Paperless<span class="bar"></span></button>
+          <button class="tab" role="tab">Paperless settings<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Intake"><img src="screenshots/16-intake.png" alt="Intake showing dropped receipts that were read and a suggested filing" loading="lazy"></div>
+          <div class="shot" data-caption="Choose from Paperless"><img src="screenshots/17-paperless-picker.png" alt="The Choose from Paperless picker" loading="lazy"></div>
+          <div class="shot" data-caption="Paperless-ngx settings"><img src="screenshots/34-settings-paperless.png" alt="Paperless-ngx settings, connected" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
   <section class="block" id="health" style="padding-top:40px">
     <div class="wrap spot">
       <div class="copy reveal">
@@ -813,60 +979,36 @@
         <h2>Your family's health records, close at hand</h2>
         <p>Keep each person's medical picture in one place, and print a clean summary for the next appointment.</p>
         <ul class="checks">
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Conditions, medications, allergies</b> and immunizations</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Visits</b> linked to providers, with costs</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Observation logs</b> to spot symptom patterns</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Conditions, medications, allergies</b>, immunizations and visits linked to providers</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Observations</b> with a heatmap to spot patterns</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Medication timeline</b> with dose changes, and a before-and-after view</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Refill, vaccine and insurance</b> reminders</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Turn the whole section off</b> in Settings if you don't need it</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Turn the whole section off</b> in Settings, enforced on the server</span></li>
         </ul>
       </div>
       <div class="gallery reveal" style="--d:.1s">
         <div class="tabs" role="tablist">
           <button class="tab" role="tab">Person<span class="bar"></span></button>
+          <button class="tab" role="tab">Observations<span class="bar"></span></button>
+          <button class="tab" role="tab">Medication timeline<span class="bar"></span></button>
+          <button class="tab" role="tab">Before and after<span class="bar"></span></button>
           <button class="tab" role="tab">Providers<span class="bar"></span></button>
-          <button class="tab" role="tab">Insurance<span class="bar"></span></button>
           <button class="tab" role="tab">Medical summary<span class="bar"></span></button>
         </div>
         <div class="frame"><div class="slides">
-          <div class="shot" data-caption="Person profile"><img src="screenshots/13.Person.png" alt="Person profile with visits, conditions, medications and allergies" loading="lazy"></div>
-          <div class="shot" data-caption="Providers"><img src="screenshots/14.Providers.png" alt="Providers list with visit counts and spend" loading="lazy"></div>
-          <div class="shot" data-caption="Insurance"><img src="screenshots/15.Insurance.png" alt="Insurance policies" loading="lazy"></div>
-          <div class="shot" data-caption="Medical summary"><img src="screenshots/16.MedicalSummary.png" alt="Printable medical summary" loading="lazy"></div>
+          <div class="shot" data-caption="Person profile"><img src="screenshots/18-person.png" alt="Person page for Alex Rivera" loading="lazy"></div>
+          <div class="shot" data-caption="Observations"><img src="screenshots/19-observations.png" alt="Observations heatmap and log" loading="lazy"></div>
+          <div class="shot" data-caption="Medication timeline"><img src="screenshots/20-medications-timeline.png" alt="Medication timeline with dose changes" loading="lazy"></div>
+          <div class="shot" data-caption="Before and after a medication"><img src="screenshots/21-medication-before-after.png" alt="Before and after medication view" loading="lazy"></div>
+          <div class="shot" data-caption="Providers"><img src="screenshots/22-providers.png" alt="Providers directory with visit counts and spend" loading="lazy"></div>
+          <div class="shot" data-caption="Printable medical summary"><img src="screenshots/33-report-medical.png" alt="Printable medical summary with a medication history chart" loading="lazy"></div>
         </div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── Costs ────────────────────────────────────── -->
-  <section class="block" id="costs" style="padding-top:40px">
-    <div class="wrap spot flip">
-      <div class="copy reveal">
-        <span class="eyebrow"><svg class="icon"><use href="#i-chart"/></svg>Costs</span>
-        <h2>See where the money goes</h2>
-        <p>Every service record carries a cost. HomeCenter adds them up across your whole household.</p>
-        <ul class="checks">
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Monthly, quarterly or yearly</b> trends with a rolling average</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>Top <b>assets, categories and vendors</b></span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Biggest expenses</b> and year-to-date totals</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>Filter to <b>properties, vehicles, equipment or people</b></span></li>
-        </ul>
-      </div>
-      <div class="gallery reveal" style="--d:.1s">
-        <div class="tabs" role="tablist">
-          <button class="tab" role="tab">Spend over time<span class="bar"></span></button>
-          <button class="tab" role="tab">By asset &amp; vendor<span class="bar"></span></button>
-        </div>
-        <div class="frame"><div class="slides">
-          <div class="shot" data-caption="Costs: totals and spend over time"><img src="screenshots/17.Costs1.png" alt="Costs page with year-to-date totals and monthly spend chart" loading="lazy"></div>
-          <div class="shot" data-caption="Costs: by category, asset and vendor"><img src="screenshots/17.Costs2.png" alt="Costs by category, asset and vendor" loading="lazy"></div>
-        </div></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Search & documents ───────────────────────── -->
   <section class="block" id="search" style="padding-top:40px">
-    <div class="wrap spot">
+    <div class="wrap spot flip">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-search"/></svg>Search &amp; documents</span>
         <h2>Find anything, even inside the manual</h2>
@@ -875,113 +1017,227 @@
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Reads</b> PDF, Word, Excel, PowerPoint, OpenDocument, RTF and text</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>OCR</b> for photos and scanned PDFs</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Search by meaning</b> with a small model that runs on your server</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Exact matches first, then meaning, then partial matches</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span>Indexing happens in the background, <b>on your server</b></span></li>
         </ul>
       </div>
       <div class="reveal" style="--d:.1s">
-        <div class="frame"><div class="shot placeholder" id="searchDemo">
-          <div class="demo">
-            <span class="label">Global search</span>
-            <div class="searchbox"><svg class="icon"><use href="#i-search"/></svg><span><span class="typed"></span><span class="caret"></span></span></div>
-            <div class="hit"><span class="tag sem">Meaning</span><b>Furnace manual.pdf</b> — "<mark>replace every 90 days</mark> or sooner in heavy use"<span class="src">Gas Furnace · page 14</span></div>
-            <div class="hit"><span class="tag">Record</span><b>Replace furnace filter</b> — due in 6 days<span class="src">Maintenance · Gas Furnace</span></div>
-            <div class="hit"><span class="tag">Record</span><b>Annual furnace service</b> — $189<span class="src">Service record · 8/19/2026</span></div>
-          </div>
-        </div></div>
+        <div class="frame">
+          <div class="shot" data-caption="Search results for roof"><img src="screenshots/23-search.png" alt="Search results for the word roof across records and documents" loading="lazy"></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- ── Assistant ────────────────────────────────── -->
   <section class="block" id="assistant" style="padding-top:40px">
-    <div class="wrap spot flip">
+    <div class="wrap spot">
       <div class="copy reveal">
-        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>AI assistant · optional</span>
+        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>Assistant · optional</span>
         <h2>Ask your house a question</h2>
-        <p>The assistant looks up your records and documents to answer plain-language questions, with links back to the source.</p>
+        <p>The assistant looks up your records and documents to answer plain-language questions. It can also draft a health observation for you to review and save.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span>Works with <b>OpenAI, OpenRouter, Ollama, LM Studio</b> or any OpenAI-compatible server</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Run it fully local</b> and nothing leaves your network</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span>You choose whether it may <b>read documents and health data</b></span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Drafts observations</b> as a card with a Save button; nothing is saved until you press it</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>You choose whether it may <b>read documents and health documents</b></span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span>Chats stay in your browser and are <b>never stored on the server</b></span></li>
         </ul>
       </div>
-      <div class="reveal" style="--d:.1s">
-        <div class="frame"><div class="shot placeholder" id="chatDemo">
-          <div class="demo">
-            <span class="label">Assistant</span>
-            <div class="bubble me">What did we spend on the truck last year?</div>
-            <div class="bubble ai" data-typing><span class="dots"><i></i><i></i><i></i></span></div>
-            <div class="bubble ai" data-answer><b>$2,184</b> across 7 service records, mostly the <b>brake pads &amp; rotors</b> ($640) and two oil changes. The next oil change is <b>4 days overdue</b>.</div>
-          </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Ask a question<span class="bar"></span></button>
+          <button class="tab" role="tab">Draft an observation<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="The assistant"><img src="screenshots/24-assistant.png" alt="Assistant answering When was the furnace last serviced" loading="lazy"></div>
+          <div class="shot" data-caption="Assistant drafting an observation"><img src="screenshots/25-assistant-observation-draft.png" alt="Assistant drafting a health observation with a Save card" loading="lazy"></div>
         </div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── Notifications & reports ──────────────────── -->
   <section class="block" id="notify" style="padding-top:40px">
-    <div class="wrap spot">
+    <div class="wrap spot flip">
       <div class="copy reveal">
         <span class="eyebrow"><svg class="icon"><use href="#i-bell"/></svg>Reminders &amp; reports</span>
-        <h2>Email reminders and printable reports</h2>
-        <p>Reminders land in the app and, if you like, your inbox. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.</p>
+        <h2>Reminders where you'll see them, reports you can hand over</h2>
+        <p>Reminders land in the app, your inbox or your phone. Reports turn an asset's history into a document you can give a buyer, a mechanic or a doctor.</p>
         <ul class="checks">
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Email digests</b> per person: as soon as possible, daily or weekly</span></li>
-          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Mail server set up in Settings</b>, with a test button</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Push</b> to Discord, ntfy, Telegram or a JSON endpoint</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Mail server set up in Settings</b>, with a test button, and password reset by email</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Dismiss and restore</b> notifications</span></li>
           <li><svg class="icon"><use href="#i-check"/></svg><span><b>Printable asset reports</b> and medical summaries</span></li>
         </ul>
       </div>
       <div class="gallery reveal" style="--d:.1s">
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab">Email settings<span class="bar"></span></button>
           <button class="tab" role="tab">Notifications<span class="bar"></span></button>
-          <button class="tab" role="tab">Asset report<span class="bar"></span></button>
+          <button class="tab" role="tab">Notification settings<span class="bar"></span></button>
+          <button class="tab" role="tab">Mail server<span class="bar"></span></button>
+          <button class="tab" role="tab">Property report<span class="bar"></span></button>
         </div>
         <div class="frame"><div class="slides">
-          <div class="shot" data-caption="Email notification settings"><img src="screenshots/12.EmailNotifications.png" alt="Email notification settings" loading="lazy"></div>
-          <div class="shot" data-caption="Notifications"><img src="screenshots/18.Notifications.png" alt="Notifications list" loading="lazy"></div>
-          <div class="shot" data-caption="Asset report"><img src="screenshots/19.AssetReport.png" alt="Printable asset report" loading="lazy"></div>
+          <div class="shot" data-caption="Notifications"><img src="screenshots/26-notifications.png" alt="Notifications page" loading="lazy"></div>
+          <div class="shot" data-caption="Notification settings"><img src="screenshots/30-settings-notifications.png" alt="Notification settings with digest and push options" loading="lazy"></div>
+          <div class="shot" data-caption="Mail server settings"><img src="screenshots/35-settings-mail.png" alt="Mail server settings" loading="lazy"></div>
+          <div class="shot" data-caption="Printable property report"><img src="screenshots/32-report-property.png" alt="Printable property report" loading="lazy"></div>
         </div></div>
       </div>
     </div>
   </section>
 
-  <!-- ── New in 2.0 ───────────────────────────────── -->
+  <section class="block" id="regional" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-toggle"/></svg>Regional settings</span>
+        <h2>Your currency, your units, your clock</h2>
+        <p>Set it once under Settings. It applies to screens, reports, notifications, the assistant, receipt reading and search.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Currency</b> from the ISO 4217 list</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Distance and area</b> units</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Date format</b> and <b>12 or 24-hour</b> time</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Feature toggles</b> for Health, Rooms, Equipment and the property filter</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Regional<span class="bar"></span></button>
+          <button class="tab" role="tab">Features<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot" data-caption="Regional settings"><img src="screenshots/28-settings-regional.png" alt="Regional settings for currency, units, date format and clock" loading="lazy"></div>
+          <div class="shot" data-caption="Feature toggles"><img src="screenshots/29-settings-features.png" alt="Feature toggles in Settings" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="themes" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-sun"/></svg>Themes</span>
+        <h2>Twelve themes, light and dark</h2>
+        <p>Pick one from the top bar or step through them with its arrows. Spruce Night is the dark one shown here.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>12 themes</b>, chosen per device</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Sidebar</b> that collapses to icons</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Placement</b> of the assistant button and Intake, per device</span></li>
+        </ul>
+      </div>
+      <div class="gallery reveal" style="--d:.1s">
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab">Themes menu<span class="bar"></span></button>
+          <button class="tab" role="tab">Dark theme<span class="bar"></span></button>
+        </div>
+        <div class="frame"><div class="slides">
+          <div class="shot r1083" data-caption="The 12-theme menu"><img src="screenshots/37-themes-menu.png" alt="The theme menu listing 12 themes" loading="lazy"></div>
+          <div class="shot r1083" data-caption="Dashboard in Spruce Night"><img src="screenshots/31-dark-theme-dashboard.png" alt="Dashboard in the Spruce Night dark theme" loading="lazy"></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="phone" style="padding-top:40px">
+    <div class="wrap spot">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-users"/></svg>On your phone</span>
+        <h2>Install it like an app</h2>
+        <p>Open HomeCenter in your phone's browser and install it from Settings. The dashboard reflows into a single column.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Install as an app</b> from Settings → Install, open to everyone who signs in</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Phone layout</b> for dashboard cards, with a Move &amp; resize menu</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Same login</b>, same data, on your own server</span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame phone-frame">
+          <div class="shot phone" data-caption="Dashboard on a phone"><img src="screenshots/36-phone-dashboard.png" alt="HomeCenter dashboard on a phone" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="backups" style="padding-top:40px">
+    <div class="wrap spot flip">
+      <div class="copy reveal">
+        <span class="eyebrow"><svg class="icon"><use href="#i-download"/></svg>Backups &amp; your data</span>
+        <h2>Backups you can trust, and a way out</h2>
+        <p>Backups are built in. Each one is a single file holding the database and every uploaded file, and it's checked after it's written.</p>
+        <ul class="checks">
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Back up now</b> or on a <b>daily or weekly schedule</b>; the newest 14 are kept by default</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Verified</b> after writing, so you know the file opens</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Protection</b> is your choice: none, a recovery key, or a password zip that opens in 7-Zip, WinRAR or Keka</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Restore in the app</b> with a dry run first, and an undo</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span><b>Offline export</b> with a viewer, so your records outlive the app</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Point the folder at a <b>second disk or NAS share</b>, because a backup beside your data doesn't survive that disk failing</span></li>
+        </ul>
+      </div>
+      <div class="reveal" style="--d:.1s">
+        <div class="frame">
+          <div class="shot r1583" data-caption="Data and backups"><img src="screenshots/27-settings-data-backups.png" alt="Data and backups settings with schedule, password-zip protection, backup list, export and restore" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── What's new since 2.0 ─────────────────────── -->
   <section class="block" id="new" style="padding-top:40px">
     <div class="wrap">
       <div class="head center reveal">
-        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>New in 2.0</span>
-        <h2>What's new since the demos</h2>
-        <p>These arrived after the walkthroughs and screenshots above were recorded.</p>
+        <span class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>Version 3.1.0</span>
+        <h2>What's new since 2.0</h2>
+        <p>2.0 brought Intake, reminder controls, twelve themes and sharper search. Here is what arrived after it.</p>
       </div>
       <div class="trio">
-        <div class="tile reveal">
-          <h3><span class="badge"><svg class="icon"><use href="#i-clip"/></svg></span>Intake</h3>
-          <p>Drop receipts, photos, PDFs or forwarded emails anywhere. HomeCenter reads the date, vendor and total, suggests the asset, and files it as a service record. It offers to complete the matching reminder too.</p>
+        <div class="tile reveal" style="--d:0s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>3.1 <span class="opt">Paperless-ngx</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>One-way import from Paperless-ngx</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Choose from Paperless on uploads and Intake</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Scheduled sync, Check now and a broken-link badge</span></li>
+          </ul>
         </div>
         <div class="tile reveal" style="--d:.08s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-cpu"/></svg></span>Receipt reading</h3>
-          <p>Use the built-in parser or, optionally, a local AI model for harder receipts. If the model can't read a file, Intake tells you instead of quietly falling back.</p>
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>3.0 <span class="opt">Planning and insurance</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Customizable dashboard cards and a phone grid</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Planned spend, estimated cost, equipment life, manual page links</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Insurance page, push notifications and the property filter</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Security hardening</span></li>
+          </ul>
         </div>
         <div class="tile reveal" style="--d:.16s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-calendar"/></svg></span>More reminder controls</h3>
-          <p><b>Skip this time</b> moves a reminder on without logging a service. <b>Add default reminders</b> fills an empty Maintenance tab with a starter plan.</p>
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>2.4 <span class="opt">Rooms and resets</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Rooms with paint and flooring</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Customizable dashboards with edit mode</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Password reset by email</span></li>
+          </ul>
         </div>
       </div>
       <div class="trio" style="margin-top:16px">
-        <div class="tile reveal">
-          <h3><span class="badge"><svg class="icon"><use href="#i-sun"/></svg></span>Twelve themes</h3>
-          <p>Light and dark themes, picked from the top bar or stepped through with its arrows.</p>
+        <div class="tile reveal" style="--d:0s">
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>2.3 <span class="opt">Health</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Medication timeline</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Assistant drafts observations</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Configurable medical report options</span></li>
+          </ul>
         </div>
         <div class="tile reveal" style="--d:.08s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-dash"/></svg></span>Layout your way</h3>
-          <p>Collapse the sidebar to icons, and choose per device where the assistant button and Intake sit.</p>
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>2.2 <span class="opt">Regional</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Currency, distance and area units, date format, 12/24-hour time</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Applied across screens, reports, notifications and search</span></li>
+          </ul>
         </div>
         <div class="tile reveal" style="--d:.16s">
-          <h3><span class="badge"><svg class="icon"><use href="#i-search"/></svg></span>Sharper search</h3>
-          <p>Exact matches come first, then results by meaning, then partial matches.</p>
+          <h3><span class="badge"><svg class="icon"><use href="#i-sparkles"/></svg></span>2.1 <span class="opt">Backups</span></h3>
+          <ul>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>In-app backup, schedule, verify and protection</span></li>
+          <li><svg class="icon"><use href="#i-check"/></svg><span>Restore with dry run, offline export</span></li>
+          </ul>
         </div>
       </div>
     </div>
@@ -1006,7 +1262,7 @@
         </div>
         <div class="tile reveal" style="--d:.16s">
           <h3><span class="badge"><svg class="icon"><use href="#i-toggle"/></svg></span>You decide</h3>
-          <p>AI is off until you turn it on. Health can be hidden entirely. Mail and API keys are encrypted at rest.</p>
+          <p>AI is off until you turn it on. Health can be hidden entirely. Mail, API, push and Paperless secrets are encrypted at rest.</p>
         </div>
       </div>
     </div>
@@ -1035,6 +1291,7 @@
       - <span class="s">"3000:3000"</span>
     <span class="k">volumes:</span>
       - <span class="s">/volume1/docker/homecenter:/data</span>
+      <span class="c"># - /volume2/backups/homecenter:/backups   # optional: second disk for backups</span>
     <span class="k">environment:</span>
       <span class="k">DATABASE_URL:</span> <span class="s">"file:/data/homecenter.db"</span>
       <span class="k">AUTH_SECRET:</span> <span class="s">""</span>   <span class="c"># required</span>
@@ -1053,12 +1310,15 @@
         <h2>Questions before you install</h2>
       </div>
       <div class="faq">
-        <details class="reveal"><summary>Does it need an internet connection?</summary><p>No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model.</p></details>
+        <details class="reveal"><summary>Is it open source?</summary><p>Source-available. HomeCenter is released under the PolyForm Noncommercial License 1.0.0: it's free for noncommercial use, and you can read the code and run it on your own hardware. It isn't an OSI-approved open source licence, and commercial use isn't covered. The full text is in the LICENSE file on GitHub.</p></details>
+        <details class="reveal"><summary>Does it need an internet connection?</summary><p>No. HomeCenter runs on your local network. It goes online only for things you turn on: email and push reminders, a cloud AI provider, Paperless-ngx on another host, or downloading a larger search model.</p></details>
         <details class="reveal"><summary>What does the AI assistant send, and where?</summary><p>Your question and the records needed to answer it go to the AI provider you configure, including health records if you allow it. Point it at Ollama or LM Studio on your own network and nothing leaves. The assistant is off until an admin sets it up, and chats are never stored on the server.</p></details>
-        <details class="reveal"><summary>How do I back it up?</summary><p>Back up the data folder. It holds the database, uploaded files and downloaded models. Copy it while the container is stopped, or use your NAS's snapshots. Keep your <code>AUTH_SECRET</code> as well, because the saved mail password and API key can't be decrypted without it.</p></details>
+        <details class="reveal"><summary>How do I back it up?</summary><p>In the app. Under Settings → Data &amp; backups, an admin can run <b>Back up now</b> or set a daily or weekly schedule; the newest 14 are kept by default. Each backup is one file with the database and every upload, and it is verified after it's written. You can leave it unprotected, use a recovery key, or use a password zip. Restore from the same page: a dry run shows what would change first, and a staged restore can be cancelled before the restart. You can also make an offline export with a viewer. Mount a second disk or NAS share at <code>/backups</code>, because a backup on the same disk doesn't survive that disk failing, and keep your <code>AUTH_SECRET</code>.</p></details>
+        <details class="reveal"><summary>Does it work with Paperless-ngx?</summary><p>Yes. Add your Paperless-ngx URL and token under Settings → Paperless-ngx, then use <b>Choose from Paperless</b> when attaching a file or in Intake. Import is one-way, into HomeCenter. You can schedule a daily or weekly sync, and a badge flags a link that no longer resolves.</p></details>
         <details class="reveal"><summary>Will it run on my NAS?</summary><p>Images are built for amd64 and arm64, so it runs on Synology, Unraid and other Docker hosts, including 64-bit ARM boards such as a Raspberry Pi.</p></details>
-        <details class="reveal"><summary>Can everyone in the house have their own login?</summary><p>Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders.</p></details>
-        <details class="reveal"><summary>How is health data protected?</summary><p>It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely.</p></details>
+        <details class="reveal"><summary>Can everyone in the house have their own login?</summary><p>Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage features, regional settings, mail, the assistant, Paperless-ngx and backups, and each person chooses their own email and push reminders. Forgotten passwords can be reset by email once a mail server is set up.</p></details>
+        <details class="reveal"><summary>Can I use it on my phone?</summary><p>Yes. Open it in the phone's browser and install it from Settings → Install. The dashboard has a phone layout.</p></details>
+        <details class="reveal"><summary>How is health data protected?</summary><p>It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder and your backups like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely.</p></details>
       </div>
     </div>
   </section>
@@ -1068,7 +1328,7 @@
     <div class="glow a" style="top:0;opacity:.3"></div>
     <div class="wrap reveal">
       <h2>Install it in <span class="grad">about five minutes.</span></h2>
-      <p>Free and open source under the MIT licence. One container, one data folder, on your own server.</p>
+      <p>Source-available and free for noncommercial use under the PolyForm Noncommercial License 1.0.0. One container, one data folder, on your own server.</p>
       <div class="cta">
         <a class="btn primary" href="#install">Install HomeCenter <svg class="icon"><use href="#i-arrow"/></svg></a>
         <a class="btn" href="https://github.com/yatzin/home-center"><svg class="icon"><use href="#i-github"/></svg>Star on GitHub</a>
@@ -1079,8 +1339,8 @@
 
 <footer>
   <div class="wrap">
-    <span class="brand" style="font-size:15px"><span class="logo" style="width:26px;height:26px;font-size:10px">HC</span>HomeCenter</span>
-    <span>MIT licence · Photos in screenshots from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, under their individual licences.</span>
+    <span class="brand" style="font-size:15px"><span class="logo" style="width:26px;height:26px;font-size:10px">HC</span>HomeCenter 3.1.0</span>
+    <span>PolyForm Noncommercial 1.0.0 · Photos in screenshots from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, under their individual licences.</span>
     <span class="badges">
       <a href="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml"><img src="https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg" alt="Docker image build status" loading="lazy"></a>
       <a href="https://github.com/yatzin/home-center/commits/main"><img src="https://img.shields.io/github/last-commit/yatzin/home-center" alt="Last commit" loading="lazy"></a>
@@ -1185,34 +1445,6 @@
     if (reduced) g.querySelectorAll(".bar").forEach((b) => b.remove())
   })
 
-  // Search demo: type a question, then reveal results.
-  const searchDemo = document.getElementById("searchDemo")
-  const typed = searchDemo.querySelector(".typed")
-  const hits = [...searchDemo.querySelectorAll(".hit")]
-  const query = "how often do I swap the furnace filter?"
-  const runSearch = () => {
-    if (reduced) { typed.textContent = query; hits.forEach((h) => h.classList.add("show")); return }
-    let n = 0
-    typed.textContent = ""; hits.forEach((h) => h.classList.remove("show"))
-    const tick = () => {
-      typed.textContent = query.slice(0, ++n)
-      if (n < query.length) setTimeout(tick, 38 + Math.random() * 40)
-      else hits.forEach((h, k) => setTimeout(() => h.classList.add("show"), 350 + k * 220))
-    }
-    setTimeout(tick, 400)
-  }
-  once(searchDemo, runSearch)
-
-  // Assistant demo: question, typing dots, answer.
-  const chatDemo = document.getElementById("chatDemo")
-  const [q, typing, answer] = chatDemo.querySelectorAll(".bubble")
-  once(chatDemo, () => {
-    if (reduced) { q.classList.add("show"); answer.classList.add("show"); typing.remove(); return }
-    setTimeout(() => q.classList.add("show"), 200)
-    setTimeout(() => typing.classList.add("show"), 900)
-    setTimeout(() => { typing.remove(); answer.classList.add("show") }, 2400)
-  })
-
   // Copy compose file.
   const copyBtn = document.getElementById("copyBtn")
   copyBtn.addEventListener("click", async () => {
@@ -1258,7 +1490,7 @@
     touchX = null
   })
 
-  // Demo player: one dialog, prev/next through the six videos, arrow keys and swipe.
+  // Demo player: one dialog, prev/next through the videos, arrow keys and swipe.
   const pl = document.getElementById("player")
   const plVideo = pl.querySelector("video")
   const [plTitle, plDesc, plCount] = pl.querySelectorAll(".pl-cap > *")

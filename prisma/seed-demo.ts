@@ -28,7 +28,7 @@ const url = process.env.DATABASE_URL ?? "file:./prisma/dev.db"
 const prisma = new PrismaClient({ adapter: new PrismaLibSql({ url }) })
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? "./uploads"
-const MANAGED_DIRS = ["properties", "vehicles", "equipment", "people", "service", "warranty", "maintenance", "condition", "insurance"]
+const MANAGED_DIRS = ["properties", "vehicles", "equipment", "people", "service", "warranty", "maintenance", "condition", "insurance", "document", "inbox"]
 
 const ADMIN_EMAIL = (process.env.DEMO_EMAIL ?? "demo@homecenter.local").trim().toLowerCase()
 const ADMIN_PASSWORD = process.env.DEMO_PASSWORD ?? "demo1234"
@@ -67,6 +67,10 @@ async function confirmWipe() {
     warranties: await prisma.warranty.count(),
     maintenance: await prisma.maintenanceSchedule.count(),
     attachments: await prisma.attachment.count(),
+    rooms: await prisma.room.count(),
+    observations: await prisma.observation.count(),
+    inboxItems: await prisma.inboxItem.count(),
+    dashboardLayouts: await prisma.dashboardLayout.count(),
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
 
@@ -106,10 +110,13 @@ async function confirmWipe() {
 async function wipe() {
   // Children first — attachments and notifications hold the foreign keys.
   await prisma.attachment.deleteMany()
+  await prisma.inboxItem.deleteMany()
   await prisma.notification.deleteMany()
+  await prisma.dashboardLayout.deleteMany()
   await prisma.serviceRecord.deleteMany()
   await prisma.warranty.deleteMany()
   await prisma.maintenanceSchedule.deleteMany()
+  await prisma.observation.deleteMany()
   await prisma.medication.deleteMany()
   await prisma.healthCondition.deleteMany()
   await prisma.allergy.deleteMany()
@@ -118,6 +125,8 @@ async function wipe() {
   await prisma.person.deleteMany()
   await prisma.provider.deleteMany()
   await prisma.equipment.deleteMany()
+  await prisma.roomPaint.deleteMany()
+  await prisma.room.deleteMany()
   await prisma.vehicle.deleteMany()
   await prisma.property.deleteMany()
   await prisma.user.deleteMany()
@@ -474,9 +483,22 @@ const P = (i: number): Ref => ({ kind: "property", index: i })
 const V = (i: number): Ref => ({ kind: "vehicle", index: i })
 const E = (i: number): Ref => ({ kind: "equipment", index: i })
 
+/** Costs charts group by category, so tag each demo record from its title. */
+function serviceCategory(title: string): "ROUTINE" | "REPAIR" | "UPGRADE" | "INSPECTION" | "PARTS" | "OTHER" {
+  const t = title.toLowerCase()
+  if (/install|upgrade|repaint|roof|replacement|generator|remodel|turnover|paint|new /.test(t)) return "UPGRADE"
+  if (/repair|crack|regrout|injection|rebuild|switch|fix/.test(t)) return "REPAIR"
+  if (/inspection|test|check/.test(t)) return "INSPECTION"
+  if (/part|battery|filter|pads|rotors|tire|replaced/.test(t)) return "PARTS"
+  if (/service|oil|flush|cleaning|rotation|clean|annual|maintenance|tune|mow|gutter|sweep|sealcoat|for the season/.test(t)) return "ROUTINE"
+  return "OTHER"
+}
+
 const SERVICE: {
   ref: Ref; daysAgo: number; title: string; vendor: string | null; cost: number | null
   description?: string; mileage?: number; receipt?: string
+  /** A Maple Street room this record is tagged to (equipment records inherit their equipment's room). */
+  room?: string
 }[] = [
   // Recent — these fill the dashboard's "Recent Service" panel
   { ref: E(6), daysAgo: 4, title: "Annual furnace service", vendor: "Springfield Heating & Air", cost: 189, description: "Cleaned burners, checked heat exchanger, replaced 16x25x4 media filter. Inducer motor showing early bearing noise — flagged for next season.", receipt: "furnace-service-invoice.pdf" },
@@ -484,11 +506,13 @@ const SERVICE: {
   { ref: E(11), daysAgo: 12, title: "Sump pump backup battery replaced", vendor: "DIY", cost: 164.99, description: "Original battery was five years old and failing the self-test." },
   { ref: E(0), daysAgo: 18, title: "Ice maker repair", vendor: "Appliance Medics", cost: 245, description: "Replaced water inlet valve. Part under manufacturer warranty, labor billed.", receipt: "icemaker-repair.pdf" },
   { ref: V(2), daysAgo: 23, title: "Brake pads & rotors — front", vendor: "Midas", cost: 612.35, mileage: 95980, receipt: "brake-invoice.pdf" },
+  { ref: P(0), daysAgo: 21, title: "Repaint living room", vendor: "DIY", cost: 186.4, room: "Living room", description: "Two coats over primer. Trim redone in semi-gloss." },
   { ref: P(0), daysAgo: 27, title: "Gutter cleaning", vendor: "Top Notch Exteriors", cost: 225 },
   { ref: E(28), daysAgo: 31, title: "Boiler annual inspection", vendor: "Peoria Mechanical", cost: 210, description: "Combustion test passed. Recommended replacing the expansion tank within two years." },
 
   // Last few months
   { ref: V(1), daysAgo: 44, title: "Oil change", vendor: "Honda of Springfield", cost: 74.2, mileage: 27600 },
+  { ref: P(0), daysAgo: 58, title: "Basement wall crack injection", vendor: "DrySpace Foundation Repair", cost: 850, room: "Basement", description: "Hairline crack on the north wall, epoxy injected. One-year workmanship guarantee." },
   { ref: E(9), daysAgo: 52, title: "Water heater flush", vendor: "DIY", cost: 0, description: "Drained about four gallons of sediment. Anode rod still has life." },
   { ref: P(1), daysAgo: 61, title: "Dock removal for the season", vendor: "Lakeside Marine", cost: 480 },
   { ref: E(21), daysAgo: 66, title: "Generator load bank test", vendor: "Generac Authorized Service", cost: 295, receipt: "generator-service.pdf" },
@@ -503,6 +527,7 @@ const SERVICE: {
   // Older history
   { ref: V(0), daysAgo: 178, title: "Oil change & cabin filter", vendor: "Jiffy Lube", cost: 96.8, mileage: 57400 },
   { ref: E(18), daysAgo: 192, title: "Well pump pressure switch", vendor: "Geneva Well & Pump", cost: 385 },
+  { ref: P(0), daysAgo: 160, title: "Bathroom regrout & recaulk", vendor: "DIY", cost: 38.75, room: "Bathroom" },
   { ref: P(0), daysAgo: 205, title: "Driveway sealcoating", vendor: "Blacktop Brothers", cost: 540 },
   { ref: E(6), daysAgo: 218, title: "Furnace igniter replaced", vendor: "Springfield Heating & Air", cost: 232, description: "No-heat call on the coldest night of the year, naturally." },
   { ref: V(2), daysAgo: 236, title: "Oil change", vendor: "Quick Lane", cost: 89.95, mileage: 91200 },
@@ -589,6 +614,68 @@ const MAINTENANCE: {
   { ref: V(3), title: "Timing belt — 105k interval", intervalDays: null, dueInDays: null, intervalMiles: 105000, dueInMiles: 3200, estimatedCost: 900 },
   { ref: E(1), title: "Clean dishwasher filter", intervalDays: 90, dueInDays: 33 },
 ]
+
+/** Maple Street's rooms, with finishes. Paint rows are one per surface. */
+const ROOMS: {
+  name: string; level: string; area: number; dimensions: string; flooringType: string; flooringProduct: string
+  flooringInstalledDaysAgo: number; notes?: string
+  paints: { surface: string; brand: string; colorName: string; colorCode: string; finish: string }[]
+}[] = [
+  {
+    name: "Kitchen", level: "Main floor", area: 196, dimensions: "14 × 14 ft", flooringType: "Tile", flooringProduct: "Daltile Emblem Gray 12×24 porcelain",
+    flooringInstalledDaysAgo: 1190, notes: "Cabinets are painted maple. Soft-close hinges on the left bank were replaced last spring.",
+    paints: [
+      { surface: "Walls", brand: "Sherwin-Williams", colorName: "Agreeable Gray", colorCode: "SW 7029", finish: "Eggshell" },
+      { surface: "Cabinets", brand: "Benjamin Moore", colorName: "Simply White", colorCode: "OC-117", finish: "Satin" },
+      { surface: "Ceiling", brand: "Behr", colorName: "Ultra Pure White", colorCode: "1850", finish: "Flat" },
+    ],
+  },
+  {
+    name: "Living room", level: "Main floor", area: 288, dimensions: "16 × 18 ft", flooringType: "Hardwood", flooringProduct: "Red oak, 3¼ in, natural satin",
+    flooringInstalledDaysAgo: 2500, notes: "Original hardwood, refinished in 2023.",
+    paints: [
+      { surface: "Walls", brand: "Sherwin-Williams", colorName: "Accessible Beige", colorCode: "SW 7036", finish: "Eggshell" },
+      { surface: "Trim", brand: "Sherwin-Williams", colorName: "Pure White", colorCode: "SW 7005", finish: "Semi-gloss" },
+      { surface: "Accent wall", brand: "Farrow & Ball", colorName: "Hague Blue", colorCode: "No. 30", finish: "Estate eggshell" },
+    ],
+  },
+  {
+    name: "Primary bedroom", level: "Upstairs", area: 224, dimensions: "14 × 16 ft", flooringType: "Carpet", flooringProduct: "Mohawk SmartStrand, Oatmeal",
+    flooringInstalledDaysAgo: 1450,
+    paints: [
+      { surface: "Walls", brand: "Benjamin Moore", colorName: "Revere Pewter", colorCode: "HC-172", finish: "Matte" },
+      { surface: "Ceiling", brand: "Behr", colorName: "Ultra Pure White", colorCode: "1850", finish: "Flat" },
+    ],
+  },
+  {
+    name: "Bathroom", level: "Upstairs", area: 60, dimensions: "6 × 10 ft", flooringType: "Tile", flooringProduct: "Hex mosaic porcelain, white",
+    flooringInstalledDaysAgo: 2000, notes: "Exhaust fan vented through the roof. Regrouted this year.",
+    paints: [{ surface: "Walls", brand: "Sherwin-Williams", colorName: "Sea Salt", colorCode: "SW 6204", finish: "Satin" }],
+  },
+  {
+    name: "Laundry room", level: "Main floor", area: 54, dimensions: "6 × 9 ft", flooringType: "LVP", flooringProduct: "COREtec Plus, Newport Oak",
+    flooringInstalledDaysAgo: 1470,
+    paints: [{ surface: "Walls", brand: "Behr", colorName: "Silver Drop", colorCode: "N520-2", finish: "Satin" }],
+  },
+  {
+    name: "Basement", level: "Lower level", area: 1050, dimensions: "Open plan, 30 × 35 ft", flooringType: "Concrete", flooringProduct: "Sealed slab, epoxy near the utilities",
+    flooringInstalledDaysAgo: 9000, notes: "Furnace, water heater, softener and sump pit are all here. Hairline crack on the north wall was injected this year.",
+    paints: [{ surface: "Walls", brand: "Drylok", colorName: "White", colorCode: "Latex base", finish: "Flat" }],
+  },
+  {
+    name: "Garage", level: "Main floor", area: 484, dimensions: "22 × 22 ft", flooringType: "Concrete", flooringProduct: "Rust-Oleum garage floor epoxy, gray flake",
+    flooringInstalledDaysAgo: 900,
+    paints: [{ surface: "Walls", brand: "Behr", colorName: "Swiss Coffee", colorCode: "12", finish: "Flat" }],
+  },
+]
+
+/** Which Maple Street room each piece of equipment (by EQUIPMENT index) stands in. */
+const ROOM_OF_EQUIPMENT: Record<number, string> = {
+  0: "Kitchen", 1: "Kitchen", 2: "Kitchen", 3: "Kitchen",
+  4: "Laundry room", 5: "Laundry room",
+  6: "Basement", 8: "Basement", 9: "Basement", 10: "Basement", 11: "Basement",
+  12: "Garage",
+}
 
 // ─── People ──────────────────────────────────────────────────────────────────
 
@@ -680,6 +767,63 @@ async function seedInsurance(properties: { id: string }[], vehicles: { id: strin
   })
 }
 
+/** A stored health date: midnight UTC of the local calendar day, like the app writes them. */
+const utcDay = (days: number) => {
+  const d = at(days)
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+}
+
+/** Small repeatable wobble so readings drift like real ones; the same run gives the same numbers. */
+const wobble = (i: number, spread: number) => Math.round(Math.sin(i * 12.9898) * spread)
+
+/**
+ * About six months of home health readings, logged as observations (the model has no numeric
+ * fields, so the value is in the notes): blood pressure trending down after the dose change,
+ * weight, resting heart rate, plus some symptoms. The child's are asthma flares and bad nights.
+ */
+async function seedObservations(userId: string, adultId: string, childId: string, hypertensionId: string, asthmaId: string) {
+  type Row = { personId: string; days: number; time?: string; type: string; severity?: number; durationMinutes?: number; notes?: string; tags?: string; conditionId?: string }
+  const rows: Row[] = []
+
+  // Blood pressure about every 9 days: drifts from the low 140s toward the 120s.
+  for (let i = 0, d = -178; d <= -1; i++, d += 9 + (i % 3)) {
+    const progress = (178 + d) / 178
+    const sys = Math.round(142 - progress * 16 + wobble(i, 5))
+    const dia = Math.round(88 - progress * 7 + wobble(i + 7, 3))
+    rows.push({
+      personId: adultId, days: d, time: i % 2 ? "07:30" : "20:45", type: "Blood pressure", conditionId: hypertensionId,
+      severity: sys >= 140 ? 3 : sys >= 130 ? 2 : 1, notes: `${sys}/${dia} mmHg, seated, left arm`, tags: i % 2 ? "morning" : "evening",
+    })
+  }
+  // Weight every ~3 weeks: slow loss.
+  for (let i = 0, d = -175; d <= -2; i++, d += 21) {
+    rows.push({ personId: adultId, days: d, time: "06:50", type: "Weight", notes: `${(188.4 - i * 0.9 + wobble(i, 1) / 4).toFixed(1)} lb`, tags: "morning" })
+  }
+  // Resting heart rate weekly-ish.
+  for (let i = 0, d = -170; d <= -1; i++, d += 7 + (i % 2)) {
+    rows.push({ personId: adultId, days: d, time: "07:10", type: "Resting heart rate", notes: `${70 - Math.round((170 + d) / 40) + wobble(i + 3, 2)} bpm`, tags: "morning" })
+  }
+  rows.push(
+    { personId: adultId, days: -33, time: "15:20", type: "Headache", severity: 3, durationMinutes: 90, notes: "Behind the eyes, came on after a long day at the screen. Eased after water and a walk.", tags: "work, dehydrated", conditionId: hypertensionId },
+    { personId: adultId, days: -12, time: "02:30", type: "Poor sleep", severity: 2, durationMinutes: 180, notes: "Awake from 2:30 on, mind racing about the roof quote.", tags: "stress" },
+    { personId: childId, days: -150, time: "16:00", type: "Asthma flare", severity: 3, durationMinutes: 40, notes: "Wheezing after soccer practice. Two puffs of albuterol and rest.", tags: "exercise, pollen", conditionId: asthmaId },
+    { personId: childId, days: -118, time: "21:30", type: "Night cough", severity: 2, durationMinutes: 120, notes: "Dry cough keeping him awake. Window was open for the pollen.", tags: "pollen", conditionId: asthmaId },
+    { personId: childId, days: -74, type: "Asthma flare", severity: 4, durationMinutes: 60, notes: "Cold air at the bus stop. Needed the inhaler twice.", tags: "cold, school", conditionId: asthmaId },
+    { personId: childId, days: -41, time: "19:00", type: "Poor sleep", severity: 2, notes: "Up three times, said his chest felt tight.", tags: "tired", conditionId: asthmaId },
+    { personId: childId, days: -9, time: "08:10", type: "Meltdown", severity: 3, durationMinutes: 25, notes: "Missed the bus. Calmed down in the car.", tags: "school, tired" },
+  )
+
+  for (const r of rows) {
+    await prisma.observation.create({
+      data: {
+        personId: r.personId, date: utcDay(r.days), time: r.time ?? null, type: r.type, severity: r.severity ?? null,
+        durationMinutes: r.durationMinutes ?? null, notes: r.notes ?? null, tags: r.tags ?? null,
+        conditionId: r.conditionId ?? null, createdById: userId,
+      },
+    })
+  }
+}
+
 async function seedPeople(userId: string) {
   const drChen = await prisma.provider.create({ data: { name: "Dr. Maria Chen", specialty: "Family medicine", practice: "Riverside Family Health", phone: "555-201-4410" } })
   const drPatel = await prisma.provider.create({ data: { name: "Dr. Anil Patel", specialty: "Dentistry", practice: "Bright Smile Dental", phone: "555-201-8832" } })
@@ -689,9 +833,16 @@ async function seedPeople(userId: string) {
   const child = await prisma.person.create({ data: { name: "Sam Rivera", relationship: "CHILD", dateOfBirth: new Date("2016-08-30"), primaryProviderId: drOkafor.id } })
 
   const hypertension = await prisma.healthCondition.create({ data: { personId: adult.id, name: "Hypertension", status: "MANAGED", diagnosedDate: at(-900), providerId: drChen.id } })
-  await prisma.healthCondition.create({ data: { personId: child.id, name: "Seasonal asthma", status: "ACTIVE", diagnosedDate: at(-500), providerId: drOkafor.id } })
+  const asthma = await prisma.healthCondition.create({ data: { personId: child.id, name: "Seasonal asthma", status: "ACTIVE", diagnosedDate: at(-500), providerId: drOkafor.id } })
+  const highCholesterol = await prisma.healthCondition.create({ data: { personId: adult.id, name: "High cholesterol", status: "RESOLVED", diagnosedDate: at(-760), providerId: drChen.id } })
 
-  await prisma.medication.create({ data: { personId: adult.id, name: "Lisinopril", dosage: "10 mg", frequency: "Once daily", prescriberId: drChen.id, conditionId: hypertension.id, startDate: at(-890), refillIntervalDays: 30, nextRefillDate: at(4), pharmacy: "Walgreens on Main" } })
+  // A medication timeline: a starting dose that was raised, a statin that was stopped, a supplement, and the child's inhaler.
+  await prisma.medication.create({ data: { personId: adult.id, name: "Lisinopril", dosage: "5 mg", frequency: "Once daily", prescriberId: drChen.id, conditionId: hypertension.id, startDate: at(-890), endDate: at(-421), pharmacy: "Walgreens on Main", notes: "Starting dose. Raised to 10 mg when readings stayed high." } })
+  await prisma.medication.create({ data: { personId: adult.id, name: "Lisinopril", dosage: "10 mg", frequency: "Once daily", prescriberId: drChen.id, conditionId: hypertension.id, startDate: at(-420), refillIntervalDays: 30, nextRefillDate: at(4), pharmacy: "Walgreens on Main" } })
+  await prisma.medication.create({ data: { personId: adult.id, name: "Atorvastatin", dosage: "20 mg", frequency: "Once daily at night", prescriberId: drChen.id, conditionId: highCholesterol.id, startDate: at(-740), endDate: at(-140), pharmacy: "Walgreens on Main", notes: "Stopped after the lipid panel came back normal on diet changes." } })
+  await prisma.medication.create({ data: { personId: adult.id, name: "Vitamin D3", dosage: "2000 IU", frequency: "Once daily", startDate: at(-300), refillIntervalDays: 90, nextRefillDate: at(33), pharmacy: "Costco Pharmacy" } })
+  await prisma.medication.create({ data: { personId: child.id, name: "Albuterol inhaler", dosage: "90 mcg, 2 puffs", frequency: "As needed", prescriberId: drOkafor.id, conditionId: asthma.id, startDate: at(-480), refillIntervalDays: 180, nextRefillDate: at(48), pharmacy: "Walgreens on Main", notes: "Use before sports and at the first sign of wheezing." } })
+  await prisma.medication.create({ data: { personId: child.id, name: "Cetirizine", dosage: "5 mg", frequency: "Once daily", startDate: at(-150), endDate: at(-95), pharmacy: "Walgreens on Main", notes: "Spring pollen season only." } })
   await prisma.medication.create({ data: { personId: child.id, name: "Amoxicillin", dosage: "250 mg", frequency: "Three times daily", prescriberId: drOkafor.id, startDate: at(-200), endDate: at(-190) } })
 
   await prisma.allergy.create({ data: { personId: child.id, substance: "Penicillin", severity: "SEVERE", reaction: "Hives, facial swelling" } })
@@ -721,11 +872,104 @@ async function seedPeople(userId: string) {
     await attach("SERVICE", record.id, userId, `${v.title}.pdf`, [v.title, v.vendor, `Amount due: $${v.cost.toFixed(2)}`])
   }
 
+  await seedObservations(userId, adult.id, child.id, hypertension.id, asthma.id)
+
   await prisma.maintenanceSchedule.create({ data: { assetType: "PERSON", assetId: adult.id, title: "Annual physical", intervalDays: 365, nextDueDate: at(165) } })
   await prisma.maintenanceSchedule.create({ data: { assetType: "PERSON", assetId: child.id, title: "Dental cleaning", intervalDays: 180, nextDueDate: at(10) } })
 }
 
 // ─── Seed ────────────────────────────────────────────────────────────────────
+
+// ─── Intake and dashboard ────────────────────────────────────────────────────
+
+type InboxSeed = {
+  daysAgo: number; vendor: string; total: number; method: "basic" | "llm"; file: string; lines: string[]
+  suggest: { kind: "property" | "vehicle" | "equipment"; index: number; reason: string } | null
+}
+
+const INBOX: InboxSeed[] = [
+  {
+    daysAgo: 1, vendor: "Ace Hardware", total: 87.43, method: "basic", file: "ace-hardware-receipt.pdf",
+    lines: ["ACE HARDWARE #4412", "Springfield, IL", "Zoeller float switch      $42.99", "1-1/2 in PVC check valve  $18.49", "Teflon tape, 3 pk          $9.95", "Subtotal $71.43  Tax $5.00  Total $87.43"],
+    suggest: { kind: "equipment", index: 11, reason: "Brand on the receipt" },
+  },
+  {
+    daysAgo: 3, vendor: "Rooter Plumbing & Drain", total: 385, method: "llm", file: "plumber-invoice.pdf",
+    lines: ["ROOTER PLUMBING & DRAIN", "Invoice 20418", "Service address: 412 Maple St, Springfield, IL", "Clear kitchen drain line, replace supply stop", "Labor 2 hrs  $240.00   Parts  $145.00", "Total due $385.00"],
+    suggest: { kind: "property", index: 0, reason: "Address on the receipt" },
+  },
+  {
+    daysAgo: 6, vendor: "Discount Tire", total: 412.9, method: "basic", file: "tire-receipt.pdf",
+    lines: ["DISCOUNT TIRE #217", "Install 2 tires, balance and align", "VIN 2HGFE2F52MH512087", "Total $412.90"],
+    suggest: { kind: "vehicle", index: 1, reason: "VIN on the receipt" },
+  },
+]
+
+async function seedInbox(userId: string, ids: { properties: { id: string }[]; vehicles: { id: string }[]; equipment: { id: string }[] }) {
+  for (const it of INBOX) {
+    const target = it.suggest ? ids[`${it.suggest.kind === "property" ? "properties" : it.suggest.kind === "vehicle" ? "vehicles" : "equipment"}`][it.suggest.index] : null
+    const when = at(-it.daysAgo)
+    const item = await prisma.inboxItem.create({
+      data: {
+        createdAt: when, createdById: userId, status: "READY",
+        parsedDate: new Date(Date.UTC(when.getFullYear(), when.getMonth(), when.getDate())), parsedTotal: it.total, parsedVendor: it.vendor, parseMethod: it.method,
+        suggestedAssetType: it.suggest ? (it.suggest.kind === "property" ? "PROPERTY" : it.suggest.kind === "vehicle" ? "VEHICLE" : "EQUIPMENT") : null,
+        suggestedAssetId: target?.id ?? null, suggestedReason: it.suggest?.reason ?? null,
+      },
+    })
+    const bytes = receiptPdf([...it.lines.slice(0, 1), ...it.lines.slice(1), `Date: ${when.toLocaleDateString()}`])
+    const dir = path.join(UPLOAD_DIR, "inbox", item.id)
+    await mkdir(dir, { recursive: true })
+    const filename = `inbox-${item.id.slice(-6)}.pdf`
+    await writeFile(path.join(dir, filename), bytes)
+    await prisma.attachment.create({
+      data: { recordType: "INBOX", filename, originalName: it.file, mimeType: "application/pdf", sizeBytes: bytes.length, uploadedById: userId, inboxItemId: item.id },
+    })
+  }
+}
+
+/**
+ * A saved, customised dashboard (the app keeps one shared layout row; without it the default shows,
+ * and the editor can restore it). Card ids are the type ids; text cards get their own.
+ * Placement is on the 12-column grid, rows are ~88px.
+ */
+async function seedDashboard() {
+  const cards = [
+    { id: "greeting", type: "text", config: { text: "Good morning, {user}", style: "h1", align: "left", border: false } },
+    { id: "today", type: "text", config: { text: "Today is {weekday}, {date}.", style: "muted", align: "left", border: false } },
+    { id: "clock", type: "clock", config: { showSeconds: false, showDate: true, face: "auto" } },
+    { id: "planned-spend", type: "planned-spend", config: { months: 12 } },
+    { id: "equipment-life", type: "equipment-life", config: { show: "all" } },
+    { id: "spending-breakdown", type: "spending-breakdown", config: { range: "months", months: 12 } },
+    { id: "observations-heatmap", type: "observations-heatmap", config: { months: 6 } },
+    { id: "activity", type: "activity", config: { months: 12 } },
+    { id: "reminders", type: "reminders", config: { windowDays: 30, limit: 6 } },
+    { id: "intake", type: "intake", config: {} },
+    { id: "rooms", type: "rooms", config: { limit: 18 } },
+    { id: "people", type: "people", config: { limit: 18 } },
+  ]
+  const large = [
+    { id: "greeting", x: 0, y: 0, w: 9, h: 1 },
+    { id: "today", x: 0, y: 1, w: 9, h: 1 },
+    { id: "clock", x: 9, y: 0, w: 3, h: 2 },
+    { id: "planned-spend", x: 0, y: 2, w: 4, h: 3 },
+    { id: "equipment-life", x: 4, y: 2, w: 4, h: 3 },
+    { id: "spending-breakdown", x: 8, y: 2, w: 4, h: 3 },
+    { id: "observations-heatmap", x: 0, y: 5, w: 6, h: 3 },
+    { id: "activity", x: 6, y: 5, w: 6, h: 3 },
+    { id: "reminders", x: 0, y: 8, w: 4, h: 4 },
+    { id: "intake", x: 4, y: 8, w: 4, h: 4 },
+    { id: "rooms", x: 8, y: 8, w: 4, h: 2 },
+    { id: "people", x: 8, y: 10, w: 4, h: 2 },
+  ]
+  // format 1 = LAYOUT_FORMAT in lib/dashboard/layout.ts; phone: null derives the phone layout.
+  const data = JSON.stringify({ format: 1, cards, large, phone: null })
+  await prisma.dashboardLayout.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", data, revision: 1 },
+    update: { data, revision: { increment: 1 } },
+  })
+}
 
 async function main() {
   let user: { id: string }
@@ -773,6 +1017,25 @@ async function main() {
     )
   }
 
+  console.log("  Creating rooms…")
+  const roomIds = new Map<string, string>()
+  for (const r of ROOMS) {
+    const room = await prisma.room.create({
+      data: {
+        propertyId: properties[0].id, name: r.name, level: r.level, area: r.area, dimensions: r.dimensions,
+        flooringType: r.flooringType, flooringProduct: r.flooringProduct, flooringInstalled: at(-r.flooringInstalledDaysAgo),
+        notes: r.notes ?? null,
+        paints: { create: r.paints.map((p, i) => ({ ...p, sortOrder: i })) },
+      },
+    })
+    roomIds.set(r.name, room.id)
+  }
+  /** The room an equipment item stands in, when it is one of Maple Street's tagged ones. */
+  const roomOfEquipment = (index: number) => {
+    const name = EQUIPMENT[index].house === 0 ? ROOM_OF_EQUIPMENT[index] : undefined
+    return name ? roomIds.get(name) ?? null : null
+  }
+
   const equipment: { id: string }[] = []
   for (const e of EQUIPMENT) {
     equipment.push(
@@ -780,7 +1043,7 @@ async function main() {
         data: {
           name: e.name, category: e.category, manufacturer: e.manufacturer, modelNumber: e.model,
           serialNumber: `${e.manufacturer.slice(0, 3).toUpperCase()}-${String(100000 + equipment.length * 7331).slice(0, 6)}`,
-          location: e.location, propertyId: properties[e.house].id,
+          location: e.location, propertyId: properties[e.house].id, roomId: roomOfEquipment(equipment.length),
           purchaseDate: at(-e.installedDaysAgo - 3), installDate: at(-e.installedDaysAgo),
           purchasePrice: e.price, notes: e.notes ?? null,
           expectedLifeYears: e.life ?? null, replacementCost: e.replace ?? null, valueClass: e.valueClass ?? null,
@@ -801,7 +1064,9 @@ async function main() {
     const record = await prisma.serviceRecord.create({
       data: {
         ...resolve(s.ref), date: at(-s.daysAgo), title: s.title, description: s.description ?? null,
+        category: serviceCategory(s.title),
         vendor: s.vendor, cost: s.cost, mileageAtService: s.mileage ?? null, createdById: user.id,
+        roomId: s.room ? roomIds.get(s.room) ?? null : s.ref.kind === "equipment" ? roomOfEquipment(s.ref.index) : null,
       },
     })
     if (s.receipt) {
@@ -889,6 +1154,7 @@ async function main() {
           ? vehicle.currentMileage + m.dueInMiles - m.intervalMiles
           : null,
         reminderDaysBefore: m.reminderDaysBefore ?? 14,
+        roomId: m.ref.kind === "equipment" ? roomOfEquipment(m.ref.index) : null,
         isActive: true,
       },
     })
@@ -906,6 +1172,16 @@ async function main() {
 
   console.log("  Creating insurance…")
   await seedInsurance(properties, vehicles)
+
+  console.log("  Creating intake items…")
+  await seedInbox(user.id, { properties, vehicles, equipment })
+
+  // --keep never overwrites a dashboard someone already arranged.
+  const keptDashboard = KEEP && (await prisma.dashboardLayout.count()) > 0
+  if (!keptDashboard) {
+    console.log("  Saving a custom dashboard…")
+    await seedDashboard()
+  }
 
   const jobs: PhotoJob[] = [
     ...properties.map((p, i) => ({ kind: "properties" as const, id: p.id, query: PROPERTIES[i].photo, fallbackQuery: "house exterior", variant: i })),
@@ -931,6 +1207,8 @@ async function main() {
     ${properties.length} properties, ${vehicles.length} vehicles, ${equipment.length} equipment
     ${SERVICE.length} service records, ${WARRANTIES.length} warranties, ${MAINTENANCE.length} reminders
     ${await prisma.attachment.count()} attachments
+    ${await prisma.room.count()} rooms (${await prisma.roomPaint.count()} painted surfaces), ${await prisma.observation.count()} health observations, ${await prisma.medication.count()} medications
+    ${await prisma.inboxItem.count()} intake items, ${keptDashboard ? "existing dashboard kept" : "1 saved custom dashboard layout"}
     ${await prisma.person.count()} people, ${await prisma.provider.count()} providers, ${await prisma.insurancePolicy.count()} insurance policies (${await prisma.insurancePolicy.count({ where: { kind: { notIn: ["MEDICAL", "DENTAL", "VISION", "OTHER"] } } })} home or auto)
     photos: ${cached} cached, ${downloaded} fetched, ${generated} generated
 
