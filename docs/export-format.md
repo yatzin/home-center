@@ -3,6 +3,8 @@
 An export is a zip you can open on any computer. You do not need HomeCenter to read it.
 Exports are for reading and moving data elsewhere. They cannot be restored. Use a backup for that.
 
+This describes the format written by HomeCenter 3.1.0. Format version 1 has been stable since backups and exports arrived in 2.1. Rooms, insurance coverages and premiums, observations, estimated cost and manual references were added to it as new fields, so older readers keep working.
+
 ## Layout
 
 ```
@@ -54,7 +56,7 @@ A file reference (`FileRef`) is `{ name, path, size, mimeType }`. `path` is rela
 - `service-records.json`: `id`, `assetId`, `assetType`, `date`, `title`, `vendor`, `cost`, `category`, `mileage`, `notes`, `files`.
 - `warranties.json`: `id`, `assetId`, `assetType`, `product`, `purchased`, `expires`, `vendor`, `phone`, `email`, `notes`, `files`.
 - `reminders.json`: `id`, `assetId`, `assetType`, `title`, `repeats` (for example "Every 90 days", "Apr, Oct" or "Once"), `estimatedCost`, `manual` (file name and page, for example "Owner manual.pdf, p. 42"), `everyDays`, `everyMiles`, `lastDone`, `nextDue`, `nextDueMileage`, `active`, `files`.
-- `documents.json`: `id`, `assetId`, `assetType`, `uploaded`, plus the `FileRef` fields.
+- `documents.json`: `id`, `assetId`, `assetType`, `uploaded`, plus the `FileRef` fields. Files imported from Paperless-ngx are ordinary files here. The link back to the Paperless document is not exported (a backup keeps it, in the database).
 - `rooms.json`: `id`, `assetId` (the property), `assetType` (always `property`), `name`, `level`, `area` (the number as stored, in the household's area unit), `dimensions`, `flooringType`, `flooringProduct`, `flooringInstalled`, `notes`, `paints` (each `surface`, `brand`, `colorName`, `colorCode`, `finish`), `files`.
 - `insurance.json`: home, renters, auto, umbrella, life and other non-health policies, always exported, with or without health records. Each has `id`, `kind`, `carrier`, `plan`, `policyNumber`, `groupNumber`, `memberId`, `phone`, `start`, `end`, `deductible`, `outOfPocketMax`, `notes`, `personIds`, `propertyIds`, `vehicleIds`, `annualPremium` (the current premium as a yearly cost), `premiums` (`effective`, `amount`, `period`, `annual`, `notes`, newest first), `coverages` (`label`, `limit`, `deductible`) and `files`.
 - `health.json`: only when health records are included. Holds `providers`, `conditions`, `medications`, `allergies`, `immunizations`, `observations` and `insurance` (medical, dental and vision policies, with the same fields as `insurance.json`). Each item has an `id`, the fields named in its CSV below, and `files`. Items for a person carry `personId`. Insurance carries `personIds`.
@@ -107,7 +109,7 @@ homecenter-YYYY-MM-DD-HHmm.hcbackup
   db/homecenter.db    a consistent copy of the database (SQLite)
   files/<upload rel>  every uploaded file, at its path inside the upload folder (for example files/service/<id>/<file>)
   readable/           the same offline viewer, JSON and CSVs as an export, covering everything including health
-  secrets.json        only in protected backups: { "mailPassword", "llmApiKey" } in plain text inside the protection
+  secrets.json        only in protected backups: { "mailPassword", "llmApiKey", "pushUrl", "pushToken", "paperlessToken" } in plain text inside the protection (`null` when never set)
 ```
 
 An unprotected backup never contains `secrets.json`. Restoring one under a different `AUTH_SECRET` means re-entering the mail password, AI key and push URL.
@@ -150,4 +152,4 @@ age -d -i homecenter-recovery-key.txt homecenter-2026-01-01-0300.hcbackup.age > 
 
 The result is the plain `.hcbackup` zip described above.
 
-Kit files downloaded before this version have text lines that age doesn't accept. For one of those, put the line that starts with `AGE-SECRET-KEY-1` in a file of its own and pass that file to `-i`.
+Kit files downloaded before this was fixed have text lines that age doesn't accept. For one of those, put the line that starts with `AGE-SECRET-KEY-1` in a file of its own and pass that file to `-i`.

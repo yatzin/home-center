@@ -18,14 +18,16 @@ This is not additive. Before it writes anything it deletes:
 
 - every property, vehicle, and piece of equipment
 - every service record, warranty, maintenance reminder, and attachment
+- every room (and its paint rows), health observation, medication, and intake item
+- the saved dashboard layout
 - every notification
 - **every user account, including yours**
-- every uploaded file under `UPLOAD_DIR`
+- the uploaded files in the folders the seed manages under `UPLOAD_DIR`
 
 It prints a row count and the exact database and uploads paths it is about to
 destroy, then waits for you to type `WIPE`. Anything else aborts without
 touching a thing. If stdin isn't a terminal it refuses outright rather than
-guessing.
+guessing. Pass `--keep` to delete nothing instead.
 
 **Do not point this at anything but a local development database.**
 
@@ -82,12 +84,17 @@ onto the dashboard — no password-change interstitial in your screenshots.
 | **3 properties** | Maple Street House (primary), Lake Cabin (seasonal), Cedar Street Rental (tenant-occupied) |
 | **5 vehicles** | RAV4, Civic, F-150, Outback, Odyssey — with mileage, VINs, and mileage-based reminders |
 | **30 equipment** | Spread 14 / 9 / 7 across the three houses: appliances, HVAC, water, tools, outdoor, security |
-| **38 service records** | Spanning about two years, six of them in the last 30 days so "Recent Service" isn't empty |
+| **41 service records** | Spanning about two years, seven of them in the last 30 days so "Recent Service" isn't empty. Equipment records, plus a few painting, foundation and bathroom jobs, are tagged to a room. |
 | **16 warranties** | 3 expired, 3 expiring within 60 days, the rest comfortably active, 1 deliberately unknown |
-| **24 reminders** | 3 overdue, 5 due within 30 days, the rest further out |
-| **12 attachments** | Generated PDF invoices and warranty certificates, so records show paperclip counts |
-| **Insurance** | A home policy on Maple Street House renewing in 21 days, an auto policy on the Work Truck (premiums every 6 months), an umbrella policy renewing in 18 days that covers nothing yet (monthly premium), and a term life policy covering both people (monthly premium that went up). Each has coverage lines. |
-| **People** | Two people (the demo user and a child), three providers, a managed condition with a medication due for refill, a severe penicillin allergy, two insurance policies (one expiring within 60 days), five visits with PDF receipts, and two health reminders |
+| **26 reminders** | 3 overdue, 6 due within 30 days, the rest further out (plus 2 health reminders for the people). Reminders on Maple Street equipment carry that equipment's room. |
+| **21 attachments** | Generated PDF invoices, warranty certificates, visit receipts, the furnace manual and the three intake files, so records show paperclip counts |
+| **7 rooms** | On Maple Street House: Kitchen, Living room, Primary bedroom, Bathroom, Laundry room, Basement and Garage, with level, area, dimensions, flooring (type, product, install date) and 12 painted surfaces (brand, color, code, finish). 12 pieces of equipment sit in a room. |
+| **Intake** | 3 items waiting to be filed (an Ace Hardware receipt, a plumber invoice, a tire receipt) with a parsed vendor, date and total and a suggested asset. Each has a small generated PDF under `UPLOAD_DIR/inbox`. |
+| **Dashboard** | A saved custom layout: a "Good morning, {user}" greeting, a date line, Clock, Planned Spend, Equipment Life, Spending Breakdown, Health Observations and Service Activity calendars, Reminders, Intake, Rooms and People. Without it the app shows its default layout. With `--keep`, an existing layout is not overwritten. |
+| **Insurance** | 6 policies. A home policy on Maple Street House renewing in 21 days, an auto policy on the Work Truck (premiums every 6 months), an umbrella policy renewing in 18 days that covers nothing yet (monthly premium), and a term life policy covering both people (monthly premium that went up), plus medical and dental. The first four have coverage lines. |
+| **People** | Two people (the demo user and a child), three providers, three conditions (managed hypertension, resolved high cholesterol, active asthma), a severe penicillin allergy, five visits with PDF receipts, and two health reminders |
+| **7 medications** | A timeline with starts and stops: lisinopril 5 mg then 10 mg (the current one due for refill), atorvastatin stopped months ago, ongoing vitamin D3, the child's albuterol inhaler, and finished amoxicillin and cetirizine courses |
+| **57 health observations** | About six months for the adult (blood pressure drifting down, weight, resting heart rate, a headache and a bad night) and the child (asthma flares, night cough, poor sleep, a meltdown). The model has no numeric fields, so readings like `128/82 mmHg` are in the notes. |
 
 The mix is deliberate: the dashboard's "Upcoming Maintenance" and "Expiring
 Warranties" panels both have content, warranty and maintenance status filters

@@ -1,25 +1,29 @@
 <div align="center">
 
+[![GitHub stars](https://img.shields.io/github/stars/yatzin/home-center?style=flat&logo=github&label=GitHub%20stars)](https://github.com/yatzin/home-center/stargazers) [![Docker pulls](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fyatzin%2Fhome-center%2Fmain%2Fdocs%2Fbadges%2Fpulls.json&style=flat&logo=docker&logoColor=white)](https://github.com/yatzin/home-center/pkgs/container/homecenter)
+
 # HomeCenter
 
 **Every repair, warranty and receipt for your home, cars and family, on your own server.**
 
-Service history, costs and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, and it all runs in one Docker container.
+Service history, costs, insurance and reminders for your homes, vehicles, equipment and family health. Every receipt and manual is searchable, and it all runs in one Docker container.
 
 **[More details at home-center.dazzos.com](https://home-center.dazzos.com/)**
 
-**[Install in 5 minutes](#get-started)** · [Features](#features) · [AI assistant](#ask-your-house-a-question) · [Demos](#see-it-in-action) · [FAQ](#faq) · [Updating](#updating)
+**[Install in 5 minutes](#get-started)** · [Demos](#see-it-in-action) · [What's new](#whats-new-since-20) · [Features](#features) · [Settings](#settings-reference) · [FAQ](#faq) · [Updating](#updating)
 
-![MIT licence](https://img.shields.io/badge/licence-MIT-blue) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555) ![No cloud](https://img.shields.io/badge/cloud-none-success)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Version 3.1.0](https://img.shields.io/badge/version-3.1.0-informational) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555) ![No cloud](https://img.shields.io/badge/cloud-none-success)
 [![Docker image build](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml) [![Last commit](https://img.shields.io/github/last-commit/yatzin/home-center)](https://github.com/yatzin/home-center/commits/main)
 
 </div>
 
-![HomeCenter dashboard](docs/screenshots/1.Dashboard.png)
+![HomeCenter dashboard: photo tiles for properties, vehicles, people and equipment, with reminders, expiring warranties, intake, planned spend and spending](docs/screenshots/01-dashboard.png)
 
 <p align="center">
 ✓ Runs on your NAS or server &nbsp;·&nbsp; ✓ No third-party sign-in &nbsp;·&nbsp; ✓ OCR and search run on-device &nbsp;·&nbsp; ✓ Works with local AI models
 </p>
+
+When was the furnace last serviced? Is the fridge still under warranty? What did the truck cost last year? What will the house cost next year? HomeCenter keeps the answers in one place, and reminds you before things are due.
 
 ## See it in action
 
@@ -27,41 +31,61 @@ Short walkthroughs recorded on the demo data. Click one to play it.
 
 <table>
 <tr>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/tour.gif"><img src="docs/screenshots/demos/posters/tour-play.jpg" alt="A quick tour demo"></a><br><b>A quick tour</b> <sub>1:03</sub><br><sub>A house, a truck and a person, tab by tab</sub></td>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/ask-ai-warranty.gif"><img src="docs/screenshots/demos/posters/ask-ai-warranty-play.jpg" alt="Ask the assistant demo"></a><br><b>Ask the assistant</b> <sub>0:38</sub><br><sub>From a question to the warranty PDF that answers it</sub></td>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/reminder-to-done.gif"><img src="docs/screenshots/demos/posters/reminder-to-done-play.jpg" alt="Reminder to done demo"></a><br><b>Reminder to done</b> <sub>0:32</sub><br><sub>An overdue filter change, completed, next date set</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/tour.gif"><img src="docs/screenshots/demos/posters/tour-play.jpg" alt="A quick tour demo"></a><br><b>A quick tour</b> <sub>1:06</sub><br><sub>Dashboard, a house with rooms, a truck, insurance, a person, costs</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/ask-ai-warranty.gif"><img src="docs/screenshots/demos/posters/ask-ai-warranty-play.jpg" alt="Ask the assistant demo"></a><br><b>Ask the assistant</b> <sub>0:26</sub><br><sub>From a question to the warranty answer</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/reminder-to-done.gif"><img src="docs/screenshots/demos/posters/reminder-to-done-play.jpg" alt="Reminder to done demo"></a><br><b>Reminder to done</b> <sub>0:40</sub><br><sub>An overdue reminder, completed, next date set</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/costs-to-receipt.gif"><img src="docs/screenshots/demos/posters/costs-to-receipt-play.jpg" alt="Costs to receipt demo"></a><br><b>Costs to receipt</b> <sub>0:33</sub><br><sub>From the spending chart to the $2,340 invoice</sub></td>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/search-documents.gif"><img src="docs/screenshots/demos/posters/search-documents-play.jpg" alt="Search your paperwork demo"></a><br><b>Search your paperwork</b> <sub>0:27</sub><br><sub>“roof” finds the 30-year shingle warranty</sub></td>
-<td width="33%" valign="top"><a href="docs/screenshots/demos/health-summary.gif"><img src="docs/screenshots/demos/posters/health-summary-play.jpg" alt="Health summary demo"></a><br><b>Health summary</b> <sub>0:32</sub><br><sub>Medications, shots and a printable summary</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/costs-to-receipt.gif"><img src="docs/screenshots/demos/posters/costs-to-receipt-play.jpg" alt="Costs to receipt demo"></a><br><b>Costs to receipt</b> <sub>0:36</sub><br><sub>From the spending chart to the invoice receipt</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/search-documents.gif"><img src="docs/screenshots/demos/posters/search-documents-play.jpg" alt="Search your paperwork demo"></a><br><b>Search your paperwork</b> <sub>0:28</sub><br><sub>“roof” finds the 30-year shingle warranty</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/health-summary.gif"><img src="docs/screenshots/demos/posters/health-summary-play.jpg" alt="Health summary demo"></a><br><b>Health summary</b> <sub>0:28</sub><br><sub>Observations, medication timeline and printable summary</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/dashboards-your-way.gif"><img src="docs/screenshots/demos/posters/dashboards-your-way-play.jpg" alt="Dashboards your way demo"></a><br><b>Dashboards your way</b> <sub>0:43</sub><br><sub>Drag, resize, add cards, switch theme</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/insurance-and-planning.gif"><img src="docs/screenshots/demos/posters/insurance-and-planning-play.jpg" alt="Insurance and planning demo"></a><br><b>Insurance and planning</b> <sub>0:38</sub><br><sub>Policies, planned spend, equipment life</sub></td>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/paperless-import.gif"><img src="docs/screenshots/demos/posters/paperless-import-play.jpg" alt="Paperless-ngx import demo"></a><br><b>Paperless-ngx import</b> <sub>0:47</sub><br><sub>Pull documents in from Paperless-ngx</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top"><a href="docs/screenshots/demos/backup-and-restore.gif"><img src="docs/screenshots/demos/posters/backup-and-restore-play.jpg" alt="Backup and restore demo"></a><br><b>Backup and restore</b> <sub>0:34</sub><br><sub>Verified backups, offline export, restore with a dry run</sub></td>
 </tr>
 </table>
 
-## New in 2.0
+## What's new since 2.0
 
-These arrived after the demos and screenshots above were recorded.
-
-- **Intake:** drop receipts, photos, PDFs or forwarded emails (`.eml`, `.msg`) anywhere in the app. HomeCenter reads the date, vendor and total, suggests which asset they belong to, and lets you file them as a new service record or attach them to an existing one. Filing a receipt also offers to complete the matching reminder, and a nudge appears when files sit unfiled for more than a week.
-- **Receipt reading with local AI** *(optional)*: under **Settings → Receipt reading**, use the built-in parser or a local model for harder receipts. If the model can't read a file, Intake says so instead of quietly falling back.
-- **More reminder controls:** **Skip this time** moves a reminder to its next interval without logging a service, and **Add default reminders** fills an empty Maintenance tab with a starter plan.
-- **Themes:** twelve themes, light and dark, picked from the top bar or stepped through with its arrows.
-- **Layout your way:** collapse the sidebar to icons, and choose per device where the assistant button and Intake sit (**Settings → Appearance**).
-- **Sharper search:** exact matches come first, then results by meaning, then partial matches.
+- **3.1, Paperless-ngx:** pull documents from your Paperless-ngx server into any asset or into Intake. A scheduled check refreshes copies and flags broken links. ([details](#paperless-ngx-optional))
+- **3.0, dashboards, push, planning, insurance, security:** a card catalog with heatmaps, Planned Spend and Equipment Life; push notifications to Discord, ntfy, Telegram or a JSON endpoint; estimated costs on reminders and a 12-month planned spend; equipment life and replacement cost; a top-level Insurance page for home, auto, umbrella, life and renters; a per-device property filter; and a security hardening pass.
+- **2.4, rooms, password reset, customizable dashboards:** paint and flooring per room, rooms on service records, reset by email, and a dashboard you can rearrange.
+- **2.3, health:** a medication timeline with dose changes, and an assistant that drafts health observations for you to save.
+- **2.2, regional settings:** currency, distance and area units, date format and 12/24-hour time, applied everywhere.
+- **2.1, backups:** scheduled, verified backups with optional protection, in-app restore with a dry run, and an offline export you can read without HomeCenter.
+- **2.0, Intake, reminder controls, themes:** drop receipts anywhere and file them in a click, snooze, pause or skip reminders, twelve themes.
 
 ## Features
 
-When was the furnace last serviced? Is the fridge still under warranty? What did the truck cost last year? HomeCenter keeps the answers in one place, and reminds you before things are due.
-
 | | |
 |---|---|
-| **Home** | Properties, vehicles and equipment, with service records, warranties and reminders, plus home, auto and life insurance |
-| **Health** *(optional)* | People, providers and health insurance, with visits, medications and immunizations |
-| **Money** | Costs by asset, category and vendor, and a 12-month spending chart |
+| **Home** | Properties, vehicles and equipment, with service records, warranties, reminders, rooms and insurance |
+| **Health** *(optional)* | People, providers and health insurance, with visits, medications, immunizations and observations |
+| **Money** | Costs by asset, category and vendor, a 12-month chart, and planned spend for the months ahead |
 | **Finding things** | Global search across records and documents, plus an optional AI assistant |
-| **Reminders** | In-app bell and per-person email digests |
-| **Records & export** | Attachments, printable reports, a full offline export, and scheduled backups with restore ([how backups work](#how-do-i-back-it-up)) |
+| **Reminders** | In-app bell, per-person email digests and push notifications |
+| **Documents** | Attachments, Intake for receipts, Paperless-ngx import, printable reports |
+| **Records & export** | Scheduled backups with restore, a full offline export, and a zip of every file on any asset |
+| **Your layout** | A customizable dashboard, 12 themes, regional units and currency, install as an app on a phone |
 | **Security** | Local login, admin and standard users, sign-in throttling, encrypted secrets |
+
+### Your dashboard, arranged your way
+
+Pick the cards, resize them, and let each one show as much as it has room for. Admins edit it in place; everyone in the household sees the same layout, and phones get a layout of their own.
+
+![Dashboard edit mode](docs/screenshots/02-dashboard-edit.png)
+
+<p>
+<a href="docs/screenshots/03-add-card.png"><img src="docs/screenshots/03-add-card.png" width="49%" alt="The Add a card picker"></a>
+<a href="docs/screenshots/31-dark-theme-dashboard.png"><img src="docs/screenshots/31-dark-theme-dashboard.png" width="49%" alt="The dashboard in the Spruce Night dark theme"></a>
+</p>
+
+[How the dashboard works](#customized-dashboards)
 
 ### Every house, car and appliance, with its whole history
 
@@ -69,37 +93,63 @@ Give each thing you own a page: photo, details, and every repair, warranty and r
 
 - **Properties:** houses, condos, cabins and land.
 - **Vehicles:** service history that tracks mileage.
-- **Equipment:** linked to the property it's in, with model and serial numbers.
-- **Rooms** *(optional)*: a property's rooms with their paint colors and flooring, and the equipment, service and reminders in each. Turn them off under **Settings → Features**.
+- **Equipment:** part of the home or belongings, with model and serial numbers, expected life, replacement cost and the room it is in.
+- **Rooms** *(optional)*: each room's paint colors and flooring, and the equipment, service and reminders in it. Turn them off under **Settings → Features**.
 - **Documents** that belong to the thing itself, like a deed, a car title or a manual, with no service record needed.
 - **Download all files** for any asset as a zip.
 
-![A house and its service records](docs/screenshots/3.House.png)
+![Maple Street House with its service history](docs/screenshots/05-property.png)
 
 <p>
-<a href="docs/screenshots/2.Properties.png"><img src="docs/screenshots/2.Properties.png" width="24%" alt="Properties"></a>
-<a href="docs/screenshots/7.Vehicles.png"><img src="docs/screenshots/7.Vehicles.png" width="24%" alt="Vehicles"></a>
-<a href="docs/screenshots/8.VehicleService.png"><img src="docs/screenshots/8.VehicleService.png" width="24%" alt="Vehicle service"></a>
-<a href="docs/screenshots/9.Equipment.png"><img src="docs/screenshots/9.Equipment.png" width="24%" alt="Equipment"></a>
+<a href="docs/screenshots/04-properties.png"><img src="docs/screenshots/04-properties.png" width="24%" alt="Properties grid with photos"></a>
+<a href="docs/screenshots/06-rooms.png"><img src="docs/screenshots/06-rooms.png" width="24%" alt="Rooms tab: paint and flooring per room"></a>
+<a href="docs/screenshots/09-vehicle.png"><img src="docs/screenshots/09-vehicle.png" width="24%" alt="Vehicle detail for the Work Truck"></a>
+<a href="docs/screenshots/11-equipment-detail.png"><img src="docs/screenshots/11-equipment-detail.png" width="24%" alt="Gas Furnace: expected life, replacement cost, location"></a>
 </p>
 
 ### Know what's due before it's overdue
 
-Set a reminder once, by days or miles. HomeCenter works out the next due date and tells you in time.
+Set a reminder once. HomeCenter works out the next due date and tells you in time.
 
-- **Date or mileage** intervals, with as much warning as you want.
+- **Every N days or miles, in specific months, or once.** As much warning as you want.
+- **Estimated cost and a manual page** on a reminder, so the job links to the right page of the manual and you know roughly what it will cost.
 - **Warranty status** at a glance: active, expiring or expired.
 - **Overviews** across every asset, sortable and filterable.
 - **Closing the loop:** completing a reminder logs it in the service history with cost, vendor and receipt, and a service you log can mark its reminder done.
-- **Snooze or pause** a reminder from the dashboard or its asset page. Snoozed reminders come back when the snooze ends; paused ones stay quiet until resumed.
+- **Snooze, pause or skip** a reminder from the dashboard or its asset page.
 
-![Maintenance overview](docs/screenshots/11.MaintenanceReminderOverview.png)
+![Maintenance reminders overview](docs/screenshots/13-maintenance.png)
 
 <p>
-<a href="docs/screenshots/6.MaintenanceReminders.png"><img src="docs/screenshots/6.MaintenanceReminders.png" width="24%" alt="Maintenance reminders"></a>
-<a href="docs/screenshots/5.Warranties.png"><img src="docs/screenshots/5.Warranties.png" width="24%" alt="Warranties"></a>
-<a href="docs/screenshots/10.WarrantyOverview.png"><img src="docs/screenshots/10.WarrantyOverview.png" width="24%" alt="Warranty overview"></a>
-<a href="docs/screenshots/4.ServiceRecord.png"><img src="docs/screenshots/4.ServiceRecord.png" width="24%" alt="Service record"></a>
+<a href="docs/screenshots/07-maintenance-reminders.png"><img src="docs/screenshots/07-maintenance-reminders.png" width="32%" alt="Property reminders with estimated cost and manual page links"></a>
+<a href="docs/screenshots/12-warranties.png"><img src="docs/screenshots/12-warranties.png" width="32%" alt="Warranties overview"></a>
+<a href="docs/screenshots/26-notifications.png"><img src="docs/screenshots/26-notifications.png" width="32%" alt="Notifications"></a>
+</p>
+
+### See where the money goes, and what is coming
+
+Every service record carries a cost. Estimated costs on reminders add up to a **planned spend** for the months ahead, so a roof inspection or a water heater replacement does not surprise you.
+
+- **Monthly, quarterly or yearly** trends with a rolling average, by asset, category and vendor.
+- **Planned spend** from your reminders' estimated costs, on the Costs page, on asset pages and as a dashboard card.
+- **Equipment life:** what is past its expected life, and what replacing it will cost.
+- Amounts and units follow your [regional settings](#settings-reference).
+
+![Costs with a monthly chart by category and planned spend](docs/screenshots/15-costs.png)
+
+### Insurance in one place
+
+Home, auto, umbrella, life and renters policies, plus medical and dental, each with coverage lines, premium history and renewal dates. Link a policy to the people, properties and vehicles it covers.
+
+![Insurance page: auto, home, umbrella and life policies with coverages, premium history and renewals](docs/screenshots/14-insurance.png)
+
+### Drop a receipt, file it in a click
+
+Drag receipts, photos, PDFs or forwarded emails (`.eml`, `.msg`) anywhere in the app. Intake reads the date, vendor and total, suggests which asset they belong to, and files them as a new service record or attaches them to an existing one. Filing a receipt also offers to complete the matching reminder.
+
+<p>
+<a href="docs/screenshots/16-intake.png"><img src="docs/screenshots/16-intake.png" width="49%" alt="Intake: dropped receipts read, with a suggested filing"></a>
+<a href="docs/screenshots/17-paperless-picker.png"><img src="docs/screenshots/17-paperless-picker.png" width="49%" alt="The Choose from Paperless picker"></a>
 </p>
 
 ### Your family's health records, close at hand *(optional)*
@@ -108,30 +158,22 @@ Keep each person's medical picture in one place, and print a clean summary for t
 
 - **Conditions, medications, allergies** and immunizations.
 - **Visits** linked to providers, with costs.
-- **Observation logs** to spot symptom patterns.
+- **Observation log and heatmap** to spot patterns in symptoms, readings and sleep.
+- **Medication timeline** with dose changes, and a **before and after** view around a change.
 - **Refill, vaccine and insurance** reminders.
-- If you don't need it, turn the whole section off in **Settings → Features**.
+- If you don't need it, turn the whole section off in **Settings → Features**. It is then off on the server too, not only hidden.
 
-![A person's health record](docs/screenshots/13.Person.png)
+![Person page for Alex Rivera](docs/screenshots/18-person.png)
 
 <p>
-<a href="docs/screenshots/14.Providers.png"><img src="docs/screenshots/14.Providers.png" width="32%" alt="Providers"></a>
-<a href="docs/screenshots/15.Insurance.png"><img src="docs/screenshots/15.Insurance.png" width="32%" alt="Insurance"></a>
-<a href="docs/screenshots/16.MedicalSummary.png"><img src="docs/screenshots/16.MedicalSummary.png" width="32%" alt="Medical summary"></a>
+<a href="docs/screenshots/19-observations.png"><img src="docs/screenshots/19-observations.png" width="32%" alt="Observations heatmap and log"></a>
+<a href="docs/screenshots/20-medications-timeline.png"><img src="docs/screenshots/20-medications-timeline.png" width="32%" alt="Medication timeline with dose changes"></a>
+<a href="docs/screenshots/21-medication-before-after.png"><img src="docs/screenshots/21-medication-before-after.png" width="32%" alt="Before and after a medication change"></a>
 </p>
 
-### See where the money goes
-
-Every service record carries a cost. HomeCenter adds them up across the whole household.
-
-- **Monthly, quarterly or yearly** trends with a rolling average.
-- Top assets, categories and vendors.
-- **Biggest expenses** and year-to-date totals.
-- Filter to properties, vehicles, equipment or people.
-
 <p>
-<a href="docs/screenshots/17.Costs1.png"><img src="docs/screenshots/17.Costs1.png" width="49%" alt="Costs over time"></a>
-<a href="docs/screenshots/17.Costs2.png"><img src="docs/screenshots/17.Costs2.png" width="49%" alt="Costs by asset and vendor"></a>
+<a href="docs/screenshots/22-providers.png"><img src="docs/screenshots/22-providers.png" width="49%" alt="Providers directory"></a>
+<a href="docs/screenshots/33-report-medical.png"><img src="docs/screenshots/33-report-medical.png" width="49%" alt="Printable medical summary with medication history chart"></a>
 </p>
 
 ### Find anything, even inside the manual
@@ -143,32 +185,48 @@ One search box covers assets, records and the text of every file you've uploaded
 - **Search by meaning**, using a small model that runs on your server.
 - Indexing and OCR run in the background, on your server.
 
-![Global search results](docs/screenshots/20.Search.png)
+![Search results for roof](docs/screenshots/23-search.png)
 
 ### Ask your house a question
 
-The assistant *(optional)* looks up your records and documents to answer plain-language questions, with links back to the source.
+The assistant *(optional)* looks up your records and documents to answer plain-language questions, with links back to the source. It can also draft a health observation from what you tell it, then show a Save card so you stay in control.
 
 - Works with OpenAI, OpenRouter, Ollama, LM Studio or any OpenAI-compatible server.
 - **Run it fully local** and nothing leaves your network.
 - You choose whether it may read documents and health data.
 - Chats stay in your browser and are never stored on the server.
 
-![The assistant answering a spending question](docs/screenshots/21.Assistant.png)
+<p>
+<a href="docs/screenshots/24-assistant.png"><img src="docs/screenshots/24-assistant.png" width="49%" alt="The assistant answering: when was the furnace last serviced?"></a>
+<a href="docs/screenshots/25-assistant-observation-draft.png"><img src="docs/screenshots/25-assistant-observation-draft.png" width="49%" alt="The assistant drafting a health observation with a Save card"></a>
+</p>
 
-### Reminders and reports
+### Reminders, reports and notifications
 
-Reminders arrive in the app and, if you like, by email. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.
+Reminders arrive in the app and, if you like, by email and push. Reports turn an asset's history into a document you can hand to a buyer, a mechanic or a doctor.
 
 - **Email digests** for each person: as soon as possible, daily or weekly.
-- **Mail server set up in Settings**, with a test button.
-- **Dismiss and restore** notifications.
+- **Push** to Discord, ntfy, Telegram or a JSON endpoint.
 - **Printable asset reports** and medical summaries.
 
 <p>
-<a href="docs/screenshots/18.Notifications.png"><img src="docs/screenshots/18.Notifications.png" width="32%" alt="Notifications"></a>
-<a href="docs/screenshots/12.EmailNotifications.png"><img src="docs/screenshots/12.EmailNotifications.png" width="32%" alt="Email notification settings"></a>
-<a href="docs/screenshots/19.AssetReport.png"><img src="docs/screenshots/19.AssetReport.png" width="32%" alt="Asset report"></a>
+<a href="docs/screenshots/32-report-property.png"><img src="docs/screenshots/32-report-property.png" width="49%" alt="Printable property report"></a>
+<a href="docs/screenshots/30-settings-notifications.png"><img src="docs/screenshots/30-settings-notifications.png" width="49%" alt="Notification settings: digest and push"></a>
+</p>
+
+### Backups you can trust
+
+Scheduled backups are checked after they are written. Restore in the app with a dry run first, or export everything as a zip you can read offline. [How it works](#how-do-i-back-it-up) · [Export format](docs/export-format.md)
+
+![Data and backups: schedule, password-zip protection, backup list, export and restore](docs/screenshots/27-settings-data-backups.png)
+
+### On your phone, in your theme
+
+Install HomeCenter as an app from the Install page (`/settings/install`). Twelve themes, light and dark, from the top bar.
+
+<p>
+<a href="docs/screenshots/36-phone-dashboard.png"><img src="docs/screenshots/36-phone-dashboard.png" width="24%" alt="The dashboard on a phone"></a>
+<a href="docs/screenshots/37-themes-menu.png"><img src="docs/screenshots/37-themes-menu.png" width="40%" alt="The 12-theme menu"></a>
 </p>
 
 ## Private by design
@@ -177,7 +235,8 @@ HomeCenter is one container and one data folder, and you own both.
 
 - **Self-hosted:** runs on a Synology, Unraid or any Docker host. Updates never touch your data folder.
 - **On-device processing:** OCR and meaning search run inside the container. Their only network call is an optional model download.
-- **You decide:** the AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and the mail password and API key are encrypted at rest. If you turn on Paperless-ngx, the server also contacts the Paperless URL an admin set, and that token is stored encrypted like the assistant key.
+- **You decide:** the AI assistant stays off until you turn it on, and Health can be hidden entirely. Login is local, users are admin or standard, repeated failed sign-ins are slowed down, and stored secrets (mail password, AI key, push URL and token, Paperless token, backup passphrase) are encrypted at rest. The assistant warns you when its server is not on your own network.
+- **Optional connections:** if you turn on Paperless-ngx, push notifications, a cloud AI provider or email, the server contacts only the addresses an admin set.
 
 <sub>Photos in the screenshots are from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>, by various authors, under their individual licenses (mostly CC BY-SA).</sub>
 
@@ -189,6 +248,7 @@ Setup takes about five minutes. You need:
 |---|---|
 | Docker + Docker Compose | How the app runs. No Node.js or build setup needed. |
 | A folder on the host for data | Holds the database and uploaded files, and survives updates |
+| A second folder or disk for backups *(recommended)* | A backup on the same disk as your data doesn't survive that disk failing |
 | ~5 minutes | To set one required value and start the container |
 
 ### Install (Docker)
@@ -211,14 +271,18 @@ services:
       - "3000:3000"
     volumes:
       - /volume1/docker/homecenter:/data
+      # Recommended: a second disk or NAS share for backups.
+      # Then set Settings → Data & backups → Folder to /backups.
+      - /volume2/backups/homecenter:/backups
     environment:
       DATABASE_URL: "file:/data/homecenter.db"
-      AUTH_SECRET: ""
+      AUTH_SECRET: ""            # required: openssl rand -base64 32
       AUTH_URL: ""
       MAX_UPLOAD_BYTES: "26214400"
       ADMIN_NAME: "Admin"
       ADMIN_EMAIL: "your@email.com"
       ADMIN_PASSWORD: "changeme"
+      # TZ: "America/Chicago"    # clock for backup and sync schedules
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
@@ -228,7 +292,7 @@ services:
       start_period: 10s
 ```
 
-Update the volume path to the folder you created in step 1.
+Update both volume paths to folders on your host (remove the `/backups` line if you have no second location yet).
 
 **3. Set these values:**
 
@@ -239,8 +303,9 @@ Update the volume path to the folder you created in step 1.
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | Your login, used once on first boot to create the admin account and ignored after that. If you remove `ADMIN_PASSWORD`, the password is `changeme` and you must change it on first login. Without `ADMIN_EMAIL`, the email is `admin@localhost`. |
 | `NOTIFY_INTERVAL_MINUTES` | No | How often to check for due maintenance and expiring warranties. Defaults to `360` (6 hours). Set `0` to turn reminders off. An admin can override it under Settings → Notifications (minimum 5), no restart needed. |
 | `SMTP_HOST` | No | Your mail server, e.g. `smtp.gmail.com`. **Leave blank and no email is ever sent.** The in-app bell still works. |
+| `TZ` | No | Your time zone, e.g. `America/Chicago`. Backup and Paperless schedules run on the server's local time, which in a container is UTC unless you set this. |
 
-Everything else can stay at its default. Uploads (`/data/uploads`) and downloaded models (`/data/models`) are kept in the data folder automatically.
+Everything else can stay at its default. Uploads (`/data/uploads`) and downloaded models (`/data/models`) are kept in the data folder automatically. The [full list of variables](#environment-variables) is below.
 
 **4. Start it:**
 
@@ -252,13 +317,46 @@ docker compose up -d
 
 The container sets up its database and admin account automatically on first boot.
 
-**5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3.
+**5. Log in** at `http://<your-server-ip>:3000/login` with the admin email/password from step 3. If you later forget the password, set a **Public URL** and a mail server under Settings → Mail server and the login page can send a reset email.
 
 > **Keep it off the open internet.** HomeCenter holds your household's records, and optionally your family's health records, behind a single login. It serves plain HTTP on port 3000 and has no built-in HTTPS. Don't forward that port from your router or publish it to the web. For access away from home, use a VPN to your home network (WireGuard, Tailscale or your router's own). If you must publish it, put it behind a reverse proxy that adds HTTPS, set `AUTH_URL` to the public address, and use a long admin password.
 
+### Environment variables
+
+Only `AUTH_SECRET` is required. A value set in the app's Settings wins over the environment where both exist.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `DATABASE_URL` | `file:/data/homecenter.db` in the compose file | Where the SQLite database lives. |
+| `AUTH_SECRET` | none, required | Signs sessions and encrypts stored secrets. Changing it logs everyone out and means re-entering the mail, AI, push and Paperless secrets (protected backups carry them). |
+| `AUTH_URL` | auto-detected | The address you browse to. |
+| `MAX_UPLOAD_BYTES` | `26214400` (25 MiB) | Largest single upload. |
+| `ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` | `Admin` / `admin@localhost` / `changeme` | First-boot admin account only. |
+| `NOTIFY_INTERVAL_MINUTES` | `360` | Reminder check interval. `0` turns it off. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`, `MAIL_FROM`, `DIGEST_HOUR`, `MAIL_DRY_RUN` | none | Mail. See [Email notifications](#email-notifications-optional). |
+| `UPLOAD_DIR` | `/data/uploads` in the image | Where uploaded files are stored. |
+| `MODELS_DIR` | `/data/models` in the image | Downloaded search models. |
+| `SEARCH_INDEX_PATH`, `DOCUMENT_REINDEX_HOURS`, `EMBEDDING_IDLE_MINUTES` | see [Document search](#document-search-optional) | Search index location, reindex timer and model unload time. |
+| `TESSDATA_PATH` | the English OCR data bundled in the image | Folder of OCR language data. Rarely needed. |
+| `PORT` | `3000` in the image | Port the app listens on inside the container. Change the published port in compose instead. If you change `PORT`, update the healthcheck too. |
+| `HOMECENTER_SUPERVISED` | `1` in the image | Lets an in-app restore restart the process, relying on `restart: unless-stopped` to bring it back. Leave it alone in Docker. |
+| `TZ` | UTC in a container | Time zone for scheduled backups and Paperless checks. |
+
 ## Customized dashboards
 
-Arrange the dashboard your way: choose which cards it shows, how big each one is, and what each one covers. A card shows more as it grows: Properties goes from photos, to a list with addresses; Spending goes from a total, to a chart, to month-by-month bars, over this year or the last X months (you type the number); the Spending Breakdown keeps showing every category down to a single row or column, as a bar split by share or a compact ranking. Planned Spend (an add-on card) shows what the estimated costs on your reminders add up to over the next X months (you type the number, 1 to 24), the same figure as the Costs page: a number with the next item, then bars by month, then stacked by property, vehicle, equipment and people, then the biggest items. The asset cards (Properties, Vehicles, Equipment, People) can also be made long and thin, down to a single cell: one row tall shows a row of round photos (or initials), with names when there is room; one column wide shows a column of them; two columns wide shows a column of names. Each one opens that item, and a "+N" opens the full list. The dated lists (Records, Active Warranties, Due Maintenance, Reminders, Expiring Warranties) show real items at every size, with the total as a small badge: one row tall is a carousel that steps through the items by itself (pausing while you point at it or use the keyboard, and not at all if your device asks for reduced motion), with arrows, dots and swipe; two rows show the most pressing item and a couple more; taller cards list them, one line each on a narrow card and with asset and cost when there is room. Equipment Life (an add-on card) shows how old your equipment is against how long it should last: a count of what is past its life, then a status bar, then a bar per item with time left (or over), then the cost of replacing what is nearing the end; equipment needs an install or purchase date and an expected life to appear. Service Activity (an add-on card) is a calendar of the last X months (you type the number) with a square for each day service was recorded, darker the busier the day, for everything or for one property, vehicle or piece of equipment; point at or tap a day to see its records and cost. One row or one column wide, the calendar fills the whole card with its title over the top left corner (point at the title and it hops to the opposite corner); at larger sizes it adds month labels and totals. Health Visits & Expenses is the same for people's visits and expenses, and Health Observations for logged observations, each for everyone or one person, with each day shaded by its worst entry from mild to severe, as on the Observations tab. You can add the same card more than once, say one Reminders card for vehicles and another for the house. The layout is shared by everyone in the household. Phones get a layout of their own, so you can arrange the small screen separately.
+Choose which cards the dashboard shows, how big each one is, and what each one covers. A card shows more as it grows, from a single number to a chart to a ranked list, and you can add the same card more than once, say one Reminders card for vehicles and another for the house. The layout is shared by everyone in the household. Phones get a layout of their own.
+
+![A customized dashboard: greeting, clock, planned spend, equipment life, spending by category, health observations and service heatmaps, reminders, intake and rooms](docs/screenshots/38-dashboard-customized.png)
+
+The card catalog:
+
+- **Assets:** Properties, Vehicles, Equipment and People, from a grid of photos down to a single row of round avatars.
+- **Dated lists:** Records, Active Warranties, Due Maintenance, Reminders and Expiring Warranties, from a self-advancing carousel to a full list.
+- **Money:** Spending Trend, Spending Breakdown and **Planned Spend** (what the estimated costs on your reminders add up to over the next 1 to 24 months).
+- **Equipment Life:** how old your equipment is against how long it should last, and what replacing what is nearing the end will cost. Equipment needs an install or purchase date and an expected life to appear.
+- **Heatmaps:** Service Activity, Health Visits & Expenses and Health Observations, each a calendar of the last X months with a square per day, darker the busier, for everything or for one asset or person.
+- **Intake:** what is waiting to be filed.
+- **Text and Clock:** your own greeting or notes with live values, and the time and date.
 
 - **Edit:** admins hover the wrench tab in the top-right corner of the page, touching the header (it slides out to read **Edit dashboard**) and click it. Drag a card to move it and drag its edges to resize it. Cards in the way slide down to make room and slide back if you drag on. Cards stay where you put them, so you can leave empty space between them (up to 5 empty rows; a card dropped further down stops 5 rows below the card above it). Every card also has a **Move & resize** button (and arrow keys on its handle) for moving without dragging. Use the gear for a card's settings (or double-click, or double-tap on a phone, the card itself; cards without settings ignore it), **×** to remove it (with Undo) and **Add card** to add one. Changes save as you go; click **Done** when you're finished. **Reset to default** brings back the standard layout on both desktop and phone.
 - **On a phone:** tap the wrench tab in the top-right corner, then use a card's **Move & resize** menu to move it up or down and pick Small, Medium or Large. You can also press and hold its handle to drag it.
@@ -351,6 +449,10 @@ A new due date always starts afresh, for example after you log the service or
 move a refill date. Emails cover only new or re-raised reminders, so lowering
 the interval doesn't mean repeat messages, except with "every check until
 dismissed".
+
+### Push notifications (optional)
+
+Under **Settings → Notifications**, an admin can add a push destination: Discord, ntfy, Telegram or a JSON endpoint. The URL or token is stored encrypted, and the page shows the last result or error. Push follows the same rules as email for who gets notifications and how often a due item is raised again.
 
 ### AI assistant (optional)
 
@@ -447,11 +549,36 @@ Switching models re-processes your documents in the background.
 | `MODELS_DIR` | `/data/models` | Where downloaded models are kept. |
 | `EMBEDDING_IDLE_MINUTES` | `10` | Unload the model this long after the last search. `0` unloads right after each search. |
 
+## Settings reference
+
+**Settings** has tabs for everyone and tabs for admins only.
+
+| Tab | Who | What it covers |
+|---|---|---|
+| **Notifications** | Everyone, plus admin controls | Your email digest (off, as soon as possible, daily, weekly) and repeat preference. Admins pick who gets notifications, override the check interval (minimum 5 minutes), turn on debug logging and set up push (Discord, ntfy, Telegram, JSON). |
+| **Appearance** | Everyone, per device | Where the assistant button and Intake sit. Themes are in the top bar. |
+| **Features** | Admin | Turn Health, Rooms, the Equipment tab, equipment in property costs and the **property filter** on or off. The property filter adds a header dropdown (per device) that scopes lists, cards, totals, reports, notifications, search and the assistant to one property. It is off by default. |
+| **Regional** | Admin | Currency (ISO 4217), distance unit, area unit, date format and 12 or 24-hour time. Applied to screens, reports, notifications, the assistant, receipt capture and search. |
+| **Mail server** | Admin | SMTP host, port, login, From address and digest hour, a **Public URL** (used in links and password-reset emails) and a **Send test email** button. |
+| **Assistant** | Admin | Turn it on or hide it, base URL, API key, model, temperature, token limit, system prompt, time limit, tool rounds, extra request JSON, and whether it may read documents and health documents. A test page checks the model. |
+| **Documents & search** | Admin | Indexing, OCR, search by meaning with a model picker, and the receipt parser (built-in or a local AI model). |
+| **Paperless-ngx** | Admin | Turn it on, server URL and API token, who can import, a daily or weekly check, and **Check now**. |
+| **Users** | Admin | Add and remove users, set admin or standard. |
+| **Data & backups** | Admin | Back up now, schedule, keep count, folder, protection, verify, restore with dry run, offline export and the backup list. |
+
+![Regional settings](docs/screenshots/28-settings-regional.png)
+
+<p>
+<a href="docs/screenshots/29-settings-features.png"><img src="docs/screenshots/29-settings-features.png" width="32%" alt="Feature toggles"></a>
+<a href="docs/screenshots/34-settings-paperless.png"><img src="docs/screenshots/34-settings-paperless.png" width="32%" alt="Paperless-ngx settings, connected"></a>
+<a href="docs/screenshots/35-settings-mail.png"><img src="docs/screenshots/35-settings-mail.png" width="32%" alt="Mail server settings"></a>
+</p>
+
 ## FAQ
 
 ### Does it need an internet connection?
 
-No. HomeCenter runs on your local network. It goes online only for things you turn on: email reminders, a cloud AI provider, or downloading a larger search model.
+No. HomeCenter runs on your local network. It goes online only for things you turn on: email or push reminders, a cloud AI provider, Paperless-ngx, or downloading a larger search model.
 
 ### What does the AI assistant send, and where?
 
@@ -459,7 +586,7 @@ Your question and the records needed to answer it go to the AI provider you conf
 
 ### How do I back it up?
 
-Settings → Data. **Back up now** makes a verified backup; a daily or weekly **schedule** keeps the newest 14 (configurable). Point the folder at a different disk or NAS share (mount it in `docker-compose.yml`, e.g. `/backups`), because a backup on the same disk as your data doesn't survive that disk failing.
+Settings → Data & backups. **Back up now** makes a verified backup; a daily or weekly **schedule** keeps the newest 14 (configurable) and runs on the server's local time, so set `TZ` in compose. Point the folder at a different disk or NAS share (mount it in `docker-compose.yml` as `/backups`, then enter `/backups` as the folder), because a backup on the same disk as your data doesn't survive that disk failing.
 
 Each backup is one file holding the database and every uploaded file. Protection is optional: none, a **recovery key** (the server can't open its own backups), or a **password zip** (opens in 7-Zip, WinRAR or Keka). From the command line: `npm run backup` and `npm run backup:verify -- <file>`.
 
@@ -477,23 +604,25 @@ Images are built for amd64 and arm64, so it runs on Synology, Unraid and other D
 
 ### Can everyone in the house have their own login?
 
-Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, mail and the assistant, and each person chooses their own email reminders.
+Yes. An admin adds users under Settings → Users as admin or standard. Everyone sees the same household records. Admins also manage users, features, regional settings, mail, the assistant, Paperless-ngx and backups, and each person chooses their own email reminders.
 
 ### How is health data protected?
 
 It stays in the database on your server, behind HomeCenter's login with sign-in throttling. The database file itself isn't encrypted, so protect the data folder like any other private files. The assistant can't read health documents unless an admin allows it, and you can hide the Health section entirely.
 
+### Can I install it as an app?
+
+Yes. The Install page (`/settings/install`) has steps for your phone or computer. Browsers only offer a full install over HTTPS or on localhost, so over plain HTTP on your LAN you may only be able to add a shortcut.
+
 ## Updating
 
-Pull the new image and recreate the container. Your data folder is untouched:
+Pull the new image and recreate the container. Your data folder is untouched, and the database upgrades itself on start:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-In Portainer: **Pull and redeploy**.
-
-From this version the image is based on Debian slim instead of Alpine. Nothing changes for you: pull and recreate as usual.
+In Portainer: **Pull and redeploy**. Take a backup first (Settings → Data & backups → **Back up now**).
 
 ## Local development
 
@@ -530,3 +659,4 @@ HomeCenter is source-available software licensed under the [PolyForm Noncommerci
 You may use, modify, and redistribute HomeCenter for permitted noncommercial purposes, subject to the license terms. Commercial use requires separate permission from the copyright holder.
 
 HomeCenter is not open source under the standard Open Source Definition because the license restricts commercial use.
+
