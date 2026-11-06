@@ -12,7 +12,7 @@ Service history, costs, insurance and reminders for your homes, vehicles, equipm
 
 **[Install in 5 minutes](#get-started)** · [Demos](#see-it-in-action) · [What's new](#whats-new-since-20) · [Features](#features) · [Settings](#settings-reference) · [FAQ](#faq) · [Updating](#updating)
 
-[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Version 3.1.0](https://img.shields.io/badge/version-3.1.0-informational) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555) ![No cloud](https://img.shields.io/badge/cloud-none-success)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Version 3.1.1](https://img.shields.io/badge/version-3.1.1-informational) ![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED) ![amd64 and arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555) ![No cloud](https://img.shields.io/badge/cloud-none-success)
 [![Docker image build](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/yatzin/home-center/actions/workflows/docker-publish.yml) [![Last commit](https://img.shields.io/github/last-commit/yatzin/home-center)](https://github.com/yatzin/home-center/commits/main)
 
 </div>
