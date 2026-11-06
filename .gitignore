@@ -69,3 +69,8 @@ next-env.d.ts
 
 # local Paperless test token (never commit)
 paperless.txt
+
+# local-only demo media tooling (see DEMO_MEDIA.md; never committed)
+demomedia/
+.demomedia-work/
+DEMO_MEDIA.md
