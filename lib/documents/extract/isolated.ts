@@ -1,3 +1,4 @@
+import { existsSync } from "fs"
 import path from "path"
 import { Worker } from "worker_threads"
 import { EXTRACT_HEAP_MB, EXTRACT_TIMEOUT_MS, EXTRACT_WORKER_GRACE_MS, OCR_TIMEOUT_MS } from "../limits"
@@ -13,11 +14,30 @@ type Reply = { ok: true; result: Extracted } | { ok: false; name: string; messag
 
 export type IsolatedOptions = { workerPath: string; entry: string; heapMb: number; graceMs: number }
 
+/**
+ * Under a container memory limit, a fixed cap could let the worker push the container
+ * past it, and the kernel would kill the whole server. Keep the worker to 40% of the limit.
+ */
+export function extractHeapMb(limitBytes = process.constrainedMemory?.() ?? 0): number {
+  if (!limitBytes) return EXTRACT_HEAP_MB
+  return Math.max(128, Math.min(EXTRACT_HEAP_MB, Math.floor((limitBytes * 0.4) / 1024 / 1024)))
+}
+
+/**
+ * The bundle `npm run build` makes, in production. Dev and tests use the .ts source,
+ * so a bundle left over from an old build never hides an edit to an extractor.
+ */
+function extractEntry(): string {
+  const bundle = path.join(process.cwd(), "workers", "extract-bundle.cjs")
+  if (process.env.NODE_ENV === "production" && existsSync(bundle)) return bundle
+  return path.join(process.cwd(), "lib", "documents", "extract", "index.ts")
+}
+
 function defaults(): IsolatedOptions {
   return {
     workerPath: path.join(process.cwd(), "workers", "extract-worker.mjs"),
-    entry: path.join(process.cwd(), "lib", "documents", "extract", "index.ts"),
-    heapMb: EXTRACT_HEAP_MB,
+    entry: extractEntry(),
+    heapMb: extractHeapMb(),
     graceMs: EXTRACT_WORKER_GRACE_MS,
   }
 }

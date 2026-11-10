@@ -42,6 +42,9 @@ ARG TARGETARCH
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# glibc otherwise gives each thread its own malloc arena, and the worker threads,
+# sharp and ONNX Runtime leave memory stranded in them that never goes back to the OS.
+ENV MALLOC_ARENA_MAX=2
 # gosu drops root in the entrypoint; wget serves the compose healthcheck;
 # openssl is for Prisma (see base).
 RUN apt-get update \

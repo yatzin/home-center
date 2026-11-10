@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import { extractPdf } from "./pdf"
+import { MAX_OCR_EDGE_PX } from "../limits"
+import { extractPdf, ocrScale } from "./pdf"
 import { textPdf } from "./test-fixtures"
 
 // OCR (or rendering the page for it) can fail on its own — e.g. no canvas
@@ -9,6 +10,14 @@ vi.mock("./ocr", () => ({
     throw new Error("canvas binary missing")
   }),
 }))
+
+describe("ocrScale", () => {
+  it("renders a letter page at 2x and shrinks a big one to the edge limit", () => {
+    expect(ocrScale(612, 792)).toBe(2)
+    // A 36x48 inch plan sheet: 2x would be a 5184x6912 bitmap.
+    expect(Math.round(3456 * ocrScale(2592, 3456))).toBe(MAX_OCR_EDGE_PX)
+  })
+})
 
 describe("extractPdf", () => {
   it("keeps the text pages when OCR of a blank page fails", async () => {

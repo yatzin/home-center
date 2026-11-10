@@ -4,18 +4,25 @@
 // takes down this thread only, and the parent can terminate it on timeout.
 // One file per worker; the parent terminates it after the answer.
 //
-// The extractors are TypeScript under lib/documents/extract. tsx compiles them
-// on load (a runtime dependency, as for the seed), so they aren't duplicated here.
+// The extractors are TypeScript under lib/documents/extract. A production build
+// bundles them to extract-bundle.cjs (scripts/build-extract-worker.mjs), loaded as is.
+// In dev and tests the entry is the .ts source, and tsx compiles it on load.
+import { createRequire } from "node:module"
 import { parentPort, workerData } from "node:worker_threads"
 import { pathToFileURL } from "node:url"
-import { register } from "tsx/esm/api"
-import { register as registerCjs } from "tsx/cjs/api"
 
-// Registered for this thread only; the server's own module loading is untouched.
-// Both loaders: without "type": "module" the .ts files are compiled as CommonJS.
-register()
-registerCjs()
-const { extractFile } = await import(pathToFileURL(workerData.entry).href)
+let extractFile
+if (workerData.entry.endsWith(".ts")) {
+  const { register } = await import("tsx/esm/api")
+  const { register: registerCjs } = await import("tsx/cjs/api")
+  // Registered for this thread only; the server's own module loading is untouched.
+  // Both loaders: without "type": "module" the .ts files are compiled as CommonJS.
+  register()
+  registerCjs()
+  ;({ extractFile } = await import(pathToFileURL(workerData.entry).href))
+} else {
+  ;({ extractFile } = createRequire(import.meta.url)(workerData.entry))
+}
 
 parentPort.once("message", async ({ filePath, ext, opts }) => {
   try {

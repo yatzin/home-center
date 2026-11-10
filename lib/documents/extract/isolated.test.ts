@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import path from "path"
-import { extractInWorker } from "./isolated"
+import { extractHeapMb, extractInWorker } from "./isolated"
 import { ExtractError } from "../types"
 import { docx } from "./test-fixtures"
 
@@ -22,6 +22,20 @@ afterAll(() => {
   } catch {
     // leftovers in the temp folder are harmless
   }
+})
+
+describe("extractHeapMb", () => {
+  const MB = 1024 * 1024
+  it("keeps the full cap with no memory limit", () => {
+    expect(extractHeapMb(0)).toBe(1024)
+  })
+  it("caps at 40% of a container limit", () => {
+    expect(extractHeapMb(1024 * MB)).toBe(409)
+  })
+  it("never goes past the fixed cap or below 128 MB", () => {
+    expect(extractHeapMb(2 ** 62)).toBe(1024)
+    expect(extractHeapMb(100 * MB)).toBe(128)
+  })
 })
 
 describe("extractInWorker", () => {

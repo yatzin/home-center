@@ -1,5 +1,6 @@
+import { unzipSync } from "fflate"
 import { readFile } from "fs/promises"
-import { EXTRACT_TIMEOUT_MS, OCR_TIMEOUT_MS } from "../limits"
+import { EXTRACT_TIMEOUT_MS, MAX_UNZIPPED_BYTES, OCR_TIMEOUT_MS } from "../limits"
 import { ExtractError, type Extracted } from "../types"
 import { kindFor, type ExtractKind } from "./kinds"
 import { decodeText, rtfToText } from "./plain"
@@ -52,6 +53,22 @@ async function run(kind: ExtractKind, ext: string, data: Buffer, opts: { ocr: bo
   }
 }
 
+/** The total size a zip's directory says its files unpack to; nothing is inflated. Null if it isn't a zip. */
+export function declaredZipBytes(data: Uint8Array): number | null {
+  let total = 0
+  try {
+    unzipSync(data, {
+      filter: (file) => {
+        total += file.originalSize
+        return false
+      },
+    })
+  } catch {
+    return null
+  }
+  return total
+}
+
 export async function extractFile(filePath: string, ext: string | null, opts: { ocr: boolean }): Promise<Extracted> {
   const kind = kindFor(ext)
   if (!kind || !ext) return { kind: "unsupported" }
@@ -59,6 +76,10 @@ export async function extractFile(filePath: string, ext: string | null, opts: { 
     if (error.code === "ENOENT") throw new ExtractError("File missing on disk")
     throw error
   })
+  // The kinds whose parsers unzip. A file that isn't a zip is left for its parser to reject.
+  if ((kind === "office" || kind === "sheet") && (declaredZipBytes(data) ?? 0) > MAX_UNZIPPED_BYTES) {
+    throw new ExtractError("Too large to read")
+  }
   const slow = opts.ocr && (kind === "pdf" || kind === "image")
   return withTimeout(run(kind, ext, data, opts), slow ? OCR_TIMEOUT_MS : EXTRACT_TIMEOUT_MS, async () => {
     if (slow) await (await import("./ocr")).terminateOcr()

@@ -22,6 +22,13 @@ export function thumbPathFor(filePath: string): string {
   return `${filePath}.thumb.webp`
 }
 
+// A page of new photos asks for all its thumbnails at once. Left alone, sharp decodes
+// them side by side, each on every core, and keeps a cache of what it opened. So: one
+// thread, no cache (each photo is read once), and one build at a time.
+sharp.concurrency(1)
+sharp.cache(false)
+let queue: Promise<unknown> = Promise.resolve()
+
 const inFlight = new Map<string, Promise<Buffer | null>>()
 
 /**
@@ -44,11 +51,17 @@ async function buildThumbnail(filePath: string): Promise<Buffer | null> {
     const [original, existing] = await Promise.all([stat(filePath), stat(thumbPath).catch(() => null)])
     if (existing && existing.mtimeMs >= original.mtimeMs) return await readFile(thumbPath)
 
-    const bytes = await sharp(await readFile(filePath))
-      .rotate() // honour the EXIF orientation phone photos carry
-      .resize({ width: THUMB_MAX_EDGE, height: THUMB_MAX_EDGE, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: THUMB_QUALITY })
-      .toBuffer()
+    // From the path, so sharp reads the file itself and can shrink a JPEG as it decodes.
+    const encode = () =>
+      sharp(filePath)
+        .rotate() // honour the EXIF orientation phone photos carry
+        .resize({ width: THUMB_MAX_EDGE, height: THUMB_MAX_EDGE, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: THUMB_QUALITY })
+        .toBuffer()
+    // Runs after the build before it, whether that one worked or not.
+    const job = queue.then(encode, encode)
+    queue = job
+    const bytes = await job
 
     // Write then rename so a request never reads half a file.
     const tmp = `${thumbPath}.${process.pid}.tmp`

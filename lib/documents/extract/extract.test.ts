@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import path from "path"
-import { extractFile, withTimeout } from "./index"
+import { zipSync } from "fflate"
+import { declaredZipBytes, extractFile, withTimeout } from "./index"
 import { terminateOcr } from "./ocr"
+import { MAX_UNZIPPED_BYTES } from "../limits"
 import { ExtractError } from "../types"
 import { docx, odt, pptx, scannedPdf, textImage, textPdf, xlsx } from "./test-fixtures"
 
@@ -97,6 +99,19 @@ describe("extractFile — failures", () => {
     await expect(extractFile(put(name, "this is not really that kind of file"), path.extname(name), { ocr: false }))
       .rejects.toEqual(new ExtractError(message))
   })
+
+  it("adds up what a zip says it unpacks to, without unpacking it", () => {
+    expect(declaredZipBytes(zipSync({ "a.xml": new Uint8Array(1000), "b.xml": new Uint8Array(234) }))).toBe(1234)
+    expect(declaredZipBytes(Buffer.from("not a zip"))).toBeNull()
+  })
+
+  it("turns away a zip bomb before opening it", async () => {
+    // 257 MiB of zeros deflates to a few hundred KB — well under the upload limit.
+    const bomb = zipSync({ "word/document.xml": new Uint8Array(MAX_UNZIPPED_BYTES + 1024 * 1024) }, { level: 1 })
+    expect(bomb.length).toBeLessThan(5 * 1024 * 1024)
+    await expect(extractFile(put("bomb.docx", Buffer.from(bomb)), ".docx", { ocr: false })).rejects.toEqual(new ExtractError("Too large to read"))
+    await expect(extractFile(put("bomb.xlsm", Buffer.from(bomb)), ".xlsm", { ocr: false })).rejects.toEqual(new ExtractError("Too large to read"))
+  }, 60_000)
 
   it("says when the file is missing", async () => {
     await expect(extractFile(path.join(dir, "nope.pdf"), ".pdf", { ocr: false })).rejects.toEqual(new ExtractError("File missing on disk"))

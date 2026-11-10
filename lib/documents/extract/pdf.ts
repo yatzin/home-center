@@ -1,11 +1,16 @@
 import { extractText, getDocumentProxy, renderPageAsImage } from "unpdf"
-import { MAX_OCR_PAGES } from "../limits"
+import { MAX_OCR_EDGE_PX, MAX_OCR_PAGES } from "../limits"
 import { isBlankPage } from "../normalize"
 import { ExtractError, type Extracted } from "../types"
 import { ocrImage } from "./ocr"
 
 // Text layer page by page. Pages with (almost) no text are probably scans:
 // with OCR on, up to MAX_OCR_PAGES of them are rendered at 2x and read.
+
+/** 2x for a letter-sized page; less for a big one (a plan sheet, a poster), so its bitmap stays bounded. */
+export function ocrScale(width: number, height: number): number {
+  return Math.min(2, MAX_OCR_EDGE_PX / Math.max(width, height))
+}
 
 export async function extractPdf(data: Uint8Array, opts: { ocr: boolean }): Promise<Extracted> {
   let doc: Awaited<ReturnType<typeof getDocumentProxy>>
@@ -28,7 +33,9 @@ export async function extractPdf(data: Uint8Array, opts: { ocr: boolean }): Prom
       }
       if (!opts.ocr || ocrPages >= MAX_OCR_PAGES) continue
       try {
-        const png = await renderPageAsImage(doc, i + 1, { canvasImport: () => import("@napi-rs/canvas"), scale: 2 })
+        const { width, height } = (await doc.getPage(i + 1)).getViewport({ scale: 1 })
+        const scale = ocrScale(width, height)
+        const png = await renderPageAsImage(doc, i + 1, { canvasImport: () => import("@napi-rs/canvas"), scale })
         pages[i] = await ocrImage(Buffer.from(png))
         ocrPages++
       } catch {

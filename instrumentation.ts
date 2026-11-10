@@ -16,6 +16,15 @@ export async function register() {
     console.error("[restore] finalize failed:", e)
   }
 
+  // WAL lets reads carry on while the schedulers and indexer write. It's stored in the
+  // file, so this only changes something on a new or freshly restored database.
+  try {
+    const { prisma } = await import("@/lib/prisma")
+    await prisma.$queryRawUnsafe("PRAGMA journal_mode=WAL")
+  } catch (e) {
+    console.error("[db] couldn't switch to WAL:", e)
+  }
+
   const { startNotificationScheduler } = await import("@/lib/notifications/scheduler")
   startNotificationScheduler()
 

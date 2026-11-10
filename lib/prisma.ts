@@ -5,7 +5,9 @@ import { ENTITY_MODELS, entitiesChanged, WRITE_OPERATIONS } from "@/lib/search/e
 function createClient() {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error("DATABASE_URL is not set")
-  const adapter = new PrismaLibSql({ url })
+  // Waits for a lock instead of failing with SQLITE_BUSY when the schedulers and a
+  // request write at the same moment. Applies to every connection, transactions too.
+  const adapter = new PrismaLibSql({ url, timeout: 5000 })
   // Any write to a record global search embeds schedules a re-sync of that
   // index (lib/search/entities), so no server action has to remember to.
   return new PrismaClient({ adapter }).$extends({

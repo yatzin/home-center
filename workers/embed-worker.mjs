@@ -1,6 +1,7 @@
 // Embedding worker. Runs one model; the main thread terminates the worker to
 // unload it, which returns its memory to the OS (dispose() in the main thread
 // did not). Never fetches anything: models come from local folders only.
+import { availableParallelism } from "node:os"
 import { parentPort, workerData } from "node:worker_threads"
 import { env, pipeline } from "@huggingface/transformers"
 
@@ -11,7 +12,12 @@ const errorName = (e) => (e && typeof e === "object" && "name" in e ? String(e.n
 
 let extractor
 try {
-  extractor = await pipeline("feature-extraction", workerData.repo, { dtype: "q8" })
+  // ONNX Runtime otherwise starts one thread per host core, ignoring a container's
+  // CPU limit, and the extra threads just get throttled.
+  extractor = await pipeline("feature-extraction", workerData.repo, {
+    dtype: "q8",
+    session_options: { intraOpNumThreads: availableParallelism(), interOpNumThreads: 1 },
+  })
 } catch (e) {
   parentPort.postMessage({ type: "error", name: errorName(e) })
   process.exit(1)

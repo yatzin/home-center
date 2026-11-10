@@ -17,6 +17,13 @@ export const MAX_ATTEMPTS = 3
 export const EXTRACT_HEAP_MB = 1024
 /** Added to the extract timeouts for the worker to start and compile the extractors. */
 export const EXTRACT_WORKER_GRACE_MS = 15_000
+/**
+ * Unzipped size an office file may declare. Inflated data is held in buffers, which
+ * the worker's heap cap doesn't count, so a zip bomb is turned away before it's opened.
+ */
+export const MAX_UNZIPPED_BYTES = 256 * 1024 * 1024
+/** Longest edge of a page rendered for OCR; a poster-sized page would otherwise take hundreds of MB. */
+export const MAX_OCR_EDGE_PX = 2500
 
 /** Separates pages in AttachmentText.text. */
 export const PAGE_BREAK = "\f"

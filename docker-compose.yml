@@ -30,6 +30,14 @@ services:
       ADMIN_NAME: "Admin"
       ADMIN_EMAIL: "your@email.com"
       ADMIN_PASSWORD: "changeme"
+    # Caps memory so a huge or hostile upload can't starve the rest of the NAS.
+    # The app sizes its document reader to fit inside the limit. Lower it on a
+    # small box; 1g is the floor with search and OCR on.
+    mem_limit: 2g
+    # Optional: cap CPU so indexing leaves cores for everything else. Off by
+    # default because some NAS kernels (older Synology) refuse to start a
+    # container with a CPU limit.
+    # cpus: 2
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]

@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "tsx scripts/restore-apply.ts && prisma migrate deploy",
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/build-extract-worker.mjs",
     "prestart": "tsx scripts/restore-apply.ts",
     "start": "next start",
     "lint": "eslint",

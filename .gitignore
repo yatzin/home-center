@@ -49,6 +49,9 @@ dev.log
 /prisma/search-index.db-*
 /prisma/*.backup*
 
+# bundled document extractors (npm run build)
+/workers/extract-bundle.cjs
+
 # generated prisma client
 /app/generated/
 next-env.d.ts
