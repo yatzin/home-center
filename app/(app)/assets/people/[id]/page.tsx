@@ -92,6 +92,10 @@ export default async function PersonDetailPage({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* Phones: the name leads, above the photo and facts. */}
+      <div className="md:hidden">
+        <h1 className="break-words font-heading text-2xl font-semibold">{person.name}</h1>
+      </div>
       {/* Files dropped anywhere on this page go to Intake for this person. */}
       <DropPageAsset assetType="PERSON" assetId={id} name={person.name} />
       <aside className="space-y-4 lg:w-72 lg:shrink-0">
@@ -99,7 +103,7 @@ export default async function PersonDetailPage({
 
         <AllergyCallout allergies={person.allergies} />
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:space-y-0">
           <Stat icon={Users} label="Relationship" value={labelFor(RELATIONSHIPS, person.relationship)} />
           {person.dateOfBirth && (
             <Stat icon={Cake} label="Born" value={`${fmt.date(person.dateOfBirth, { utc: true })} (${age})`} />
@@ -126,7 +130,7 @@ export default async function PersonDetailPage({
 
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
-          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{person.name}</h1>
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold max-md:hidden">{person.name}</h1>
           <div className="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">
             <LogObservationButton personId={id} typeOptions={observationTypes} conditions={conditionOptions} />
             <PersonEditButton person={person} providers={providers} policyChoices={policyChoices} policyIds={person.insurancePolicies.map((p) => p.id)} propertyChoices={propertyChoices ?? undefined} />
@@ -189,11 +193,11 @@ export default async function PersonDetailPage({
 
 function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 max-md:flex-col max-md:items-start max-md:justify-start max-md:gap-0.5 max-md:px-2.5 max-md:py-1.5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className="min-w-0 break-words font-semibold text-sm text-right">{value}</div>
+      <div className="min-w-0 break-words font-semibold text-sm text-right max-md:text-left">{value}</div>
     </div>
   )
 }

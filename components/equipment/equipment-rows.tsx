@@ -5,7 +5,9 @@ import { ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useFormat } from "@/components/regional-provider"
 import { locationLabel } from "@/lib/rooms"
-import { categoryLabel } from "./categories"
+import { equipmentIcon, equipmentLabel } from "@/lib/categories"
+import { CategoryName } from "@/components/category-icon"
+import { useCategories } from "@/components/category-provider"
 import type { EquipmentWithRoom } from "./equipment-form-dialog"
 
 /**
@@ -13,6 +15,7 @@ import type { EquipmentWithRoom } from "./equipment-form-dialog"
  * page. `showLocation` adds where the item sits, for lists that aren't already scoped to one room.
  */
 export function EquipmentRows({ equipment, onEdit, showLocation = false }: { equipment: EquipmentWithRoom[]; onEdit: (equipment: EquipmentWithRoom) => void; showLocation?: boolean }) {
+  const categoryDefs = useCategories()
   const fmt = useFormat()
   return (
     <ul className="divide-y rounded-md border bg-card">
@@ -29,7 +32,7 @@ export function EquipmentRows({ equipment, onEdit, showLocation = false }: { equ
             <button type="button" onClick={() => onEdit(e)} className="min-w-0 flex-1 space-y-0.5 px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-ring">
               <span className="flex items-center gap-2">
                 <span className="truncate font-medium">{e.name}</span>
-                <Badge variant="outline" className="shrink-0 text-xs">{categoryLabel(e.category)}</Badge>
+                <Badge variant="outline" className="shrink-0 text-xs"><CategoryName icon={equipmentIcon(e.category, categoryDefs)} label={equipmentLabel(e.category, categoryDefs)} /></Badge>
               </span>
               {make && <span className="block truncate text-muted-foreground">{make}</span>}
               {facts && <span className="block truncate text-xs text-muted-foreground">{facts}</span>}

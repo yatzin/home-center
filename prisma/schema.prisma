@@ -46,35 +46,40 @@ enum MeterUnit {
   HOURS
 }
 
-/// What kind of spending a service record represents, as distinct from what it was
-/// spent on. Nullable on the record: anything logged before categories existed is
-/// genuinely uncategorized, and the reports say so rather than guessing.
-/// The medical values are offered only on people's records — see lib/costs.ts.
-enum ServiceCategory {
-  ROUTINE
-  REPAIR
-  UPGRADE
-  INSPECTION
-  PARTS
-  OTHER
-  OFFICE_VISIT
-  PRESCRIPTION
-  LAB
-  DENTAL
-  VISION
-  PROCEDURE
-  THERAPY
+/// Where a category is offered. Service categories label what money was spent on
+/// (service records); equipment categories classify equipment items.
+enum CategoryScope {
+  SERVICE
+  EQUIPMENT
 }
 
-enum EquipmentCategory {
-  APPLIANCE
-  HVAC
-  WATER
-  ELECTRONICS
-  TOOL
-  OUTDOOR
-  SECURITY
-  OTHER
+/// Service categories only: which kind of asset offers it. Equipment categories are ALL.
+enum CategoryAudience {
+  ALL
+  ASSET
+  PERSON
+}
+
+/// Configurable categories (Settings → Categories). Records store the `key` as plain
+/// text, so renaming changes only the label and old records keep working. The
+/// built-in keys are the former enum values (ROUTINE, HVAC, ...).
+model Category {
+  id        String           @id @default(cuid())
+  scope     CategoryScope
+  key       String
+  label     String
+  /// A lucide icon name from lib/category-icons.ts, or null for none.
+  icon      String?
+  /// A hex colour like #2a78d6, or null for the built-in default / automatic.
+  color     String?
+  audience  CategoryAudience @default(ALL)
+  /// Hidden categories stay on existing records but are not offered on new ones.
+  hidden    Boolean          @default(false)
+  sortOrder Int              @default(0)
+  builtIn   Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@unique([scope, key])
 }
 
 enum EquipmentValueClass {
@@ -339,7 +344,7 @@ model Vehicle {
 model Equipment {
   id                String               @id @default(cuid())
   name              String
-  category          EquipmentCategory    @default(APPLIANCE)
+  category          String               @default("APPLIANCE")
   manufacturer      String?
   modelNumber       String?
   serialNumber      String?
@@ -593,7 +598,7 @@ model ServiceRecord {
   description      String?
   vendor           String?
   cost             Float?
-  category         ServiceCategory?
+  category         String?
   mileageAtService Int?
   /// Person records only: who was seen and what for. vendor stays free text for
   /// facilities outside the provider directory.

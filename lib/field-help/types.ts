@@ -19,6 +19,8 @@ export type FieldHelpEntry = {
   what: string
   use?: string
   values?: { label: string; effect: string }[]
+  /** Shown to admins only, at the bottom: a shortcut to the Settings page that edits what this field offers. */
+  adminLink?: { href: string; text: string }
 }
 
 export type FieldHelpMap = Record<string, FieldHelpEntry>

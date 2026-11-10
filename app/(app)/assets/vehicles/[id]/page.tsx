@@ -52,12 +52,17 @@ export default async function VehicleDetailPage({
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* Phones: the name leads, above the photo and facts. */}
+      <div className="md:hidden">
+        <h1 className="break-words font-heading text-2xl font-semibold">{vehicle.name}</h1>
+        {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") ? <p className="mt-0.5 text-sm text-muted-foreground">{[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")}</p> : null}
+      </div>
       {/* Files dropped anywhere on this page go to Intake for this vehicle. */}
       <DropPageAsset assetType="VEHICLE" assetId={id} name={vehicle.name} />
       <aside className="space-y-4 lg:w-72 lg:shrink-0">
         <AssetImageUploader assetType="VEHICLE" assetId={id} imageFilename={vehicle.imageFilename} alt={vehicle.name} />
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:space-y-0">
           <Stat icon={Factory} label="Make" value={vehicle.make} />
           <Stat icon={Tag} label="Model" value={vehicle.model} />
           <Stat icon={Calendar} label="Year" value={vehicle.year.toString()} />
@@ -85,7 +90,7 @@ export default async function VehicleDetailPage({
 
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
-          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{vehicle.name}</h1>
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold max-md:hidden">{vehicle.name}</h1>
           <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
             <VehicleEditButton vehicle={vehicle} policyChoices={policyChoices} policyIds={policies.map((p) => p.id)} propertyChoices={propertyChoices ?? undefined} />
             <Link
@@ -131,11 +136,11 @@ export default async function VehicleDetailPage({
 
 function Stat({ icon: Icon, label, value, mono }: { icon: React.ElementType; label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 max-md:flex-col max-md:items-start max-md:justify-start max-md:gap-0.5 max-md:px-2.5 max-md:py-1.5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className={mono ? "min-w-0 font-mono text-xs break-all text-right" : "min-w-0 break-words font-semibold text-sm text-right"}>{value}</div>
+      <div className={mono ? "min-w-0 font-mono text-xs break-all text-right max-md:text-left" : "min-w-0 break-words font-semibold text-sm text-right max-md:text-left"}>{value}</div>
     </div>
   )
 }

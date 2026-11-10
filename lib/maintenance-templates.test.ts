@@ -9,6 +9,8 @@ const ALL: TemplateAsset[] = [
   { type: "VEHICLE", meterUnit: "MILES" },
   { type: "VEHICLE", meterUnit: "HOURS" },
   ...EQUIPMENT_CATEGORIES.map((category) => ({ type: "EQUIPMENT" as const, category })),
+  // A custom category has no templates of its own and falls back to Other's.
+  { type: "EQUIPMENT", category: "c_custom" },
 ]
 
 describe("templatesFor", () => {

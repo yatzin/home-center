@@ -109,7 +109,7 @@ export function PropertyFormDialog({ open, onClose, property, policyChoices = NO
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => onSubmit(v))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="property.name">Name *</FormLabel>
@@ -138,7 +138,7 @@ export function PropertyFormDialog({ open, onClose, property, policyChoices = NO
               <FormField control={form.control} name="yearBuilt" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="property.year-built">Year Built</FormLabel>
-                  <FormControl><Input type="number" placeholder="1995" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="1995" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -162,7 +162,7 @@ export function PropertyFormDialog({ open, onClose, property, policyChoices = NO
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="property.purchase-price">Purchase Price</FormLabel>
-                  <FormControl><Input type="number" placeholder="350000" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="350000" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -170,7 +170,7 @@ export function PropertyFormDialog({ open, onClose, property, policyChoices = NO
               <FormField control={form.control} name="sqFt" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="property.area">{fmt.areaLabel}</FormLabel>
-                  <FormControl><Input type="number" placeholder="2000" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="2000" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

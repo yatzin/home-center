@@ -16,6 +16,7 @@ import { GENERIC_ERROR, firstMessages } from "./server-errors"
 import { Paperclip, TriangleAlert, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { ActionResult, FieldConfig, FormValues } from "@/lib/form-types"
 import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
+import { FileLink } from "@/components/attachments/file-link"
 
 // Base UI Select has no empty-string option, so "none" needs a sentinel.
 const NONE = "__none__"
@@ -238,9 +239,9 @@ export function EntityFormDialog({ open, onClose, title, submitLabel, successMes
                     return (
                       <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:underline">
+                        <FileLink href={href} name={a.originalName} className="flex-1 truncate hover:underline">
                           {a.originalName}
-                        </a>
+                        </FileLink>
                         <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                         <button
                           type="button"

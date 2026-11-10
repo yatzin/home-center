@@ -18,7 +18,7 @@ import type { AssetType } from "@/app/generated/prisma/client"
 export type AssetCardContent = {
   name: string
   subtitle?: string | null
-  badge?: string | null
+  badge?: React.ReactNode
   meta?: { icon?: React.ElementType; text: string; clamp?: boolean }[]
   mono?: string | null
 }

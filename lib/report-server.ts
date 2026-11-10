@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
-import { categoryLabel as equipmentCategoryLabel } from "@/components/equipment/categories"
+import { equipmentLabel } from "@/lib/categories"
+import { loadCategories } from "@/lib/categories-server"
 import type { AssetType, MeterUnit, Prisma, Provider } from "@/app/generated/prisma/client"
 import type { CostRow } from "@/lib/costs"
 import { getFormat } from "@/lib/regional-server"
@@ -269,13 +270,14 @@ async function loadAsset(assetType: AssetType, assetId: string): Promise<ReportA
     include: { property: { select: { name: true } }, room: { select: { name: true } } },
   })
   if (!e) return null
+  const categoryDefs = await loadCategories()
   const location = locationLabel(e)
   const age = equipmentAge(e, localDay(new Date()))
   return {
     type: "EQUIPMENT",
     id: e.id,
     name: e.name,
-    subtitle: [equipmentCategoryLabel(e.category), location].filter(Boolean).join(" · ") || null,
+    subtitle: [equipmentLabel(e.category, categoryDefs), location].filter(Boolean).join(" · ") || null,
     imageFilename: e.imageFilename,
     purchaseDate: e.purchaseDate,
     purchasePrice: e.purchasePrice,
@@ -283,7 +285,7 @@ async function loadAsset(assetType: AssetType, assetId: string): Promise<ReportA
     meterUnit: null,
     currentMeter: null,
     details: [
-      { label: "Category", value: equipmentCategoryLabel(e.category) },
+      { label: "Category", value: equipmentLabel(e.category, categoryDefs) },
       ...(e.manufacturer ? [{ label: "Manufacturer", value: e.manufacturer }] : []),
       ...(e.modelNumber ? [{ label: "Model number", value: e.modelNumber }] : []),
       ...(e.serialNumber ? [{ label: "Serial number", value: e.serialNumber }] : []),

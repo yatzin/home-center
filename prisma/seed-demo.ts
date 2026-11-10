@@ -14,7 +14,8 @@
  *
  * See DEMO-DATA.md.
  */
-import { PrismaClient, type EquipmentCategory, type PropertyType } from "../app/generated/prisma/client"
+import { PrismaClient, type PropertyType } from "../app/generated/prisma/client"
+import type { EquipmentCategory } from "../lib/categories"
 import { PrismaLibSql } from "@prisma/adapter-libsql"
 import bcrypt from "bcryptjs"
 import { mkdir, writeFile, readFile, rm } from "fs/promises"

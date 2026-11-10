@@ -1,11 +1,13 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { DEFAULT_PANEL_WIDTH, clampPanelWidth, readPanelPrefs, writePanelPrefs } from "@/lib/llm/panel-prefs"
 import { useChatThread } from "./use-chat-thread"
 
 // One live thread for the whole app shell, so the docked panel and the /chat
 // page show the same conversation — even mid-answer — while you navigate.
+// Phones never show the panel: opening the assistant there goes to /chat.
 
 type ChatContextValue = ReturnType<typeof useChatThread> & {
   available: boolean
@@ -45,6 +47,7 @@ export function ChatProvider({
   model: string | null
   children: React.ReactNode
 }) {
+  const router = useRouter()
   const thread = useChatThread(userId)
   const [panelOpen, setOpen] = useState(false)
   const [panelWidth, setWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -60,10 +63,16 @@ export function ChatProvider({
 
   const setPanelOpen = useCallback(
     (open: boolean) => {
+      // On a phone there is no room beside the page, so every way of opening the assistant
+      // (header button, floating button) goes to its full page instead of covering the screen.
+      if (open && !isWide()) {
+        router.push("/chat")
+        return
+      }
       setOpen(open)
       writePanelPrefs(storage(), { open, width: panelWidth })
     },
-    [panelWidth]
+    [panelWidth, router]
   )
 
   /** Called on every drag move; persist once the drag ends. */

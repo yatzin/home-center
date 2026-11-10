@@ -76,7 +76,7 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, manual, on
         </DialogHeader>
         <ManualLink manual={manual} />
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
             <div className="space-y-1.5">
               <Label htmlFor="complete-date" help="complete.date">Completion Date</Label>
               <Input id="complete-date" type="date" {...register("completedDate")} />
@@ -85,7 +85,7 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, manual, on
             {schedule.assetType === "VEHICLE" && (
               <div className="space-y-1.5">
                 <Label htmlFor="complete-mileage" help="complete.mileage">{fmt.meterNoun(meterUnit)} at Completion</Label>
-                <Input id="complete-mileage" type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...register("completedMileage")} />
+                <Input id="complete-mileage" type="number" inputMode="numeric" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...register("completedMileage")} />
                 {errors.completedMileage && <p className="text-xs text-destructive">{errors.completedMileage.message}</p>}
               </div>
             )}
@@ -97,7 +97,7 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, manual, on
           </Label>
 
           {logService && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <div className="space-y-1.5">
                 <Label htmlFor="complete-vendor" help="complete.vendor">{isPerson ? "Facility" : "Vendor / Shop"}</Label>
                 <Input id="complete-vendor" placeholder={isPerson ? "City Medical Center" : "Jiffy Lube"} {...register("vendor")} />
@@ -105,7 +105,7 @@ export function CompleteDialog({ schedule, currentMileage, meterUnit, manual, on
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="complete-cost" help="complete.cost">{`Cost (${fmt.currencySymbol})`}</Label>
-                <Input id="complete-cost" type="number" step="0.01" min="0" placeholder={schedule.estimatedCost != null ? `Est. ${fmt.money(schedule.estimatedCost)}` : "89.99"} {...register("cost")} />
+                <Input id="complete-cost" type="number" inputMode="decimal" step="0.01" min="0" placeholder={schedule.estimatedCost != null ? `Est. ${fmt.money(schedule.estimatedCost)}` : "89.99"} {...register("cost")} />
                 {errors.cost && <p className="text-xs text-destructive">{errors.cost.message}</p>}
               </div>
               <div className="col-span-2 space-y-1.5">

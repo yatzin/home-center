@@ -263,13 +263,14 @@ describe("tierOf in phone mode", () => {
     expect(tierOf(t, { w: 2, h: 4 }, "phone")).toBe(tierOf(t, { w: 4, h: 4 }))
   })
 
-  // Asset cards on the phone grid are at most 2 columns wide, so they always
-  // show an avatar look there (raw cells, not scaled): pills at full width.
+  // Asset cards on the phone grid are at most 2 columns wide. Half width shows an avatar look
+  // (raw cells); a full-width one with 2+ rows counts as wide and gets the photo mosaic, as on
+  // a large screen.
   it.each([
-    ["properties", "column-pills"],
-    ["vehicles", "column-pills"],
-    ["people", "column-pills"],
-    ["equipment", "column-pills"],
+    ["properties", "thumbnails"],
+    ["vehicles", "thumbnails"],
+    ["people", "thumbnails"],
+    ["equipment", "thumbnails"],
     ["rooms", "thumbnails"],
     ["records", "carousel"],
     ["active-warranties", "carousel"],
@@ -331,9 +332,11 @@ describe("asset card avatar looks", () => {
       // assetLook names the look; "rich" sizes keep the sized tiers.
       expect(assetLook({ w, h })).toBe(["thumbnails", "list"].includes(look) ? "rich" : look)
     }
-    // The phone grid uses the raw cells: a 2x2 phone card is not scaled to 4x2.
+    // The phone grid uses the raw cells for half width (1 wide); a full-width (2 wide) card
+    // with 2+ rows shows the photo mosaic, and a single row stays an avatar row.
     for (const [w, h, look] of cases.filter(([w]) => w <= PHONE_COLS)) {
-      expect(name(id, { w, h }, "phone"), `phone ${w}x${h}`).toBe(look)
+      const expected = w === PHONE_COLS && h >= 2 ? "thumbnails" : look
+      expect(name(id, { w, h }, "phone"), `phone ${w}x${h}`).toBe(expected)
     }
   })
 

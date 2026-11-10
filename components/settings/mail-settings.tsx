@@ -124,7 +124,7 @@ export function MailSettings({
               <FormField control={form.control} name="port" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="mail.port">Port</FormLabel>
-                  <FormControl><Input type="number" placeholder="587" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="587" {...field} /></FormControl>
                   <SourceNote source={sources.port} />
                   <FormMessage />
                 </FormItem>
@@ -189,7 +189,7 @@ export function MailSettings({
               <FormField control={form.control} name="digestHour" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="mail.digest-hour">Digest hour</FormLabel>
-                  <FormControl><Input type="number" min={0} max={23} placeholder="8" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" min={0} max={23} placeholder="8" {...field} /></FormControl>
                   <FormDescription className="text-xs">When daily and weekly emails go out.</FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -206,7 +206,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
   const details = (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
           <FormField control={form.control} name="name" render={({ field }) => (
             <FormItem>
               <FormLabel help="room.name">Name *</FormLabel>
@@ -224,7 +224,7 @@ function RoomDialogBody({ open, onClose, propertyId, room, serviceRecords, sched
           <FormField control={form.control} name="area" render={({ field }) => (
             <FormItem>
               <FormLabel help="room.area">{fmt.areaLabel}</FormLabel>
-              <FormControl><Input type="number" step="any" min="0" {...field} /></FormControl>
+              <FormControl><Input type="number" inputMode="decimal" step="any" min="0" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />

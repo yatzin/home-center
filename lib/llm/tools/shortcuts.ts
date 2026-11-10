@@ -12,7 +12,7 @@ import { loadVehicleMileage } from "@/lib/maintenance-due-server"
 import {
   daysUntil, HEALTH_WINDOWS, immunizationDue, insuranceExpiring, isSupersededImmunization, refillDue,
 } from "@/lib/health"
-import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
+import type { AssetType } from "@/app/generated/prisma/client"
 import { ENTITIES, HEALTH_ENTITIES, ROOM_ENTITIES, type EntityKey, type Row } from "../ontology"
 import { coerceValue, entityDef, healthOffWhere, healthOn, inDayRange, roomsOn, requireDay, selectFor, ToolInputError, withLocationSelect, type ToolContext } from "../query"
 import { HEALTH_INSURANCE_KINDS } from "@/lib/insurance"
@@ -218,7 +218,7 @@ export const costSummaryTool = defineTool({
     const from = optionalDay(a.from, "from")
     const to = optionalDay(a.to, "to")
     const category = a.category
-      ? (coerceValue(ENTITIES.serviceRecord.fields.category, "category", a.category) as ServiceCategory)
+      ? (coerceValue(ENTITIES.serviceRecord.fields.category, "category", a.category) as string)
       : null
 
     const [records, index, installed] = await Promise.all([

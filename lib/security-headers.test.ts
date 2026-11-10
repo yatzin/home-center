@@ -35,6 +35,15 @@ describe("securityHeaderRules", () => {
 
   it("leaves uploaded files out of the content policy so the browser's PDF viewer still works", () => {
     const csp = rules.find((r) => r.headers.some((h) => h.key === "Content-Security-Policy"))
-    expect(csp?.source).toBe("/((?!api/files/).*)")
+    expect(csp?.source).toBe("/((?!api/files/|view$).*)")
+  })
+
+  it("gives only the file viewer page WebAssembly, for PDF decoding", () => {
+    const viewer = header(rules, "/view", "Content-Security-Policy")
+    expect(viewer).toContain("'wasm-unsafe-eval'")
+    expect(viewer).toContain("default-src 'self'")
+    expect(contentSecurityPolicy(false)).not.toContain("wasm-unsafe-eval")
+    // The general policy skips /view, so the two never both apply.
+    expect(rules.find((r) => r.source.includes("view$"))).toBeDefined()
   })
 })

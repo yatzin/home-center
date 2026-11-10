@@ -125,7 +125,33 @@ export default async function WarrantiesPage({
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <div className="overflow-x-auto">
+          {/* Phones: one tappable row per warranty, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {warranties.map((w) => {
+              const assetName = assets.assetName(w.assetType, w.assetId)
+              const AssetIcon = assetIcon[w.assetType]
+              const st = warrantyStatus(w.expirationDate)
+              return (
+                <li key={w.id}>
+                  <Link href={`${assetHref(w.assetType, w.assetId)}?tab=warranties&open=${w.id}`} className="block space-y-1.5 px-4 py-3 active:bg-muted/50">
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 font-medium">{w.productName}</span>
+                      {st && <Badge variant={st.variant} className="shrink-0">{st.label}</Badge>}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <AssetIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        {assetName ?? <span className="italic">Unknown</span>}
+                      </span>
+                      {w.expirationDate && <span>Expires {fmt.date(w.expirationDate, { utc: true })}</span>}
+                      {w.vendor && <span>{w.vendor}</span>}
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-muted-foreground">
                 <tr>

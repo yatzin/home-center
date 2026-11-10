@@ -19,6 +19,7 @@ import { warrantySchema as schema } from "@/lib/warranty-input"
 import { showServerError } from "@/components/forms/server-errors"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, Warranty, AssetType } from "@/app/generated/prisma/client"
+import { FileLink } from "@/components/attachments/file-link"
 
 type FormValues = z.infer<typeof schema>
 
@@ -203,7 +204,7 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
               </FormItem>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="productName" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="warranty.product">Product / Coverage *</FormLabel>
@@ -295,14 +296,9 @@ export function WarrantyFormDialog({ open, onClose, assetId, assetType, warranty
                     return (
                       <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 truncate hover:underline"
-                        >
+                        <FileLink href={href} name={a.originalName} className="flex-1 truncate hover:underline">
                           {a.originalName}
-                        </a>
+                        </FileLink>
                         <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                         <button
                           type="button"

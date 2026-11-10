@@ -1,9 +1,10 @@
 import { AssetImage } from "@/components/asset-image"
 import { assetLabel } from "@/lib/assets"
-import { averagePerMonth, categoryLabel, costPerMeter, sum, UNCATEGORIZED } from "@/lib/costs"
+import { averagePerMonth, categoryColor, categoryLabel, costPerMeter, sum, UNCATEGORIZED } from "@/lib/costs"
+import { loadCategories } from "@/lib/categories-server"
+import type { CategoryDef } from "@/lib/categories"
 import { scheduleDue, type MileageIndex } from "@/lib/maintenance-due"
 import type { ReportData, ReportRoom, ReportSchedule, ReportService, ReportWarranty } from "@/lib/report-server"
-import type { ServiceCategory } from "@/app/generated/prisma/client"
 import { Empty, SectionTitle } from "./report-parts"
 import { HealthSummary } from "./health-summary"
 import { getFormat } from "@/lib/regional-server"
@@ -19,6 +20,7 @@ import { warrantyToday } from "@/lib/llm/warranty-status"
 /** `options` only applies to a medical summary; other reports print everything. */
 export async function AssetReport({ data, options = DEFAULT_REPORT_OPTIONS }: { data: ReportData; options?: ReportOptions }) {
   const fmt = await getFormat()
+  const categoryDefs = await loadCategories()
   const { asset, services, warranties, schedules, costRows, generatedAt } = data
   const isPerson = asset.type === "PERSON"
 
@@ -145,7 +147,7 @@ export async function AssetReport({ data, options = DEFAULT_REPORT_OPTIONS }: { 
       ) : null}
 
       {(!isPerson || options.visits !== "off") && (
-        <ServiceHistory services={services} asset={data.asset} total={lifetime} showCost={!isPerson || options.visits === "cost"} fmt={fmt} />
+        <ServiceHistory services={services} asset={data.asset} total={lifetime} showCost={!isPerson || options.visits === "cost"} fmt={fmt} categoryDefs={categoryDefs} />
       )}
       {!isPerson && <Warranties warranties={warranties} now={now} fmt={fmt} />}
       {(!isPerson || options.reminders) && (
@@ -241,17 +243,19 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 /// Category is shown as a coloured dot beside its name, never as colour alone —
 /// the report has to survive a monochrome printer, and the name is what does the
 /// work there.
-function CategoryTag({ category }: { category: ServiceCategory | null }) {
+function CategoryTag({ category, defs }: { category: string | null; defs: CategoryDef[] }) {
   const key = category ?? UNCATEGORIZED
+  // Built-ins print in the report's own --cat- palette; a custom or recoloured category carries its own colour.
+  const color = categoryColor(key, defs)
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[9pt]">
       <span
         aria-hidden="true"
         className="h-2 w-2 shrink-0 rounded-full"
-        style={{ background: `var(--cat-${key})` }}
+        style={{ background: color.startsWith("var(--cost-") ? `var(--cat-${key})` : color }}
         data-print-color=""
       />
-      {categoryLabel(key)}
+      {categoryLabel(key, defs)}
     </span>
   )
 }
@@ -324,7 +328,9 @@ function ServiceHistory({
   total,
   showCost,
   fmt,
+  categoryDefs,
 }: {
+  categoryDefs: CategoryDef[]
   services: ReportService[]
   asset: ReportData["asset"]
   total: number
@@ -379,7 +385,7 @@ function ServiceHistory({
                   <Files attachments={s.attachments} />
                 </td>
                 <td className="py-2.5 pr-3">
-                  <CategoryTag category={s.category} />
+                  <CategoryTag category={s.category} defs={categoryDefs} />
                 </td>
                 {showMeter ? (
                   <td className="py-2.5 pr-3 text-right tabular-nums" style={{ color: "var(--ink-soft)" }}>

@@ -39,7 +39,43 @@ export function EntityTable<T extends { id: string }>({
 
   return (
     <div className="rounded-lg border overflow-hidden bg-card">
-      <div className="overflow-x-auto">
+      {/* Phones: one card per row (the first column as its title, the rest as labelled values), in place of the table below. */}
+      <ul className="divide-y md:hidden">
+        {rows.map((row) => {
+          const expanded = expandedId === row.id
+          const [first, ...rest] = columns
+          return (
+            <li key={row.id}>
+              <div className="flex items-start gap-1 pr-2">
+                <button type="button" onClick={() => onEdit(row)} aria-label={`Edit ${describe(row)}`} className="min-w-0 flex-1 space-y-1.5 px-4 py-3 text-left active:bg-muted/50">
+                  <span className="block text-sm font-medium">{first.cell(row)}</span>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    {rest.map((c) => (
+                      <div key={c.key} className="min-w-0">
+                        <dt className="text-muted-foreground">{c.label}</dt>
+                        <dd className="break-words">{c.cell(row)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </button>
+                <div className="flex shrink-0 items-center pt-1.5">
+                  {extraActions?.(row)}
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" aria-label={`Delete ${describe(row)}`} onClick={() => onDelete(row)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  {renderExpanded && (
+                    <Button variant="ghost" size="icon" aria-label={expanded ? "Hide details" : "Show details"} aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : row.id)}>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {expanded && renderExpanded && <div className="bg-muted/30 px-4 py-3 text-sm">{renderExpanded(row)}</div>}
+            </li>
+          )
+        })}
+      </ul>
+      <div className="overflow-x-auto max-md:hidden">
         <Table>
           <TableHeader>
             <TableRow>

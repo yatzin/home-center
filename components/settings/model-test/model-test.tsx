@@ -71,7 +71,7 @@ export function ModelTest({
               <Label htmlFor="mt-temp" help="modeltest.temperature">Temperature</Label>
               <Input
                 id="mt-temp"
-                type="number"
+                type="number" inputMode="numeric"
                 step="0.1"
                 min={0}
                 max={2}
@@ -85,7 +85,7 @@ export function ModelTest({
               <Label htmlFor="mt-rounds" help="modeltest.rounds">Lookup rounds</Label>
               <Input
                 id="mt-rounds"
-                type="number"
+                type="number" inputMode="numeric"
                 min={3}
                 max={12}
                 value={t.rounds}

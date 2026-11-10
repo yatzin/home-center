@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Home } from "lucide-react"
+import { BrandIcon } from "@/components/brand-icon"
 import Link from "next/link"
 import { loadMailConfig } from "@/lib/notifications/mail-config"
 import { isMailConfigured } from "@/lib/notifications/mailer"
@@ -43,9 +44,11 @@ export default async function LoginPage({
     <div className="min-h-svh flex items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground max-md:hidden">
             <Home className="h-5 w-5" />
           </div>
+          {/* Phones get the app's own mark, as in the header and on the Home Screen. */}
+          <BrandIcon className="h-16 w-16 md:hidden" />
           <h1 className="font-heading text-2xl font-semibold tracking-tight">HomeCenter</h1>
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </div>

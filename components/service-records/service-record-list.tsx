@@ -144,7 +144,53 @@ export function ServiceRecordList({ records: initialRecords, assetId, assetType,
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <Table>
+          {/* Phones: one card per record, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {table.rows.map((record) => {
+              const expanded = expandedId === record.id
+              const roomId = record.roomId ?? (record.assetType === "EQUIPMENT" ? equipmentRooms[record.assetId] : null)
+              const roomName = roomId ? roomNames[roomId] : undefined
+              const isForeign = showSource && record.assetType !== assetType
+              const bits = [
+                fmt.date(record.date, { utc: true }),
+                record.vendor,
+                isForeign ? equipmentNames?.[record.assetId] ?? "Equipment" : null,
+                roomName,
+                assetType === "VEHICLE" && record.mileageAtService != null ? `${record.mileageAtService.toLocaleString()} ${fmt.meterShort(meterUnit)}` : null,
+              ].filter(Boolean)
+              return (
+                <li key={record.id}>
+                  <div className="flex items-start gap-1 pr-2">
+                    <button
+                      type="button"
+                      onClick={() => { setEditingId(record.id); setDialogOpen(true) }}
+                      aria-label={`Edit "${record.title}"`}
+                      className="min-w-0 flex-1 space-y-1 px-4 py-3 text-left active:bg-muted/50"
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-sm font-medium">{record.title}</span>
+                        <span className="shrink-0 text-sm tabular-nums">{record.cost != null ? fmt.money(record.cost) : "—"}</span>
+                      </span>
+                      <span className="block text-xs text-muted-foreground">{bits.join(" · ")}</span>
+                      {record.description && <span className="line-clamp-2 block text-xs text-muted-foreground">{record.description}</span>}
+                    </button>
+                    <div className="flex shrink-0 items-center pt-1.5">
+                      <AttachmentCount attachments={record.attachments} onClick={() => setExpandedId(expanded ? null : record.id)} />
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" aria-label={`Delete "${record.title}"`} onClick={() => handleDelete(record)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div className="bg-muted/30 px-4 py-3">
+                      <AttachmentList recordId={record.id} recordType="SERVICE" attachments={record.attachments} />
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <Table className="max-md:hidden">
             <TableHeader>
               <TableRow>
                 <SortableTableHead column="date" label="Date" sortState={table.sortState} onToggle={table.toggleSort} />

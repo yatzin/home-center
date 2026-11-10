@@ -120,7 +120,43 @@ export default async function MaintenancePage({
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <div className="overflow-x-auto">
+          {/* Phones: one tappable row per schedule, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {schedules.map((s) => {
+              const assetName = assets.assetName(s.assetType, s.assetId)
+              const AssetIcon = assetIcon[s.assetType]
+              const status = isDoneOnce(s)
+                ? { label: "Done", variant: "outline" as const, icon: CheckCircle2 }
+                : statusOf(scheduleDue(s, mileage, now), s.snoozedUntil, now, fmt)
+              const StatusIcon = status.icon
+              const due = s.nextDueDate ? fmt.date(s.nextDueDate, { utc: true }) : null
+              return (
+                <li key={s.id}>
+                  <Link
+                    href={`${assetHref(s.assetType, s.assetId)}?tab=${reminderTab(s.assetType)}&open=${s.id}`}
+                    className="block space-y-1.5 px-4 py-3 active:bg-muted/50"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 font-medium">{s.title}</span>
+                      <Badge variant={status.variant} className="shrink-0">
+                        <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                        {status.label}
+                      </Badge>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <AssetIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        {assetName ?? <span className="italic">Unknown</span>}
+                      </span>
+                      {due && <span>Due {due}</span>}
+                      {s.nextDueMileage != null && <span>{s.nextDueMileage.toLocaleString()} {fmt.meterShort(mileage.get(s.assetId)?.unit ?? "MILES")}</span>}
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-muted-foreground">
                 <tr>

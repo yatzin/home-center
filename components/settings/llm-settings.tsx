@@ -274,7 +274,7 @@ export function LlmSettings({
               <FormField control={form.control} name="temperature" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="llm.temperature">Temperature</FormLabel>
-                  <FormControl><Input type="number" step="0.1" min={0} max={2} placeholder="Provider default" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.1" min={0} max={2} placeholder="Provider default" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -282,7 +282,7 @@ export function LlmSettings({
               <FormField control={form.control} name="maxTokens" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="llm.max-tokens">Max tokens</FormLabel>
-                  <FormControl><Input type="number" min={1} max={32000} placeholder="Provider default" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" min={1} max={32000} placeholder="Provider default" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -290,7 +290,7 @@ export function LlmSettings({
               <FormField control={form.control} name="timeoutSeconds" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="llm.timeout">Time limit per question (seconds)</FormLabel>
-                  <FormControl><Input type="number" min={30} max={900} placeholder={String(DEFAULT_TIMEOUT_SECONDS)} {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" min={30} max={900} placeholder={String(DEFAULT_TIMEOUT_SECONDS)} {...field} /></FormControl>
                   <FormDescription className="text-xs">
                     Raise it for slow local models. Once a reply starts, it also stops if the server then sends nothing for 60 seconds.
                   </FormDescription>
@@ -302,7 +302,7 @@ export function LlmSettings({
                 <FormItem>
                   <FormLabel help="llm.tool-rounds">Lookup rounds per question</FormLabel>
                   <FormControl>
-                    <Input type="number" min={TOOL_ROUNDS_RANGE.min} max={TOOL_ROUNDS_RANGE.max} placeholder={String(DEFAULT_TOOL_ROUNDS)} {...field} />
+                    <Input type="number" inputMode="numeric" min={TOOL_ROUNDS_RANGE.min} max={TOOL_ROUNDS_RANGE.max} placeholder={String(DEFAULT_TOOL_ROUNDS)} {...field} />
                   </FormControl>
                   <FormDescription className="text-xs">
                     How many times the assistant may go back for more data before it must answer. More helps follow-up and

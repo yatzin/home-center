@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { CategoryIcon } from "@/components/category-icon"
 import { cn } from "@/lib/utils"
 
 // A legend is present whenever a chart carries two or more series — it is the
@@ -8,7 +9,7 @@ import { cn } from "@/lib/utils"
 // A single-series chart gets none: the panel title already names what is plotted,
 // and a box with one swatch in it just restates the title.
 
-export type LegendItem = { key: string; label: string; color: string }
+export type LegendItem = { key: string; label: string; color: string; /** A category icon name, drawn before the label. */ icon?: string | null }
 
 /// Two modes, and which one is in play is decided by the caller passing `hrefFor`.
 ///
@@ -48,7 +49,10 @@ export function Legend({
         // Muting changes opacity *and* strikes the label through, so the state is
         // never carried by colour alone.
         const label = (
-          <span className={cn("truncate", muted && "line-through opacity-60")}>{item.label}</span>
+          <span className={cn("inline-flex min-w-0 items-center gap-1", muted && "line-through opacity-60")}>
+            <CategoryIcon name={item.icon} className="h-3 w-3 shrink-0" />
+            <span className="truncate">{item.label}</span>
+          </span>
         )
 
         return (

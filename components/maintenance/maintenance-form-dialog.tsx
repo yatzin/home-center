@@ -25,6 +25,7 @@ import { RoomSelect } from "@/components/rooms/room-select"
 import type { RoomOption } from "@/lib/rooms-server"
 import { Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, MaintenanceSchedule, MeterUnit, AssetType } from "@/app/generated/prisma/client"
+import { FileLink } from "@/components/attachments/file-link"
 
 const schema = z.object({
   assetId: z.string(),
@@ -344,7 +345,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
 
             <RoomSelect value={form.watch("roomId") ?? ""} onChange={(v) => form.setValue("roomId", v)} options={roomOptions} />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="reminder.title">Title *</FormLabel>
@@ -376,7 +377,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                   <FormField control={form.control} name="intervalDays" render={({ field }) => (
                     <FormItem>
                       <FormLabel help="reminder.interval-days">Repeat Every (days)</FormLabel>
-                      <FormControl><Input type="number" placeholder="90" {...field} /></FormControl>
+                      <FormControl><Input type="number" inputMode="numeric" placeholder="90" {...field} /></FormControl>
                       <FormDescription className="text-xs">
                         {INTERVAL_PRESETS.map((p, i) => (
                           <span key={p.days}>
@@ -395,7 +396,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                     <FormField control={form.control} name="intervalMiles" render={({ field }) => (
                       <FormItem>
                         <FormLabel help="reminder.interval-miles">Repeat Every ({fmt.meterShort(meterUnit)})</FormLabel>
-                        <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "50" : "5000"} {...field} /></FormControl>
+                        <FormControl><Input type="number" inputMode="numeric" placeholder={meterUnit === "HOURS" ? "50" : "5000"} {...field} /></FormControl>
                         <FormDescription className="text-xs">{meterUnit === "HOURS" ? "e.g. 50 for an oil change" : "e.g. 5000 for oil change"}</FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -436,7 +437,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                   <FormField control={form.control} name="dueDay" render={({ field }) => (
                     <FormItem>
                       <FormLabel help="reminder.due-day">Day of month</FormLabel>
-                      <FormControl><Input type="number" min={1} max={28} placeholder="1" {...field} /></FormControl>
+                      <FormControl><Input type="number" inputMode="numeric" min={1} max={28} placeholder="1" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -446,7 +447,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
               <FormField control={form.control} name="estimatedCost" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="reminder.estimated-cost">{`Estimated cost (${fmt.currencySymbol})`}</FormLabel>
-                  <FormControl><Input type="number" step="0.01" min="0" placeholder="150" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="150" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -463,7 +464,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                 <FormField control={form.control} name="nextDueMileage" render={({ field }) => (
                   <FormItem>
                     <FormLabel help="reminder.next-due-mileage">Next Due {fmt.meterNoun(meterUnit)}</FormLabel>
-                    <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "1300" : "50000"} {...field} /></FormControl>
+                    <FormControl><Input type="number" inputMode="numeric" placeholder={meterUnit === "HOURS" ? "1300" : "50000"} {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -472,7 +473,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
               <FormField control={form.control} name="reminderDaysBefore" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="reminder.remind-days">Remind (days before)</FormLabel>
-                  <FormControl><Input type="number" placeholder="14" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="14" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -481,7 +482,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                 <FormField control={form.control} name="reminderMilesBefore" render={({ field }) => (
                   <FormItem>
                     <FormLabel help="reminder.remind-miles">Remind ({fmt.meterShort(meterUnit)} before)</FormLabel>
-                    <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "10" : "500"} {...field} /></FormControl>
+                    <FormControl><Input type="number" inputMode="numeric" placeholder={meterUnit === "HOURS" ? "10" : "500"} {...field} /></FormControl>
                     <FormDescription className="text-xs">How close to the due {meterUnit === "HOURS" ? "hour count" : fmt.distanceNoun.toLowerCase()} to start warning</FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -516,7 +517,7 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                     {pickedChoice && (
                       <>
                         <FormField control={form.control} name="referencePage" render={({ field }) => (
-                          <Input type="number" min={1} max={9999} step={1} placeholder="42" aria-label="Page" className="w-24" {...field} />
+                          <Input type="number" inputMode="decimal" min={1} max={9999} step={1} placeholder="42" aria-label="Page" className="w-24" {...field} />
                         )} />
                         {pickedChoice.hasText && (
                           <Button type="button" variant="outline" size="sm" onClick={findPage} disabled={finding || !titleValue.trim()}>
@@ -572,14 +573,9 @@ export function MaintenanceFormDialog({ open, onClose, assetId, assetType, sched
                     return (
                       <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 truncate hover:underline"
-                        >
+                        <FileLink href={href} name={a.originalName} className="flex-1 truncate hover:underline">
                           {a.originalName}
-                        </a>
+                        </FileLink>
                         <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                         <button
                           type="button"

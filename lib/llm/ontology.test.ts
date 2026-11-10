@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { AssetType, ServiceCategory } from "@/app/generated/prisma/enums"
+import { AssetType } from "@/app/generated/prisma/enums"
 import { describeOntology, ENTITIES, ENTITY_KEYS, entityKeysFor } from "./ontology"
 import { compileInclude, compileWhere, entityDef, relationNames, withLocationSelect } from "./query"
 
@@ -61,7 +61,6 @@ describe("ontology", () => {
   })
 
   it("uses the Prisma enum values", () => {
-    expect(ENTITIES.serviceRecord.fields.category.values).toEqual(Object.values(ServiceCategory))
     expect(ENTITIES.serviceRecord.fields.assetType.values).toEqual(Object.values(AssetType))
   })
 

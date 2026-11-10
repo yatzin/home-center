@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { deleteAssetWithRecords } from "@/lib/asset-delete-server"
 import { ignoreGone, orGone } from "@/lib/gone"
+import { categoryExists } from "@/lib/categories-server"
 import { equipmentSchema as schema, equipmentData as clean, type EquipmentInput } from "@/lib/asset-input"
 
 /**
@@ -26,6 +27,7 @@ export async function createEquipment(data: EquipmentInput) {
 
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+  if (!(await categoryExists("EQUIPMENT", parsed.data.category))) return { error: { category: ["Pick a category from the list."] } }
 
   const row = await prisma.equipment.create({ data: await withRoom(clean(parsed.data)) })
   revalidatePath("/assets/equipment")
@@ -38,6 +40,7 @@ export async function updateEquipment(id: string, data: EquipmentInput) {
 
   const parsed = schema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+  if (!(await categoryExists("EQUIPMENT", parsed.data.category))) return { error: { category: ["Pick a category from the list."] } }
 
   const saved = await orGone(async () => prisma.equipment.update({ where: { id }, data: await withRoom(clean(parsed.data)) }))
   if (saved) return { error: saved.error }

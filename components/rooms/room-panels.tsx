@@ -18,6 +18,7 @@ import { EquipmentRows } from "@/components/equipment/equipment-rows"
 import type { EquipmentWithRoom } from "@/components/equipment/equipment-form-dialog"
 import type { Attachment } from "@/app/generated/prisma/client"
 import type { RoomSchedule, RoomServiceRecord, RoomWithDetails } from "./room-list"
+import { FileLink } from "@/components/attachments/file-link"
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -122,10 +123,10 @@ export function RoomFiles({ room, uploading, onUpload, onPick, onChanged }: {
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {images.map((a) => (
             <li key={a.id} className="group relative overflow-hidden rounded-md border">
-              <a href={href(a)} target="_blank" rel="noopener noreferrer" title={a.originalName}>
+              <FileLink href={href(a)} name={a.originalName} title={a.originalName}>
                 {/* eslint-disable-next-line @next/next/no-img-element -- served from a private, auth-gated route */}
                 <img src={href(a)} alt={a.originalName} loading="lazy" className="aspect-square w-full object-cover" />
-              </a>
+              </FileLink>
               {removeButton(a, "absolute right-1 top-1 rounded bg-background/90 p-1")}
             </li>
           ))}
@@ -137,7 +138,7 @@ export function RoomFiles({ room, uploading, onUpload, onPick, onChanged }: {
           {others.map((a) => (
             <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <a href={href(a)} target="_blank" rel="noopener noreferrer" className="flex-1 truncate hover:underline">{a.originalName}</a>
+              <FileLink href={href(a)} name={a.originalName} className="flex-1 truncate hover:underline">{a.originalName}</FileLink>
               <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(a.sizeBytes)}</span>
               {removeButton(a)}
             </li>

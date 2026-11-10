@@ -35,7 +35,7 @@ export function SearchBar({ placeholder = "Search…", filters = [] }: Props) {
       <div className="relative flex-1 min-w-48">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          className="pl-8 h-8 text-sm"
+          className="pl-8 h-8 text-sm max-md:text-base"
           placeholder={placeholder}
           defaultValue={q}
           onChange={(e) => {

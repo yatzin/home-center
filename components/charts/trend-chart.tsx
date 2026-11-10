@@ -9,7 +9,7 @@ import { ChartTable } from "./primitives/chart-table"
 import { TooltipCard, useChartTooltip, type TooltipContent } from "./primitives/tooltip"
 import { niceMax, niceTicks } from "./primitives/scale"
 import {
-  CATEGORY_ORDER, categoryColor, categoryLabel, type CategoryKey, type StackedBucket,
+  type CategoryKey, type StackedBucket,
 } from "@/lib/costs"
 import { useFormat } from "@/components/regional-provider"
 
@@ -50,15 +50,18 @@ export function TrendChart({
 
   // Only categories actually present get a legend entry, walked in fixed order so
   // a category's colour never depends on which others happen to be on screen.
-  const present = useMemo(
-    () => CATEGORY_ORDER.filter((key) => buckets.some((b) => b.segments.some((s) => s.key === key))),
-    [buckets]
-  )
+  const seen = useMemo(() => {
+    const m = new Map<CategoryKey, { label: string; color: string; icon: string | null; order: number }>()
+    for (const b of buckets) for (const s of b.segments) if (!m.has(s.key)) m.set(s.key, s)
+    return m
+  }, [buckets])
+  const present = useMemo(() => [...seen.keys()].sort((a, b) => seen.get(a)!.order - seen.get(b)!.order), [seen])
 
   const legendItems: LegendItem[] = present.map((key) => ({
     key,
-    label: categoryLabel(key),
-    color: categoryColor(key),
+    label: seen.get(key)!.label,
+    color: seen.get(key)!.color,
+    icon: seen.get(key)!.icon,
   }))
 
   // Muting recomputes the stack and rescales the axis, which is the point of it:
@@ -252,7 +255,7 @@ export function TrendChart({
         caption="Spending per period, broken down by category"
         columns={[
           { key: "period", label: "Period" },
-          ...present.map((key) => ({ key, label: categoryLabel(key), align: "right" as const })),
+          ...present.map((key) => ({ key, label: seen.get(key)!.label, align: "right" as const })),
           { key: "total", label: "Total", align: "right" as const },
         ]}
         rows={buckets.map((bucket) => ({

@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 // Type only: inbox-server reaches Prisma.
 import type { InboxListItem } from "@/lib/inbox-server"
 import { useFormat } from "@/components/regional-provider"
+import { FileLink } from "@/components/attachments/file-link"
 
 type OpenDialog = { kind: "file"; defaults: FileFormValues } | { kind: "keep" } | { kind: "attach"; initial: AttachChoices } | null
 
@@ -186,10 +187,9 @@ export function InboxItemCard({
     <Card className="gap-0 overflow-hidden py-0">
       {/* Header: what it is, how sure we are, and the rarely used actions. */}
       <div className="flex gap-3 p-4 sm:gap-4">
-        <a
+        <FileLink
           href={first?.href}
-          target="_blank"
-          rel="noopener noreferrer"
+          name={first?.originalName ?? ""}
           aria-label={first ? `Open ${first.originalName}` : undefined}
           title={first ? `Open ${first.originalName}` : undefined}
           className="flex h-20 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/40 transition-colors hover:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none sm:h-24 sm:w-20"
@@ -200,7 +200,7 @@ export function InboxItemCard({
           ) : (
             <FileText className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} />
           )}
-        </a>
+        </FileLink>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
@@ -234,9 +234,9 @@ export function InboxItemCard({
             {item.attachments.map((a, i) => (
               <span key={a.id}>
                 {i > 0 && ", "}
-                <a href={a.href} target="_blank" rel="noopener noreferrer" className="break-all hover:text-foreground hover:underline">
+                <FileLink href={a.href} name={a.originalName} className="break-all hover:text-foreground hover:underline">
                   {a.originalName}
-                </a>
+                </FileLink>
                 {" · "}
                 {formatBytes(a.sizeBytes)}
               </span>

@@ -124,7 +124,54 @@ export function WarrantyList({ warranties: initialWarranties, assetId, assetType
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <Table>
+          {/* Phones: one card per warranty, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {table.rows.map((w) => {
+              const status = warrantyStatus(w.expirationDate)
+              const expanded = expandedId === w.id
+              const bits = [
+                w.expirationDate ? `Expires ${fmt.date(w.expirationDate, { utc: true })}` : null,
+                w.vendor,
+                showSource && w.assetType === "EQUIPMENT" ? equipmentNames?.[w.assetId] ?? "Equipment" : null,
+              ].filter(Boolean)
+              return (
+                <li key={w.id}>
+                  <div className="flex items-start gap-1 pr-2">
+                    <button
+                      type="button"
+                      onClick={() => { setEditing(w); setDialogOpen(true) }}
+                      aria-label={`Edit warranty for "${w.productName}"`}
+                      className="min-w-0 flex-1 space-y-1 px-4 py-3 text-left active:bg-muted/50"
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-sm font-medium">{w.productName}</span>
+                        {status && <Badge variant={status.variant} className="shrink-0">{status.label}</Badge>}
+                      </span>
+                      {bits.length > 0 && <span className="block text-xs text-muted-foreground">{bits.join(" · ")}</span>}
+                    </button>
+                    <div className="flex shrink-0 items-center pt-1.5">
+                      <AttachmentCount attachments={w.attachments} onClick={() => setExpandedId(expanded ? null : w.id)} />
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" aria-label={`Delete warranty for "${w.productName}"`} onClick={() => handleDelete(w)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div className="space-y-3 bg-muted/30 px-4 py-3">
+                      {(w.vendorPhone || w.vendorEmail) && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                          {w.vendorPhone && <a href={`tel:${w.vendorPhone}`} className="underline-offset-2 hover:underline">Phone: {w.vendorPhone}</a>}
+                          {w.vendorEmail && <a href={`mailto:${w.vendorEmail}`} className="underline-offset-2 hover:underline">Email: {w.vendorEmail}</a>}
+                        </div>
+                      )}
+                      <AttachmentList recordId={w.id} recordType="WARRANTY" attachments={w.attachments} />
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <Table className="max-md:hidden">
             <TableHeader>
               <TableRow>
                 <SortableTableHead column="product" label="Product" sortState={table.sortState} onToggle={table.toggleSort} />

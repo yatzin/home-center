@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { CATEGORY_ORDER, bucketed, categoriesFor, categoryColor, dailyTotals, lastYearMonthly, monthsBack, nestedByAsset, rankedRowKey, SERVICE_CATEGORY_VALUES, sum, yearToDate, yearlyBars } from "./costs"
+import { categoryOrder, bucketed, categoriesFor, categoryColor, dailyTotals, lastYearMonthly, monthsBack, nestedByAsset, rankedRowKey, sum, yearToDate, yearlyBars } from "./costs"
 import { localDay } from "./equipment-life"
 
 describe("service categories", () => {
@@ -14,11 +14,11 @@ describe("service categories", () => {
   })
 
   it("keeps Other then Uncategorized at the end of the fixed order", () => {
-    expect(CATEGORY_ORDER.slice(-2)).toEqual(["OTHER", "UNCATEGORIZED"])
+    expect(categoryOrder().slice(-2)).toEqual(["OTHER", "UNCATEGORIZED"])
   })
 
   it("gives every category a colour", () => {
-    for (const value of SERVICE_CATEGORY_VALUES) expect(categoryColor(value)).toMatch(/^var\(--cost-/)
+    for (const value of categoryOrder()) expect(categoryColor(value)).toMatch(/^var\(--cost-/)
   })
 })
 

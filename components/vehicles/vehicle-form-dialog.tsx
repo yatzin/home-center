@@ -128,7 +128,7 @@ export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_C
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => onSubmit(v))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="vehicle.name">Nickname *</FormLabel>
@@ -140,7 +140,7 @@ export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_C
               <FormField control={form.control} name="year" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="vehicle.year">Year *</FormLabel>
-                  <FormControl><Input type="number" placeholder="2022" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder="2022" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -180,7 +180,7 @@ export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_C
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="vehicle.purchase-price">{`Purchase Price (${fmt.currencySymbol})`}</FormLabel>
-                  <FormControl><Input type="number" step="0.01" placeholder="28500" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.01" placeholder="28500" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -188,7 +188,7 @@ export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_C
               <FormField control={form.control} name="currentMileage" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="vehicle.current-mileage">Current {fmt.meterNoun(form.watch("meterUnit"))}</FormLabel>
-                  <FormControl><Input type="number" placeholder={form.watch("meterUnit") === "HOURS" ? "1250" : "45000"} {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" placeholder={form.watch("meterUnit") === "HOURS" ? "1250" : "45000"} {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -228,7 +228,7 @@ export function VehicleFormDialog({ open, onClose, vehicle, policyChoices = NO_C
               <FormField control={form.control} name="vin" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="vehicle.vin">VIN</FormLabel>
-                  <FormControl><Input placeholder="1HGCM82633A123456" className="font-mono text-sm" {...field} /></FormControl>
+                  <FormControl><Input placeholder="1HGCM82633A123456" className="font-mono text-sm max-md:text-base" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

@@ -6,11 +6,11 @@ import { Fragment, useState } from "react"
 import { cn } from "@/lib/utils"
 import { isHealthPath } from "@/lib/features"
 import { sidebarCookie } from "@/lib/sidebar-state"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { BrandIcon } from "@/components/brand-icon"
 import {
   LayoutDashboard, Building2, Car, Refrigerator, Wrench, ShieldCheck,
-  Calendar, Bell, Settings, Menu, PiggyBank, HeartPulse, Stethoscope, Umbrella, Sparkles,
+  Calendar, Bell, Settings, PiggyBank, HeartPulse, Stethoscope, Umbrella, Sparkles,
   PanelLeftClose, PanelLeftOpen, Inbox,
 } from "lucide-react"
 
@@ -111,9 +111,9 @@ function NavLink({ href, label, icon: Icon, badge, onClick, collapsed = false }:
 }
 
 /** `intakeCount` is set only when Intake goes in the side menu rather than the header. */
-type NavProps = { showAssistant: boolean; showHealth: boolean; intakeCount?: number }
+export type NavProps = { showAssistant: boolean; showHealth: boolean; intakeCount?: number }
 
-function SidebarContent({
+export function SidebarContent({
   onNavClick, showAssistant, showHealth, intakeCount, collapsed = false, onToggle,
 }: NavProps & { onNavClick?: () => void; collapsed?: boolean; onToggle?: () => void }) {
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose
@@ -137,8 +137,11 @@ function SidebarContent({
     <div className={cn("flex h-full flex-col py-4", collapsed ? "px-2" : "px-3")}>
       {/* The toggle shares the logo's row (under it when collapsed), so it costs the nav no height. */}
       <div className={cn("mb-6 flex items-center gap-2", collapsed ? "flex-col" : "pl-3")}>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">HC</div>
-        <span className={cn("font-heading font-semibold tracking-tight", collapsed && "sr-only")}>HomeCenter</span>
+        {/* The logo and name go home. */}
+        <Link href="/" onClick={onNavClick} className="flex items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <BrandIcon className="h-8 w-8 shrink-0" />
+          <span className={cn("font-heading font-semibold tracking-tight", collapsed && "sr-only")}>HomeCenter</span>
+        </Link>
         {toggle && (collapsed ? <NavTooltip label={toggleLabel}>{toggle}</NavTooltip> : toggle)}
       </div>
       <nav aria-label="Main" className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden">
@@ -187,20 +190,5 @@ export function Sidebar({ initialCollapsed = false, ...props }: NavProps & { ini
     >
       <SidebarContent {...props} collapsed={collapsed} onToggle={toggle} />
     </aside>
-  )
-}
-
-export function MobileSidebarTrigger(props: NavProps) {
-  const [open, setOpen] = useState(false)
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger className="relative inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted transition-colors before:absolute before:top-1/2 before:left-1/2 before:size-10 before:-translate-1/2 md:hidden">
-        <Menu className="h-4 w-4" />
-        <span className="sr-only">Menu</span>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-56 p-0">
-        <SidebarContent {...props} onNavClick={() => setOpen(false)} />
-      </SheetContent>
-    </Sheet>
   )
 }

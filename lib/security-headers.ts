@@ -6,10 +6,15 @@
 // bootstrapping; nonces would force every page to render per request. See
 // node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md.
 
-export function contentSecurityPolicy(isDev: boolean): string {
+/**
+ * `wasm` is for the in-app file viewer (app/view): the PDF renderer decodes some images with
+ * WebAssembly, which needs 'wasm-unsafe-eval'. It allows compiling .wasm files only, not eval()
+ * of strings, and no other page gets it.
+ */
+export function contentSecurityPolicy(isDev: boolean, { wasm = false }: { wasm?: boolean } = {}): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline'${wasm ? " 'wasm-unsafe-eval'" : ""}${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
@@ -38,8 +43,12 @@ export function securityHeaderRules(isDev: boolean): HeaderRule[] {
     {
       // Uploaded files open straight in a tab; a page policy on them can break
       // the browser's built-in PDF viewer, and they are never HTML anyway.
-      source: "/((?!api/files/).*)",
+      source: "/((?!api/files/|view$).*)",
       headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy(isDev) }],
+    },
+    {
+      source: "/view",
+      headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy(isDev, { wasm: true }) }],
     },
   ]
 }

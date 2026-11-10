@@ -10,7 +10,7 @@ import { useFormat } from "@/components/regional-provider"
 /// Colour and link resolved by the caller, on the server. A client component
 /// cannot take a `colorFor(key)` or `hrefFor(entry)` callback across the RSC
 /// boundary — functions are not serializable — so the data arrives resolved.
-export type CompositionSlice = RankedEntry & { color: string; href?: string }
+export type CompositionSlice = RankedEntry & { color: string; href?: string; icon?: string | null }
 
 const BAR_HEIGHT = 40
 const SEGMENT_GAP = 2
@@ -49,6 +49,7 @@ export function CompositionBar({
     key: entry.key,
     label: entry.label + "  " + Math.round((entry.total / total) * 100) + "%",
     color: entry.color,
+    icon: entry.icon,
   }))
 
   const hrefByKey = new Map(entries.flatMap((e) => (e.href ? [[e.key, e.href] as const] : [])))
