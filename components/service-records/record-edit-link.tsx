@@ -9,7 +9,7 @@ import type { Attachment, ServiceRecord } from "@/app/generated/prisma/client"
 type Loaded = { record: ServiceRecord & { attachments: Attachment[] }; ctx: RecordFormContext }
 
 /** A Records-table cell that opens the record's edit form in place instead of going to the asset's page. */
-export function RecordEditLink({ id, children }: { id: string; children: React.ReactNode }) {
+export function RecordEditLink({ id, children, className = "flex items-center gap-2 text-left hover:underline" }: { id: string; children: React.ReactNode; className?: string }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -31,7 +31,7 @@ export function RecordEditLink({ id, children }: { id: string; children: React.R
 
   return (
     <>
-      <button type="button" onClick={open} aria-busy={loading} className="flex items-center gap-2 text-left hover:underline">
+      <button type="button" onClick={open} aria-busy={loading} className={className}>
         {children}
       </button>
       {loaded && (

@@ -123,7 +123,37 @@ export default async function RecordsPage({
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <div className="overflow-x-auto">
+          {/* Phones: one tappable row per record, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {records.map((r) => {
+              const assetName = assets.assetName(r.assetType, r.assetId)
+              const AssetIcon = assetIcon[r.assetType]
+              return (
+                <li key={r.id}>
+                  <RecordEditLink id={r.id} className="block w-full space-y-1 px-4 py-3 text-left active:bg-muted/50">
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 font-medium">
+                        {r.title}
+                        {r._count.attachments > 0 && (
+                          <Badge variant="outline" className="ml-2 h-4 px-1.5 align-middle text-xs">{r._count.attachments}</Badge>
+                        )}
+                      </span>
+                      <span className="shrink-0 tabular-nums">{r.cost != null ? fmt.money(r.cost) : "—"}</span>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{fmt.date(r.date, { utc: true })}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <AssetIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        {assetName ?? <span className="italic">Unknown</span>}
+                      </span>
+                      {r.vendor && <span>{r.vendor}</span>}
+                    </span>
+                  </RecordEditLink>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="overflow-x-auto max-md:hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-muted-foreground">
                 <tr>

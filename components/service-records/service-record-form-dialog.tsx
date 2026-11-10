@@ -17,7 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createServiceRecord, updateServiceRecord } from "@/lib/actions/service-records"
 import { deleteAttachment } from "@/lib/actions/attachments"
 import { matchingReminder } from "@/lib/maintenance-match"
-import { SERVICE_CATEGORIES, categoriesFor } from "@/lib/costs"
+import { categoriesFor, categoryIcon, categoryLabel } from "@/lib/costs"
+import { CategoryName } from "@/components/category-icon"
+import { useCategories } from "@/components/category-provider"
 import { ASSET_TYPES } from "@/lib/assets"
 import { BellRing, Paperclip, Upload, X, Trash2, FileText, Image } from "lucide-react"
 import type { Attachment, ServiceRecord, MeterUnit, AssetType } from "@/app/generated/prisma/client"
@@ -27,6 +29,7 @@ import type { RoomOption } from "@/lib/rooms-server"
 import { localDay } from "@/lib/equipment-life"
 import { meterReading, moneyAmount, nameText, numberText, optionalNameText, requiredDateText } from "@/lib/input-limits"
 import { showServerError } from "@/components/forms/server-errors"
+import { FileLink } from "@/components/attachments/file-link"
 
 // Base UI Select has no empty-string option, so "no category" needs a sentinel.
 const NO_CATEGORY = "__none__"
@@ -94,6 +97,7 @@ function formatBytes(bytes: number) {
 }
 
 export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, record, attachments: initialAttachments = [], onAttachmentDeleted, equipmentOptions, propertyName = "This property", roomOptions = [], defaultRoomId, meterUnit = "MILES", providerOptions, conditionOptions, reminderOptions = [] }: Props) {
+  const categoryDefs = useCategories()
   const isPerson = assetType === "PERSON"
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
@@ -321,7 +325,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               )} />
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="service.date">Date *</FormLabel>
@@ -364,7 +368,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
               <FormField control={form.control} name="cost" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="service.cost">{`Cost (${fmt.currencySymbol})`}</FormLabel>
-                  <FormControl><Input type="number" step="0.01" placeholder="89.99" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.01" placeholder="89.99" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -376,14 +380,14 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Uncategorized">
-                          {(v: string) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label ?? "Uncategorized"}
+                          {(v: string) => <CategoryName icon={categoryIcon(v, categoryDefs)} label={v === NO_CATEGORY ? "Uncategorized" : categoryLabel(v, categoryDefs)} />}
                         </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>Uncategorized</SelectItem>
-                      {categoriesFor(assetType).map((c) => (
-                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      {categoriesFor(assetType, categoryDefs, record?.category).map((c) => (
+                        <SelectItem key={c.value} value={c.value}><CategoryName icon={c.icon} label={c.label} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -433,7 +437,7 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                 <FormField control={form.control} name="mileageAtService" render={({ field }) => (
                   <FormItem>
                     <FormLabel help="service.mileage">{fmt.meterNoun(meterUnit)} at Service</FormLabel>
-                    <FormControl><Input type="number" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...field} /></FormControl>
+                    <FormControl><Input type="number" inputMode="numeric" placeholder={meterUnit === "HOURS" ? "1250" : "45230"} {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -482,14 +486,9 @@ export function ServiceRecordFormDialog({ open, onClose, assetId, assetType, rec
                     return (
                       <li key={a.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 truncate hover:underline"
-                        >
+                        <FileLink href={href} name={a.originalName} className="flex-1 truncate hover:underline">
                           {a.originalName}
-                        </a>
+                        </FileLink>
                         <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                         <button
                           type="button"

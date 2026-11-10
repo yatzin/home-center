@@ -9,6 +9,7 @@ import { assetLabel } from "@/lib/assets"
 import { highlight } from "@/lib/search/query"
 import type { AssetResult, AssetThumb, DocumentResult, Fact, MatchKind, RecordKind, RecordResult } from "@/lib/search/types"
 import { cn } from "@/lib/utils"
+import { FileLink } from "@/components/attachments/file-link"
 
 // Cards for /search. Each card's title link stretches over the whole card
 // (after:inset-0); the owner and file links sit above it (relative z-10) so
@@ -219,15 +220,14 @@ export function DocumentCard({ item, terms }: { item: DocumentResult; terms: str
         <div className="flex shrink-0 items-center gap-1.5">
           <MatchBadge matchedBy={item.matchedBy} />
           {item.fileHref && (
-            <a
+            <FileLink
               href={item.fileHref}
-              target="_blank"
-              rel="noopener noreferrer"
+              name={item.fileName}
               aria-label={`Open ${item.fileName}`}
               className="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            </FileLink>
           )}
         </div>
       </div>

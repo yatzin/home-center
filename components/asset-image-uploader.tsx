@@ -62,7 +62,7 @@ export function AssetImageUploader({
   }
 
   return (
-    <div className="group relative h-48 w-full overflow-hidden rounded-xl border border-border/60 shadow-sm sm:h-56">
+    <div className="group relative h-48 w-full overflow-hidden rounded-xl border border-border/60 shadow-sm max-sm:h-32 sm:h-56">
       <AssetImage assetType={assetType} assetId={assetId} imageFilename={imageFilename} alt={alt} size="full" className="h-full w-full" />
 
       <input
@@ -78,7 +78,8 @@ export function AssetImageUploader({
 
       <div
         className={cn(
-          "absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100",
+          // Phones have no hover: the buttons sit in the corner, always visible, over a clear photo.
+          "absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100 max-md:items-end max-md:justify-end max-md:bg-transparent max-md:p-2 max-md:opacity-100",
           busy && "opacity-100"
         )}
       >
@@ -89,15 +90,15 @@ export function AssetImageUploader({
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-colors duration-150 hover:bg-white/20"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-sm font-medium text-white backdrop-blur-sm transition-colors duration-150 hover:bg-white/20 max-md:h-9 max-md:w-9 max-md:justify-center max-md:gap-0 max-md:px-0 max-md:bg-black/60"
             >
-              <Camera className="h-3.5 w-3.5" /> {imageFilename ? "Change photo" : "Add photo"}
+              <Camera className="h-3.5 w-3.5" /> <span className="max-md:sr-only">{imageFilename ? "Change photo" : "Add photo"}</span>
             </button>
             {imageFilename && (
               <button
                 type="button"
                 onClick={handleRemove}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white backdrop-blur-sm transition-colors duration-150 hover:bg-destructive/80"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-white backdrop-blur-sm transition-colors duration-150 hover:bg-destructive/80 max-md:h-9 max-md:w-9 max-md:bg-black/60"
                 aria-label="Remove photo"
               >
                 <X className="h-3.5 w-3.5" />

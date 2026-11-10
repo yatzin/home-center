@@ -13,8 +13,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
 import { createEquipment, updateEquipment } from "@/lib/actions/equipment"
-import { EQUIPMENT_CATEGORIES, categoryLabel } from "./categories"
-import type { Equipment, EquipmentCategory } from "@/app/generated/prisma/client"
+import { equipmentChoices, equipmentIcon, equipmentLabel } from "@/lib/categories"
+import { CategoryName } from "@/components/category-icon"
+import { useCategories } from "@/components/category-provider"
+import type { Equipment } from "@/app/generated/prisma/client"
 import { AddRemindersSubmit, remindersHref } from "@/components/maintenance/add-reminders-submit"
 import { locationLabel, resolveRoomId } from "@/lib/rooms"
 import { VALUE_CLASSES, defaultValueClass, valueClassLabel, type ValueClass } from "@/lib/equipment-value"
@@ -29,7 +31,7 @@ const DEFAULT_CLASS = "__default__"
 
 const schema = z.object({
   name: nameText("Name is required"),
-  category: z.enum(["APPLIANCE", "HVAC", "WATER", "ELECTRONICS", "TOOL", "OUTDOOR", "SECURITY", "OTHER"]),
+  category: z.string().min(1, "Pick a category"),
   manufacturer: optionalNameText,
   modelNumber: optionalNameText,
   serialNumber: optionalNameText,
@@ -69,6 +71,7 @@ const EMPTY: FormValues = {
 }
 
 export function EquipmentFormDialog({ open, onClose, equipment, properties, defaultPropertyId, defaultLocation }: Props) {
+  const categoryDefs = useCategories()
   const router = useRouter()
   const roomListId = useId()
   const form = useForm<FormValues>({
@@ -137,7 +140,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => onSubmit(v))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem className="col-span-2">
                   <FormLabel help="equipment.name">Name *</FormLabel>
@@ -150,10 +153,10 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
                 <FormItem>
                   <FormLabel help="equipment.category">Category *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: EquipmentCategory) => categoryLabel(v)}</SelectValue></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger className="w-full"><SelectValue>{(v: string) => <CategoryName icon={equipmentIcon(v, categoryDefs)} label={equipmentLabel(v, categoryDefs)} />}</SelectValue></SelectTrigger></FormControl>
                     <SelectContent>
-                      {EQUIPMENT_CATEGORIES.map((c) => (
-                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      {equipmentChoices(categoryDefs, equipment?.category).map((c) => (
+                        <SelectItem key={c.key} value={c.key}><CategoryName icon={c.icon} label={c.label} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -233,7 +236,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
               <FormField control={form.control} name="purchasePrice" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="equipment.purchase-price">Purchase Price</FormLabel>
-                  <FormControl><Input type="number" step="0.01" placeholder="2499" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.01" placeholder="2499" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -241,7 +244,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
               <FormField control={form.control} name="replacementCost" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="equipment.replacement-cost">Replacement Cost</FormLabel>
-                  <FormControl><Input type="number" step="0.01" min="0" placeholder="2800" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="0.01" min="0" placeholder="2800" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -249,7 +252,7 @@ export function EquipmentFormDialog({ open, onClose, equipment, properties, defa
               <FormField control={form.control} name="expectedLifeYears" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="equipment.expected-life">Expected Life (years)</FormLabel>
-                  <FormControl><Input type="number" step="1" min="1" max="100" placeholder="15" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="numeric" step="1" min="1" max="100" placeholder="15" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

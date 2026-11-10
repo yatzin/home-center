@@ -1,10 +1,24 @@
 import type { MetadataRoute } from "next"
+import { cookies } from "next/headers"
+import { BRAND_COLORS } from "@/lib/brand-icon-colors"
+import { THEME_COOKIE, iconThemeId, installIcons } from "@/lib/theme-icons"
 
-// Lets "Add to Home Screen" launch HomeCenter as a standalone app. The
-// icons come from app/favicon.ico (scripts/make-pwa-icons.mjs). proxy.ts leaves
-// this route and /icons out of the login redirect so the browser can fetch them
-// before anyone is signed in.
-export default function manifest(): MetadataRoute.Manifest {
+// Lets "Add to Home Screen" launch HomeCenter as a standalone app. The icons
+// follow the theme chosen in the header (remembered in a cookie by
+// components/theme-icons.tsx); the files come from scripts/make-brand-icons.ts.
+// proxy.ts leaves this route and /icons out of the login redirect so the browser
+// can fetch them before anyone is signed in.
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  // No cookie (first visit, or outside a request): Spruce.
+  const chosen = await (async () => {
+    try {
+      return (await cookies()).get(THEME_COOKIE)?.value
+    } catch {
+      return undefined
+    }
+  })()
+  const id = iconThemeId(chosen)
+  const colors = BRAND_COLORS[id]
   return {
     name: "HomeCenter",
     short_name: "HomeCenter",
@@ -12,12 +26,8 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#ffffff",
-    icons: [
-      { src: "/icons/app-192.png", sizes: "192x192", type: "image/png" },
-      { src: "/icons/app-512.png", sizes: "512x512", type: "image/png" },
-      { src: "/icons/app-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-    ],
+    background_color: colors.background,
+    theme_color: colors.tile,
+    icons: installIcons(id),
   }
 }

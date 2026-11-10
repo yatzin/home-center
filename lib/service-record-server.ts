@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { ASSET_TYPES, assetHref } from "@/lib/assets"
-import { SERVICE_CATEGORY_VALUES } from "@/lib/costs"
+import { categoryExists } from "@/lib/categories-server"
 import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
 import { scheduleCompletionWrites } from "@/lib/maintenance-complete-server"
 import { checkRoom } from "@/lib/rooms-server"
@@ -22,7 +22,7 @@ export const serviceRecordSchema = z.object({
   vendor: optionalNameText,
   // "" is tried first: coerce would turn a blank field into 0. Negative is how a refund is entered.
   cost: z.literal("").or(moneyAmount({ negative: true })).optional(),
-  category: z.enum(SERVICE_CATEGORY_VALUES).optional().or(z.literal("")),
+  category: z.string().max(60).optional(),
   mileageAtService: z.literal("").or(meterReading()).optional(),
   providerId: z.string().optional(),
   conditionId: z.string().optional(),
@@ -73,6 +73,7 @@ export async function prepareNewServiceRecord(
   const parsed = serviceRecordSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
 
+  if (parsed.data.category && !(await categoryExists("SERVICE", parsed.data.category))) return { error: { category: ["Pick a category from the list."] } }
   const room = await checkRoom(parsed.data.roomId, parsed.data.assetType, parsed.data.assetId)
   if ("error" in room) return { error: { roomId: [room.error] } }
   const row = await withProviderVendor({ ...cleanServiceRecord(parsed.data, userId), roomId: room.roomId })

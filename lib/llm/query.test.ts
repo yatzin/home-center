@@ -57,7 +57,8 @@ describe("compileWhere", () => {
     expect(where).toEqual({
       AND: [
         { cost: { gt: 1200 } },
-        { category: { equals: "REPAIR" } },
+        // Categories are free text now (custom ones exist): matched case-insensitively, not coerced.
+        { category: { startsWith: "repair", endsWith: "repair" } },
         { assetType: { in: ["VEHICLE", "EQUIPMENT"] } },
         { mileageAtService: { lt: 90000 } },
       ],
@@ -98,8 +99,8 @@ describe("compileWhere", () => {
   })
 
   it("rejects bad enum values with the allowed list", () => {
-    expect(() => compileWhere("serviceRecord", [{ field: "category", op: "eq", value: "fun" }], ctx)).toThrow(
-      /category must be one of ROUTINE, REPAIR/
+    expect(() => compileWhere("serviceRecord", [{ field: "assetType", op: "eq", value: "fun" }], ctx)).toThrow(
+      /assetType must be one of/
     )
   })
 

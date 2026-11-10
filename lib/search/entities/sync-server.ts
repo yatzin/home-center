@@ -1,8 +1,8 @@
 import { createHash } from "crypto"
 import { prisma } from "@/lib/prisma"
 import type { AssetType } from "@/app/generated/prisma/client"
-import { categoryLabel as equipmentCategoryLabel } from "@/components/equipment/categories"
-import { categoryLabel as serviceCategoryLabel } from "@/lib/costs"
+import { equipmentLabel, serviceLabel } from "@/lib/categories"
+import { loadCategories } from "@/lib/categories-server"
 import { loadDocumentSettings } from "@/lib/documents/settings"
 import { documentIndexer, searchIndex } from "@/lib/documents/indexer-server"
 import {
@@ -25,6 +25,7 @@ const OWNER_KIND: Record<AssetType, NonNullable<OwnerRef>["kind"]> = {
 
 export async function buildEntityDocs(now: Date = new Date()): Promise<EntityDoc[]> {
   const fmt = await getFormat()
+  const categoryDefs = await loadCategories()
   const [
     properties, vehicles, equipment, people, services, schedules, warranties, policies, providers,
     conditions, medications, allergies, immunizations, observations, rooms,
@@ -76,11 +77,11 @@ export async function buildEntityDocs(now: Date = new Date()): Promise<EntityDoc
 
   return [
     ...properties.map((p) => propertyDoc({
-      ...p, equipment: p.equipment.map((e) => ({ name: e.name, category: equipmentCategoryLabel(e.category) })),
+      ...p, equipment: p.equipment.map((e) => ({ name: e.name, category: equipmentLabel(e.category, categoryDefs) })),
     }, now, fmt)),
     ...vehicles.map((v) => vehicleDoc(v, now, fmt)),
     ...equipment.map((e) => equipmentDoc({
-      ...e, category: equipmentCategoryLabel(e.category), location: locationLabel(e), propertyName: e.property?.name ?? null,
+      ...e, category: equipmentLabel(e.category, categoryDefs), location: locationLabel(e), propertyName: e.property?.name ?? null,
     }, now, fmt)),
     ...rooms.map((r) => roomDoc(r, fmt)),
     ...people.map((p) => personDoc({
@@ -90,7 +91,7 @@ export async function buildEntityDocs(now: Date = new Date()): Promise<EntityDoc
     }, now)),
     ...services.map((r) => serviceDoc({
       ...r,
-      category: r.category ? serviceCategoryLabel(r.category) : null,
+      category: r.category ? serviceLabel(r.category, categoryDefs) : null,
       meterUnit: meterUnit(r.assetType, r.assetId),
       isPerson: r.assetType === "PERSON",
       owner: ownerOf(r.assetType, r.assetId),

@@ -45,7 +45,8 @@ export const RECORD_HELP: FieldHelpMap = {
   "service.category": {
     title: "Category",
     what: "The kind of work, like Routine, Repair or Upgrade. Visits for people use types such as Office visit or Lab.",
-    use: "The costs charts split spending by category. Records without one show as Uncategorized.",
+    use: "The costs charts split spending by category. Records without one show as Uncategorized. The list can be changed: categories can be added, renamed, hidden or reordered.",
+    adminLink: { href: "/settings?tab=categories", text: "Edit these categories in Settings" },
   },
   "service.provider": {
     title: "Provider",

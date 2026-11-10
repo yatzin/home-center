@@ -6,14 +6,14 @@ import { cardType } from "@/lib/dashboard/card-types"
 import type { CanvasCardData } from "@/lib/dashboard/card-data"
 import { collapseHidden, LARGE_COLS, PHONE_COLS, type Placement, type Size } from "@/lib/dashboard/grid"
 import type { DashboardLayout } from "@/lib/dashboard/layout"
-import { resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
+import { phoneDisplayPlacements, resolvePhoneLayout } from "@/lib/dashboard/resolve-phone"
 import { isBareCard } from "@/lib/dashboard/text-card"
 import type { Features } from "@/lib/features"
 import { cn } from "@/lib/utils"
 import { CARD_VIEWS } from "@/components/dashboard/cards"
 import { CardFrame } from "./card-frame"
 import { CARD_ICONS } from "./card-icons"
-import { GAP, ROW_HEIGHT } from "./grid-metrics"
+import { GAP, PHONE_GAP, PHONE_ROW_HEIGHT, ROW_HEIGHT } from "./grid-metrics"
 import { useCardTier, type LayoutMode } from "./use-card-tier"
 
 // Both layouts are in the markup at once: each card carries its phone and its
@@ -40,6 +40,8 @@ export function isShownType(type: string, features: Features): boolean {
 
 const GRID_STYLE = {
   "--dash-row": `${ROW_HEIGHT}px`,
+  "--dash-row-phone": `${PHONE_ROW_HEIGHT}px`,
+  "--dash-gap-phone": `${PHONE_GAP}px`,
   "--dash-gap": `${GAP}px`,
   "--dash-cols-phone": PHONE_COLS,
   "--dash-cols-large": LARGE_COLS,
@@ -221,16 +223,17 @@ export function ViewGrid({
 
   // Display only: cards that are not shown (feature off, unknown type, no view
   // yet) would leave holes, so the rows they took are closed; empty rows the
-  // admin left between cards stay (grid.ts collapseHidden). The stored layout
-  // is untouched.
+  // admin left between cards stay on the large grid (grid.ts collapseHidden),
+  // where they are a deliberate layout. On the phone they only read as gaps, so
+  // they are closed there too. The stored layout is untouched.
   const ids = new Set(shown.map((c) => c.id))
   const large = new Map(collapseHidden(layout.large, ids, LARGE_COLS).map((p) => [p.id, p]))
-  const phone = new Map(collapseHidden([...phoneById.values()], ids, PHONE_COLS).map((p) => [p.id, p]))
+  const phone = new Map(phoneDisplayPlacements([...phoneById.values()], ids).map((p) => [p.id, p]))
 
   return (
     <div className="@container/dash">
       <div
-        className="grid auto-rows-(--dash-row) grid-cols-[repeat(var(--dash-cols-phone),minmax(0,1fr))] gap-(--dash-gap) @min-[640px]/dash:grid-cols-[repeat(var(--dash-cols-large),minmax(0,1fr))]"
+        className="grid auto-rows-(--dash-row-phone) grid-cols-[repeat(var(--dash-cols-phone),minmax(0,1fr))] gap-(--dash-gap-phone) @min-[640px]/dash:auto-rows-(--dash-row) @min-[640px]/dash:grid-cols-[repeat(var(--dash-cols-large),minmax(0,1fr))] @min-[640px]/dash:gap-(--dash-gap)"
         style={GRID_STYLE}
       >
         {shown.map((card) => (

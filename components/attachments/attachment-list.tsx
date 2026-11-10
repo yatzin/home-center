@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { PaperlessPicker } from "@/components/paperless/paperless-picker"
 import { PaperlessBadge } from "@/components/paperless/paperless-badge"
 import type { Attachment, AttachmentRecordType } from "@/app/generated/prisma/client"
+import { FileLink } from "@/components/attachments/file-link"
 
 interface Props {
   recordId: string
@@ -181,14 +182,9 @@ export function AttachmentList({ recordId, recordType, attachments: initial, lab
                   </>
                 ) : (
                   <>
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 truncate hover:underline"
-                    >
+                    <FileLink href={href} name={a.originalName} className="flex-1 truncate hover:underline">
                       {a.originalName}
-                    </a>
+                    </FileLink>
                     <PaperlessBadge attachment={a} />
                     <span className="text-xs text-muted-foreground shrink-0">{formatBytes(a.sizeBytes)}</span>
                     <button

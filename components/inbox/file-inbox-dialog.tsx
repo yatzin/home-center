@@ -13,7 +13,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AssetSelect, type InboxAssetOption, type InboxReminderOption } from "@/components/inbox/asset-select"
 import { fileInboxItem } from "@/lib/actions/inbox"
-import { SERVICE_CATEGORIES, categoriesFor } from "@/lib/costs"
+import { categoriesFor, categoryIcon, categoryLabel } from "@/lib/costs"
+import { CategoryName } from "@/components/category-icon"
+import { useCategories } from "@/components/category-provider"
 import { BellRing } from "lucide-react"
 import { matchingReminder } from "@/lib/maintenance-match"
 import { NO_CATEGORY, fieldErrorTarget, fileFormPayload, parseAssetKey, type FileFormValues } from "@/lib/inbox-form"
@@ -75,6 +77,7 @@ export function FileInboxDialog({
   const suggested = scheduleId
     ? null
     : matchingReminder(title ?? "", assetReminders) ?? assetReminders.find((r) => r.id === reminderMatches[key]) ?? null
+  const categoryDefs = useCategories()
   const isPerson = asset?.assetType === "PERSON"
 
   async function onSubmit(values: FileFormValues) {
@@ -206,14 +209,14 @@ export function FileInboxDialog({
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Uncategorized">
-                          {(v: string) => SERVICE_CATEGORIES.find((c) => c.value === v)?.label ?? "Uncategorized"}
+                          {(v: string) => <CategoryName icon={categoryIcon(v, categoryDefs)} label={v === NO_CATEGORY ? "Uncategorized" : categoryLabel(v, categoryDefs)} />}
                         </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>Uncategorized</SelectItem>
-                      {categoriesFor(asset?.assetType ?? "PROPERTY").map((c) => (
-                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      {categoriesFor(asset?.assetType ?? "PROPERTY", categoryDefs).map((c) => (
+                        <SelectItem key={c.value} value={c.value}><CategoryName icon={c.icon} label={c.label} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

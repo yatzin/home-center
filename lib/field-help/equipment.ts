@@ -9,7 +9,8 @@ export const EQUIPMENT_HELP: FieldHelpMap = {
   "equipment.category": {
     title: "Category",
     what: "The kind of item, like Appliance, HVAC or Water.",
-    use: "Picks the default reminders offered for it, and decides what Counts As means when left on Default.",
+    use: "Picks the default reminders offered for it, and decides what Counts As means when left on Default. The list can be changed: categories can be added, renamed, hidden or reordered.",
+    adminLink: { href: "/settings?tab=categories", text: "Edit these categories in Settings" },
   },
   "equipment.property": {
     title: "Property",

@@ -1,6 +1,6 @@
 import {
-  AllergySeverity, AssetType, ConditionStatus, EquipmentCategory, EquipmentValueClass, InsuranceKind, MeterUnit,
-  NotificationType, PremiumPeriod, PropertyType, Relationship, ServiceCategory,
+  AllergySeverity, AssetType, ConditionStatus, EquipmentValueClass, InsuranceKind, MeterUnit,
+  NotificationType, PremiumPeriod, PropertyType, Relationship,
 } from "@/app/generated/prisma/enums"
 import { HEALTH_INSURANCE_KINDS } from "@/lib/insurance"
 import { assetHref } from "@/lib/assets"
@@ -123,7 +123,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     nameField: "name", searchFields: ["name", "manufacturer", "modelNumber", "location"], keys: ["propertyId", "roomId"],
     assetType: "EQUIPMENT",
     fields: {
-      name: s, category: enumOf(EquipmentCategory), manufacturer: s, modelNumber: s, serialNumber: s,
+      name: s, category: { type: "string", description: "Category key. Built-in: APPLIANCE, HVAC, WATER, ELECTRONICS, TOOL, OUTDOOR, SECURITY, OTHER. Households may add custom keys (c_...)." }, manufacturer: s, modelNumber: s, serialNumber: s,
       location: s, purchaseDate: date, purchasePrice: money, installDate: date, notes: s,
       valueClass: enumOf(EquipmentValueClass, "Part of the home (FIXTURE) or belongings (CONTENTS). Null means the category default: HVAC, WATER and SECURITY are FIXTURE, the rest CONTENTS. To select by class, do not filter on this field alone: list the equipment and classify null rows by category, or combine valueClass with category."),
       expectedLifeYears: { type: "int", description: "Years it should last, counted from installDate, else purchaseDate" },
@@ -173,7 +173,7 @@ export const ENTITIES: Record<EntityKey, EntityDef> = {
     nameField: "title", searchFields: ["title", "vendor", "description"],
     ...polymorphic, keys: ["assetType", "assetId", "providerId", "conditionId", "roomId"],
     fields: {
-      date: date, title: s, description: s, vendor: s, cost: money, category: enumOf(ServiceCategory),
+      date: date, title: s, description: s, vendor: s, cost: money, category: { type: "string", description: "Category key. Built-in: ROUTINE, REPAIR, UPGRADE, INSPECTION, PARTS, OTHER (houses, vehicles, equipment); OFFICE_VISIT, PRESCRIPTION, LAB, DENTAL, VISION, PROCEDURE, THERAPY, OTHER (people). Households may add custom keys (c_...)." },
       mileageAtService: { type: "int", description: "Odometer (household distance unit) or hour meter at the time (vehicles)" },
       assetType: enumOf(AssetType, "Kind of asset this belongs to"),
     },

@@ -28,6 +28,8 @@ import { SettingsNav } from "@/components/settings/settings-nav"
 import { FeatureSettings } from "@/components/settings/feature-settings"
 import { RegionalSettingsForm } from "@/components/settings/regional-settings"
 import { loadRegionalSettings } from "@/lib/regional-server"
+import { CategorySettings } from "@/components/settings/category-settings"
+import { loadCategories } from "@/lib/categories-server"
 import { loadFeatures, loadPropertyEquipmentCostsEnabled, loadPropertyFilterEnabled } from "@/lib/features-server"
 import { DataSettings } from "@/components/settings/data/data-settings"
 import { loadBackupOverview } from "@/lib/backup/overview-server"
@@ -191,6 +193,8 @@ export default async function SettingsPage({
           )}
 
           {is("features") && features &&<FeatureSettings initial={{ healthEnabled: features.health, roomsEnabled: features.rooms, equipmentTabEnabled: features.equipmentTab, propertyFilterEnabled, propertyEquipmentCostsEnabled }} />}
+
+          {is("categories") && <CategorySettings defs={await loadCategories()} />}
 
           {is("regional") && regional && <RegionalSettingsForm initial={regional} />}
 

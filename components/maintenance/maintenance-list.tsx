@@ -167,7 +167,68 @@ export function MaintenanceList({ schedules: initialSchedules, assetId, assetTyp
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden bg-card">
-          <Table>
+          {/* Phones: one card per schedule, with Complete one tap away, in place of the table below. */}
+          <ul className="divide-y md:hidden">
+            {table.rows.map((s) => {
+              const status = getStatus(s, currentMileage, meterUnit, fmt)
+              const StatusIcon = status?.icon
+              const expanded = expandedId === s.id
+              const due = [
+                s.nextDueDate ? fmt.date(s.nextDueDate, { utc: true }) : null,
+                s.nextDueMileage != null ? `${s.nextDueMileage.toLocaleString()} ${fmt.meterShort(meterUnit)}` : null,
+              ].filter(Boolean).join(" · ")
+              const bits = [
+                due ? `Due ${due}` : isDoneOnce(s) ? "Done" : null,
+                repeatsLabel(s, fmt.meterShort(meterUnit)),
+                s.roomId ? roomNames[s.roomId] : null,
+                showSource && s.assetType === "EQUIPMENT" ? equipmentNames?.[s.assetId] ?? "Equipment" : null,
+              ].filter(Boolean)
+              return (
+                <li key={s.id} className={s.isActive ? "" : "text-muted-foreground"}>
+                  <button
+                    type="button"
+                    onClick={() => { setEditing(s); setFormOpen(true) }}
+                    aria-label={`Edit "${s.title}"`}
+                    className="block w-full space-y-1 px-4 pt-3 text-left active:bg-muted/50"
+                  >
+                    <span className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 text-sm font-medium">{s.title}</span>
+                      {status && (
+                        <Badge variant={status.variant} className="shrink-0 gap-1">
+                          {StatusIcon && <StatusIcon className="h-3 w-3" />}
+                          {status.label}
+                        </Badge>
+                      )}
+                    </span>
+                    {bits.length > 0 && <span className="block text-xs text-muted-foreground">{bits.join(" · ")}</span>}
+                    {s.estimatedCost != null && <span className="block text-xs text-muted-foreground">Est. {fmt.money(s.estimatedCost)}</span>}
+                  </button>
+                  <div className="px-4"><ManualLink manual={resolveManual(s, manualOptions ?? [])} className="mt-1" /></div>
+                  <div className="flex items-center gap-1.5 px-3 pb-2.5 pt-2">
+                    <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setCompleting(s)}>Complete</Button>
+                    {s.isActive ? (
+                      <SnoozeMenu schedule={s} />
+                    ) : (
+                      <Button variant="outline" size="sm" className="h-8 gap-1 px-3" onClick={() => handleResume(s)}>
+                        <Play className="h-3.5 w-3.5" /> Resume
+                      </Button>
+                    )}
+                    <span className="flex-1" />
+                    <AttachmentCount attachments={s.attachments} onClick={() => setExpandedId(expanded ? null : s.id)} />
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" aria-label={`Delete "${s.title}"`} onClick={() => handleDelete(s)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {expanded && (
+                    <div className="bg-muted/30 px-4 py-3">
+                      <AttachmentList recordId={s.id} recordType="MAINTENANCE" attachments={s.attachments} />
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <Table className="max-md:hidden">
             <TableHeader>
               <TableRow>
                 <SortableTableHead column="title" label="Title" sortState={table.sortState} onToggle={table.toggleSort} />

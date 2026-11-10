@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma"
 import type { AssetType, Prisma } from "@/app/generated/prisma/client"
 import { assetHref } from "@/lib/assets"
-import { categoryLabel as equipmentCategoryLabel } from "@/components/equipment/categories"
-import { categoryLabel as serviceCategoryLabel } from "@/lib/costs"
+import { equipmentLabel, serviceLabel } from "@/lib/categories"
+import { loadCategories } from "@/lib/categories-server"
 import {
   ageFrom, ALLERGY_SEVERITIES, CONDITION_STATUSES, INSURANCE_KINDS, insuranceExpiring, isMedicationActive,
   labelFor, RELATIONSHIPS,
@@ -346,6 +346,7 @@ async function semanticRecords(
 /** `terms` empty for the meaning pass; otherwise rows are ranked and marked exact or partial. */
 async function searchAssets(where: Wheres, now: Date, terms: string[]): Promise<Section[]> {
   const fmt = await getFormat()
+  const categoryDefs = await loadCategories()
   const money = moneyWith(fmt)
   const day = dayWith(fmt)
   const take = terms.length ? KEYWORD_POOL : TAKE
@@ -427,7 +428,7 @@ async function searchAssets(where: Wheres, now: Date, terms: string[]): Promise<
 
   const equipmentCards: AssetResult[] = e.items.map((r) => ({
     type: "EQUIPMENT", id: r.id, href: assetHref("EQUIPMENT", r.id), name: r.name, imageFilename: r.imageFilename,
-    badge: equipmentCategoryLabel(r.category),
+    badge: equipmentLabel(r.category, categoryDefs),
     subtitle: [r.manufacturer, r.modelNumber].filter(Boolean).join(" · ") || null,
     facts: facts([
       ["Property", r.property?.name],
@@ -476,6 +477,7 @@ async function searchRecords(
   where: Wheres, owners: Owners, now: Date, terms: string[], showPeople: boolean, scope: PropertyScope | null,
 ): Promise<Section[]> {
   const fmt = await getFormat()
+  const categoryDefs = await loadCategories()
   const money = moneyWith(fmt)
   const day = dayWith(fmt)
   const thumb = (id: string) => owners.thumbs.get(id) ?? null
@@ -566,7 +568,7 @@ async function searchRecords(
     status: null,
     facts: facts([
       ["Vendor", r.vendor],
-      ["Category", r.category ? serviceCategoryLabel(r.category) : null],
+      ["Category", r.category ? serviceLabel(r.category, categoryDefs) : null],
       [r.assetType === "VEHICLE" && unitOf(r.assetId) === "HOURS" ? "Hours" : "Odometer",
         r.mileageAtService != null ? `${r.mileageAtService.toLocaleString()} ${fmt.meterShort(unitOf(r.assetId))}` : null],
     ]),
@@ -580,7 +582,7 @@ async function searchRecords(
     status: null,
     facts: facts([
       ["Provider", r.provider?.name ?? r.vendor],
-      ["Type", r.category ? serviceCategoryLabel(r.category) : null],
+      ["Type", r.category ? serviceLabel(r.category, categoryDefs) : null],
       ["For", r.condition?.name],
     ]),
     owner: thumb(r.assetId), people: null,

@@ -52,7 +52,7 @@ export function ChatLauncher() {
             type="button"
             onClick={() => chat.setPanelOpen(true)}
             aria-label="Open assistant"
-            className="fixed right-5 bottom-14 z-30 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-primary/20 transition-all duration-150 hover:scale-105 hover:bg-primary/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50 motion-reduce:hover:scale-100"
+            className="fixed right-5 bottom-14 max-md:bottom-[calc(8.25rem+env(safe-area-inset-bottom))] z-30 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-primary/20 transition-all duration-150 hover:scale-105 hover:bg-primary/90 hover:shadow-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50 motion-reduce:hover:scale-100"
           >
             <MessageSquare className="h-5 w-5" aria-hidden="true" />
             {/* An answer is still being written while the dock is closed. */}

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { CircleHelp } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { FieldHelpEntry, FieldHelpMap } from "@/lib/field-help"
+import Link from "next/link"
+import { useIsAdmin } from "@/components/viewer-provider"
 import { cn } from "@/lib/utils"
 
 // The help text is a few dozen KB across every form, so it isn't part of the page: it's fetched the
@@ -22,6 +24,7 @@ function loadHelpText(): Promise<FieldHelpMap> {
 export function FieldHelp({ id, className }: { id: string; className?: string }) {
   const [entry, setEntry] = useState<FieldHelpEntry | null | undefined>(undefined) // undefined = not asked for yet
   const [open, setOpen] = useState(false)
+  const isAdmin = useIsAdmin()
 
   function warm() {
     if (entry !== undefined) return
@@ -80,6 +83,13 @@ export function FieldHelp({ id, className }: { id: string; className?: string })
                     ))}
                   </dl>
                 </div>
+              )}
+              {isAdmin && entry.adminLink && (
+                <p className="border-t pt-2.5 text-sm text-muted-foreground">
+                  <Link href={entry.adminLink.href} onClick={() => setOpen(false)} className="font-medium text-primary underline-offset-4 hover:underline">
+                    {entry.adminLink.text} →
+                  </Link>
+                </p>
               )}
             </>
           )}

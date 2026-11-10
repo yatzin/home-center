@@ -6,6 +6,12 @@ export const ROW_HEIGHT = 88
 /** Space between cards, both directions. */
 export const GAP = 16
 /**
+ * The phone grid is denser than the large one: shorter rows and tighter gaps, so more of the
+ * dashboard fits on a small screen. The large grid keeps ROW_HEIGHT and GAP.
+ */
+export const PHONE_ROW_HEIGHT = 72
+export const PHONE_GAP = 12
+/**
  * Canvas width (its own width, not the viewport's) at which the large layout
  * replaces the phone one: 640px (not rem, so it matches what the editor measures). Below it a 12-column cell would be under
  * ~40px. The `@min-[640px]/dash:` classes in view-grid.tsx encode this

@@ -71,7 +71,7 @@ export function BackupSchedule({ data, onSaved }: { data: BackupOverview; onSave
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="bk-keep" help="backup.keep">Keep the newest</Label>
-            <Input id="bk-keep" type="number" min={1} max={365} value={keep} onChange={(e) => setKeep(e.target.value)} />
+            <Input id="bk-keep" type="number" inputMode="numeric" min={1} max={365} value={keep} onChange={(e) => setKeep(e.target.value)} />
           </div>
           <div className="flex items-end sm:col-span-2">
             <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save schedule"}</Button>

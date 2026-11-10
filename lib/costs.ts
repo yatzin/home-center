@@ -1,4 +1,5 @@
-import type { AssetType, ServiceCategory } from "@/app/generated/prisma/client"
+import type { AssetType } from "@/app/generated/prisma/client"
+import { DEFAULT_CATEGORIES, UNCATEGORIZED, serviceChoices, serviceColor, serviceIcon, serviceLabel, serviceOrder, type CategoryDef, type ServiceCategory } from "@/lib/categories"
 import { localDay } from "@/lib/equipment-life"
 
 // Pure, client-safe cost aggregation. Anything needing the database lives in
@@ -21,92 +22,35 @@ export type CostRow = {
 
 export type Bucket = { total: number; count: number }
 
-/// Map key standing in for `category === null`. Records logged before categories
-/// existed get their own bucket rather than being folded into OTHER, which would
-/// misstate every one of them.
-export const UNCATEGORIZED = "UNCATEGORIZED"
+export { UNCATEGORIZED }
 
-export type CategoryKey = ServiceCategory | typeof UNCATEGORIZED
+/// A stored category key, or UNCATEGORIZED for records with none. Keys are plain
+/// strings: built-ins are the former enum values, custom ones are generated.
+export type CategoryKey = string
 
-/// Categories for houses, vehicles and equipment.
-export const ASSET_CATEGORIES: { value: ServiceCategory; label: string }[] = [
-  { value: "ROUTINE", label: "Routine" },
-  { value: "REPAIR", label: "Repair" },
-  { value: "UPGRADE", label: "Upgrade" },
-  { value: "INSPECTION", label: "Inspection" },
-  { value: "PARTS", label: "Parts" },
-  { value: "OTHER", label: "Other" },
-]
-
-const MEDICAL_ONLY: { value: ServiceCategory; label: string }[] = [
-  { value: "OFFICE_VISIT", label: "Office visit" },
-  { value: "PRESCRIPTION", label: "Prescription" },
-  { value: "LAB", label: "Lab / imaging" },
-  { value: "DENTAL", label: "Dental" },
-  { value: "VISION", label: "Vision" },
-  { value: "PROCEDURE", label: "Procedure" },
-  { value: "THERAPY", label: "Therapy" },
-]
-
-const OTHER_CATEGORY = { value: "OTHER" as ServiceCategory, label: "Other" }
-
-/// Categories for people's visits and medical expenses.
-export const MEDICAL_CATEGORIES = [...MEDICAL_ONLY, OTHER_CATEGORY]
-
-/// Every category, in the fixed order the charts colour them. Other stays last
-/// among the real categories whichever set it came from.
-export const SERVICE_CATEGORIES = [
-  ...ASSET_CATEGORIES.filter((c) => c.value !== "OTHER"),
-  ...MEDICAL_ONLY,
-  OTHER_CATEGORY,
-]
-
-export const SERVICE_CATEGORY_VALUES = [
-  "ROUTINE", "REPAIR", "UPGRADE", "INSPECTION", "PARTS", "OTHER",
-  "OFFICE_VISIT", "PRESCRIPTION", "LAB", "DENTAL", "VISION", "PROCEDURE", "THERAPY",
-] as const satisfies readonly ServiceCategory[]
-
-export function categoriesFor(assetType: AssetType) {
-  return assetType === "PERSON" ? MEDICAL_CATEGORIES : ASSET_CATEGORIES
+/// Categories offered for houses, vehicles and equipment (visible built-ins and custom).
+export function categoriesFor(assetType: AssetType, defs: CategoryDef[] = DEFAULT_CATEGORIES, keep?: string | null) {
+  return serviceChoices(defs, assetType === "PERSON", keep).map((d) => ({ value: d.key, label: d.label, icon: d.icon }))
 }
 
-// Fixed order, assigned in sequence and never cycled — the colour a category
-// wears must not depend on which categories happen to be on screen. Uncategorized
-// sorts last because it is an absence, not a kind of spending.
-export const CATEGORY_ORDER: CategoryKey[] = [
-  ...SERVICE_CATEGORIES.map((c) => c.value),
-  UNCATEGORIZED,
-]
-
-const CATEGORY_LABELS = Object.fromEntries(
-  SERVICE_CATEGORIES.map((c) => [c.value, c.label])
-) as Record<ServiceCategory, string>
-
-export function categoryLabel(key: CategoryKey): string {
-  return key === UNCATEGORIZED ? "Uncategorized" : CATEGORY_LABELS[key] ?? "Other"
+export function categoryIcon(key: CategoryKey, defs: CategoryDef[] = DEFAULT_CATEGORIES): string | null {
+  return serviceIcon(key, defs)
 }
 
-// Colours are CSS variables, not literals, so light and dark are one definition
-// in globals.css rather than a branch in every component.
-const CATEGORY_COLORS: Record<CategoryKey, string> = {
-  ROUTINE: "var(--cost-routine)",
-  REPAIR: "var(--cost-repair)",
-  UPGRADE: "var(--cost-upgrade)",
-  INSPECTION: "var(--cost-inspection)",
-  PARTS: "var(--cost-parts)",
-  OTHER: "var(--cost-other)",
-  OFFICE_VISIT: "var(--cost-office-visit)",
-  PRESCRIPTION: "var(--cost-prescription)",
-  LAB: "var(--cost-lab)",
-  DENTAL: "var(--cost-dental)",
-  VISION: "var(--cost-vision)",
-  PROCEDURE: "var(--cost-procedure)",
-  THERAPY: "var(--cost-therapy)",
-  [UNCATEGORIZED]: "var(--cost-uncategorized)",
+export function categoryLabel(key: CategoryKey, defs: CategoryDef[] = DEFAULT_CATEGORIES): string {
+  return serviceLabel(key, defs)
 }
 
-export function categoryColor(key: CategoryKey): string {
-  return CATEGORY_COLORS[key]
+// Colours are CSS variables for built-ins (light and dark are one definition in
+// globals.css) or the admin's chosen hex.
+export function categoryColor(key: CategoryKey, defs: CategoryDef[] = DEFAULT_CATEGORIES): string {
+  return serviceColor(key, defs)
+}
+
+/// Chart order: the order set in Settings, Uncategorized last. The colour a
+/// category wears must not depend on which categories happen to be on screen.
+export function categoryOrder(defs: CategoryDef[] = DEFAULT_CATEGORIES): CategoryKey[] {
+  return serviceOrder(defs)
 }
 
 /// `ServiceRecord.cost` is a SQLite Float, so summing many of them accumulates
@@ -193,7 +137,7 @@ export function nestedByAsset(rows: CostRow[], equipmentProperty: Map<string, st
 }
 
 export function byCategory(rows: CostRow[]): Map<CategoryKey, Bucket> {
-  return rollup(rows, (r) => (r.category ?? UNCATEGORIZED) as CategoryKey)
+  return rollup(rows, (r) => r.category ?? UNCATEGORIZED)
 }
 
 export function byVendor(rows: CostRow[]): Map<string, Bucket> {
@@ -237,7 +181,7 @@ export function ranked(
   }))
 }
 
-export type StackSegment = { key: CategoryKey; label: string; color: string; total: number }
+export type StackSegment = { key: CategoryKey; label: string; color: string; icon: string | null; total: number; /** Position in the chart order, so a legend can sort without knowing the categories. */ order: number }
 
 export function sum(rows: CostRow[]): number {
   return cents(rows.reduce((s, r) => s + r.cost, 0))
@@ -423,7 +367,7 @@ export function bucketed(rows: CostRow[], g: Granularity, range: DateRange): Buc
   )
 }
 
-export function stackedBuckets(rows: CostRow[], g: Granularity, range: DateRange): StackedBucket[] {
+export function stackedBuckets(rows: CostRow[], g: Granularity, range: DateRange, defs: CategoryDef[] = DEFAULT_CATEGORIES): StackedBucket[] {
   const grouped = new Map<string, CostRow[]>()
   for (const row of rows) {
     const key = bucketKeyOf(row.date, g)
@@ -438,10 +382,16 @@ export function stackedBuckets(rows: CostRow[], g: Granularity, range: DateRange
       const categories = byCategory(grouped.get(key) ?? [])
       // Walked in CATEGORY_ORDER, not the map's order, so a category keeps its
       // position in every stack whether or not its neighbours are present.
-      const segments = CATEGORY_ORDER.filter((c) => categories.has(c)).map((c) => ({
+      // Keys with no definition (a deleted category) sort after the defined ones.
+      const order = categoryOrder(defs)
+      const known = order.filter((c) => categories.has(c))
+      const orphans = [...categories.keys()].filter((c) => !order.includes(c)).sort()
+      const segments = [...known, ...orphans].map((c, i) => ({
+        order: order.includes(c) ? order.indexOf(c) : order.length + i,
         key: c,
-        label: categoryLabel(c),
-        color: categoryColor(c),
+        label: categoryLabel(c, defs),
+        color: categoryColor(c, defs),
+        icon: categoryIcon(c, defs),
         total: categories.get(c)!.total,
       }))
       return {

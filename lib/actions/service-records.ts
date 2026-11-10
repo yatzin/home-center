@@ -1,5 +1,6 @@
 "use server"
 
+import { categoryExists } from "@/lib/categories-server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { orGone } from "@/lib/gone"
@@ -103,6 +104,7 @@ export async function updateServiceRecord(id: string, data: ServiceRecordInput) 
 
   const parsed = serviceRecordSchema.safeParse(data)
   if (!parsed.success) return { error: parsed.error.flatten().fieldErrors }
+  if (parsed.data.category && !(await categoryExists("SERVICE", parsed.data.category))) return { error: { category: ["Pick a category from the list."] } }
 
   // No roomId sent (no room select shown, e.g. Rooms off) leaves the record's room as it was.
   const room = parsed.data.roomId === undefined ? undefined : await checkRoom(parsed.data.roomId, parsed.data.assetType, parsed.data.assetId)

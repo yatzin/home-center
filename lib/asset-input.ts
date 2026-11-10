@@ -12,7 +12,7 @@ export function optionalNumber<T extends z.ZodTypeAny>(inner: T) {
 
 export const equipmentSchema = z.object({
   name: nameText("Name is required"),
-  category: z.enum(["APPLIANCE", "HVAC", "WATER", "ELECTRONICS", "TOOL", "OUTDOOR", "SECURITY", "OTHER"]),
+  category: z.string().min(1, "Pick a category").max(60),
   manufacturer: optionalNameText,
   modelNumber: optionalNameText,
   serialNumber: optionalNameText,

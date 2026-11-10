@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { FIELD_HELP } from "./index"
 import { HELP_LIMITS } from "./types"
+import { SETTINGS_SECTIONS } from "../settings-sections"
 
 const root = path.resolve(__dirname, "../..")
 
@@ -61,6 +62,16 @@ describe("field help", () => {
           expect(v.effect.length, `${id} ${v.label}`).toBeLessThanOrEqual(HELP_LIMITS.valueEffect)
         }
       }
+    }
+  })
+
+  it("admin links point at a real Settings section", () => {
+    const sections = SETTINGS_SECTIONS.map((x) => x.id as string)
+    for (const [id, e] of entries) {
+      if (!e.adminLink) continue
+      expect(e.adminLink.href, id).toMatch(/^\/settings\?tab=[a-z]+$/)
+      expect(sections, id).toContain(e.adminLink.href.split("=")[1])
+      expect(e.adminLink.text.trim().length, id).toBeGreaterThan(0)
     }
   })
 

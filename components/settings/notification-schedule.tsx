@@ -91,7 +91,7 @@ export function NotificationSchedule({
       <CardContent className="space-y-3 px-5">
         <div className="flex flex-wrap items-center gap-2">
           <Input
-            type="number"
+            type="number" inputMode="numeric"
             min={0}
             className="w-32"
             placeholder="360"

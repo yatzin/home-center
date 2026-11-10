@@ -13,7 +13,9 @@ import { AssetImageUploader } from "@/components/asset-image-uploader"
 import { EquipmentEditButton } from "@/components/equipment/equipment-edit-button"
 import { PlanReplacementButton } from "@/components/equipment/plan-replacement-button"
 import { ageLabel, equipmentAge, localDay } from "@/lib/equipment-life"
-import { categoryLabel } from "@/components/equipment/categories"
+import { equipmentIcon, equipmentLabel } from "@/lib/categories"
+import { CATEGORY_ICONS } from "@/components/category-icon"
+import { loadCategories } from "@/lib/categories-server"
 import { AssetCostPanel } from "@/components/costs/asset-cost-panel"
 import { getFormat } from "@/lib/regional-server"
 import { propertiesWithRooms, roomOptionsFor } from "@/lib/rooms-server"
@@ -52,17 +54,23 @@ export default async function EquipmentDetailPage({
     loadManualOptions([{ assetType: "EQUIPMENT", assetId: id }]),
   ])
 
+  const categoryDefs = await loadCategories()
   const age = equipmentAge(equipment, localDay(new Date()))
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      {/* Phones: the name leads, above the photo and facts. */}
+      <div className="md:hidden">
+        <h1 className="break-words font-heading text-2xl font-semibold">{equipment.name}</h1>
+        {[equipment.manufacturer, equipment.modelNumber].filter(Boolean).join(" ") ? <p className="mt-0.5 text-sm text-muted-foreground">{[equipment.manufacturer, equipment.modelNumber].filter(Boolean).join(" ")}</p> : null}
+      </div>
       {/* Files dropped anywhere on this page go to Intake for this equipment. */}
       <DropPageAsset assetType="EQUIPMENT" assetId={id} name={equipment.name} />
       <aside className="space-y-4 lg:w-72 lg:shrink-0">
         <AssetImageUploader assetType="EQUIPMENT" assetId={id} imageFilename={equipment.imageFilename} alt={equipment.name} />
 
-        <div className="space-y-2">
-          <Stat icon={Wrench} label="Category" value={categoryLabel(equipment.category)} />
+        <div className="space-y-2 max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:space-y-0">
+          <Stat icon={CATEGORY_ICONS[equipmentIcon(equipment.category, categoryDefs) ?? ""] ?? Wrench} label="Category" value={equipmentLabel(equipment.category, categoryDefs)} />
           {equipment.manufacturer && <Stat icon={Factory} label="Manufacturer" value={equipment.manufacturer} />}
           {equipment.modelNumber && <Stat icon={Tag} label="Model" value={equipment.modelNumber} mono />}
           {equipment.serialNumber && <Stat icon={Fingerprint} label="Serial" value={equipment.serialNumber} mono />}
@@ -103,7 +111,7 @@ export default async function EquipmentDetailPage({
 
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
-          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold">{equipment.name}</h1>
+          <h1 className="min-w-0 break-words font-heading text-2xl font-semibold max-md:hidden">{equipment.name}</h1>
           <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
             <EquipmentEditButton equipment={equipment} properties={properties} />
             <PlanReplacementButton equipment={equipment} roomOptions={roomOptions} />
@@ -150,11 +158,11 @@ export default async function EquipmentDetailPage({
 
 function Stat({ icon: Icon, label, value, mono }: { icon: React.ElementType; label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 max-md:flex-col max-md:items-start max-md:justify-start max-md:gap-0.5 max-md:px-2.5 max-md:py-1.5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
         <Icon className="h-3.5 w-3.5" /> {label}
       </div>
-      <div className={mono ? "min-w-0 font-mono text-xs break-all text-right" : "min-w-0 break-words font-semibold text-sm text-right"}>{value}</div>
+      <div className={mono ? "min-w-0 font-mono text-xs break-all text-right max-md:text-left" : "min-w-0 break-words font-semibold text-sm text-right max-md:text-left"}>{value}</div>
     </div>
   )
 }

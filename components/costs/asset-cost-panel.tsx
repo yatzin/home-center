@@ -1,6 +1,7 @@
 import { TrendChart } from "@/components/charts/trend-chart"
 import { Meter } from "@/components/charts/meter"
 import { loadCostRecords, loadPlannedSchedules } from "@/lib/costs-server"
+import { loadCategories } from "@/lib/categories-server"
 import { loadPropertyEquipmentCostsEnabled } from "@/lib/features-server"
 import { prisma } from "@/lib/prisma"
 import { costPerYearOwned, nextDueMeter, warrantyMeter, type StatusMeter, type Tone } from "@/lib/asset-status"
@@ -89,7 +90,7 @@ export async function AssetCostPanel({
   const range = costRange(rows, now)
   const spanYears = range.end.getUTCFullYear() - range.start.getUTCFullYear() + 1
   const granularity: Granularity = spanYears >= YEARS_FOR_YEARLY ? "year" : "quarter"
-  const buckets = stackedBuckets(rows, granularity, range)
+  const buckets = stackedBuckets(rows, granularity, range, await loadCategories())
   const populated = buckets.filter((b) => b.total > 0).length
 
   return (

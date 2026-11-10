@@ -1,6 +1,7 @@
 "use client"
 
-import { useId, useState } from "react"
+import { useEffect, useId, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -19,11 +20,20 @@ import type { AssetType } from "@/app/generated/prisma/client"
  */
 export function RecordsAddButton({ assets }: { assets: InboxAssetOption[] }) {
   const id = useId()
-  const [open, setOpen] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  // The phone's quick-add button links here with ?add=1: start with the asset chooser open.
+  const [open, setOpen] = useState(() => params.get("add") === "1")
   const [key, setKey] = useState("")
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<{ assetType: AssetType; assetId: string; ctx: RecordFormContext } | null>(null)
   const asset = parseAssetKey(key)
+
+  // ...and tidy the address so a refresh doesn't reopen it.
+  useEffect(() => {
+    if (params.get("add") === "1") router.replace(pathname, { scroll: false })
+  }, [params, pathname, router])
 
   async function go() {
     if (!asset) return

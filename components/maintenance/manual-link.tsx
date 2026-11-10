@@ -1,4 +1,5 @@
 import { BookOpen } from "lucide-react"
+import { FileLink } from "@/components/attachments/file-link"
 
 export type ManualLinkTarget = { href: string; label: string; title: string } | null | undefined
 
@@ -6,10 +7,9 @@ export type ManualLinkTarget = { href: string; label: string; title: string } | 
 export function ManualLink({ manual, className = "" }: { manual: ManualLinkTarget; className?: string }) {
   if (!manual) return null
   return (
-    <a
+    <FileLink
       href={manual.href}
-      target="_blank"
-      rel="noopener noreferrer"
+      name={manual.title}
       title={manual.title}
       // The row opens the edit form on click; this link must not.
       onClick={(e) => e.stopPropagation()}
@@ -17,6 +17,6 @@ export function ManualLink({ manual, className = "" }: { manual: ManualLinkTarge
     >
       <BookOpen className="h-3 w-3" />
       {manual.label}
-    </a>
+    </FileLink>
   )
 }

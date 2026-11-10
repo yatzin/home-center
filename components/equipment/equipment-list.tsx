@@ -9,7 +9,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MoreHorizontal, MapPin, Building2, Pencil, Trash2 } from "lucide-react"
 import { deleteEquipment } from "@/lib/actions/equipment"
 import { EquipmentFormDialog, type EquipmentWithRoom as Equipment } from "./equipment-form-dialog"
-import { categoryLabel } from "./categories"
+import { equipmentIcon, equipmentLabel } from "@/lib/categories"
+import { CategoryName } from "@/components/category-icon"
+import { useCategories } from "@/components/category-provider"
 import { AssetCollection, type AssetColumn } from "@/components/assets/asset-collection"
 import { AssetViewToggle } from "@/components/assets/asset-view-toggle"
 import { useAssetView } from "@/components/assets/use-asset-view"
@@ -22,7 +24,6 @@ import { locationLabel } from "@/lib/rooms"
 // so has to be built inside the component.
 const BASE_ACCESSORS: Record<string, Accessor<Equipment>> = {
   name: (e) => e.name,
-  category: (e) => categoryLabel(e.category),
   manufacturer: (e) => [e.manufacturer, e.modelNumber].filter(Boolean).join(" ") || null,
   location: (e) => locationLabel(e),
   serialNumber: (e) => e.serialNumber,
@@ -42,6 +43,7 @@ interface Props {
 }
 
 export function EquipmentList({ equipment, properties, initialView, emptyText, newPropertyId }: Props) {
+  const categoryDefs = useCategories()
   const router = useRouter()
   const [view, setView] = useAssetView("equipment", initialView)
   const [editing, setEditing] = useState<Equipment | null>(null)
@@ -57,15 +59,16 @@ export function EquipmentList({ equipment, properties, initialView, emptyText, n
   const accessors = useMemo(
     () => ({
       ...BASE_ACCESSORS,
+      category: (e: Equipment) => equipmentLabel(e.category, categoryDefs),
       property: (e: Equipment) => (e.propertyId ? propertyNames[e.propertyId] ?? null : null),
     }),
-    [propertyNames]
+    [propertyNames, categoryDefs]
   )
 
   // Depends on `properties`, so it can't sit at module scope like the others.
   const columns: AssetColumn<Equipment>[] = [
     { key: "name", label: "Name", cell: (e) => <span className="font-medium">{e.name}</span> },
-    { key: "category", label: "Category", cell: (e) => <Badge variant="secondary" className="text-xs">{categoryLabel(e.category)}</Badge> },
+    { key: "category", label: "Category", cell: (e) => <Badge variant="secondary" className="text-xs"><CategoryName icon={equipmentIcon(e.category, categoryDefs)} label={equipmentLabel(e.category, categoryDefs)} /></Badge> },
     { key: "manufacturer", label: "Make / Model", className: "text-muted-foreground", cell: (e) => [e.manufacturer, e.modelNumber].filter(Boolean).join(" ") || "—" },
     { key: "location", label: "Location", className: "text-muted-foreground", cell: (e) => locationLabel(e) ?? "—" },
     { key: "property", label: "Property", className: "text-muted-foreground", cell: (e) => (e.propertyId ? propertyNames[e.propertyId] ?? "—" : "—") },
@@ -76,7 +79,7 @@ export function EquipmentList({ equipment, properties, initialView, emptyText, n
     const location = locationLabel(e)
     return {
       name: e.name,
-      badge: categoryLabel(e.category),
+      badge: <CategoryName icon={equipmentIcon(e.category, categoryDefs)} label={equipmentLabel(e.category, categoryDefs)} />,
       subtitle: [e.manufacturer, e.modelNumber].filter(Boolean).join(" ") || null,
       meta: [
         ...(location ? [{ icon: MapPin, text: location }] : []),

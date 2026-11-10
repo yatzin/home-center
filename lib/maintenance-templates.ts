@@ -1,4 +1,5 @@
-import type { EquipmentCategory, MeterUnit, PropertyType } from "@/app/generated/prisma/client"
+import type { MeterUnit, PropertyType } from "@/app/generated/prisma/client"
+import type { EquipmentCategory } from "@/lib/categories"
 import { firstCalendarDue } from "@/lib/maintenance-schedule"
 
 // Generic starting reminders offered after an asset is created. They're common
@@ -63,7 +64,8 @@ const VEHICLE_HOURS: MaintenanceTemplate[] = [
   { key: "registration", title: "Registration renewal", intervalDays: 365 },
 ]
 
-const EQUIPMENT: Record<EquipmentCategory, MaintenanceTemplate[]> = {
+/// Keyed by the built-in categories; a custom category gets OTHER's list.
+const EQUIPMENT: Record<string, MaintenanceTemplate[]> = {
   APPLIANCE: [
     { key: "clean-inspect", title: "Clean and inspect", description: "Coils, filters, seals and drains.", intervalDays: 365 },
   ],
@@ -102,7 +104,7 @@ export function templatesFor(asset: TemplateAsset): MaintenanceTemplate[] {
     case "VEHICLE":
       return asset.meterUnit === "HOURS" ? VEHICLE_HOURS : VEHICLE_MILES
     case "EQUIPMENT":
-      return EQUIPMENT[asset.category]
+      return EQUIPMENT[asset.category] ?? EQUIPMENT.OTHER
   }
 }
 

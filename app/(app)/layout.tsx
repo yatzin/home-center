@@ -6,7 +6,11 @@ import { cookies } from "next/headers"
 import { SIDEBAR_COOKIE, readSidebarCollapsed } from "@/lib/sidebar-state"
 import { PLACEMENTS, readPlacement } from "@/lib/placement"
 import { prisma } from "@/lib/prisma"
-import { Sidebar, MobileSidebarTrigger } from "@/components/sidebar"
+import { Sidebar } from "@/components/sidebar"
+import { MainScroll } from "@/components/main-scroll"
+import { MobileTabBar } from "@/components/mobile-tab-bar"
+import { MobileHeaderLead } from "@/components/mobile-header-lead"
+import { MobileQuickAdd } from "@/components/mobile-quick-add"
 import { UserMenu } from "@/components/user-menu"
 import { NotificationBell } from "@/components/notification-bell"
 import { ThemeNavigator } from "@/components/theme-navigator"
@@ -25,6 +29,9 @@ import { cn } from "@/lib/utils"
 import packageJson from "@/package.json"
 import { loadFeatures, visibleNotificationsWhere } from "@/lib/features-server"
 import { loadRegionalSettings } from "@/lib/regional-server"
+import { ViewerProvider } from "@/components/viewer-provider"
+import { CategoryProvider } from "@/components/category-provider"
+import { loadCategories } from "@/lib/categories-server"
 import { RegionalProvider } from "@/components/regional-provider"
 import { PaperlessProvider } from "@/components/paperless/paperless-context"
 import { loadPaperlessUiState } from "@/lib/paperless/ui-state"
@@ -36,12 +43,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth()
   if (!session) redirect("/login")
 
-  const [features, regional, scope, propertyChoices, paperless] = await Promise.all([
+  const [features, regional, scope, propertyChoices, paperless, categories] = await Promise.all([
     loadFeatures(),
     loadRegionalSettings(),
     loadPropertyScope(),
     loadPropertyFilterChoices(null),
     loadPaperlessUiState(session.user.role),
+    loadCategories(),
   ])
   const [notifications, llm, inbox, captureParser] = await Promise.all([
     prisma.notification.findMany({
@@ -75,16 +83,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <RegionalProvider value={regional}>
+    <ViewerProvider isAdmin={isAdmin}>
+    <CategoryProvider value={categories}>
     <PaperlessProvider available={paperless.available} linkBase={paperless.linkBase}>
     <ChatProvider userId={session.user.id} available={llm.available} isAdmin={isAdmin} model={llm.model}>
       <DropProvider healthEnabled={features.health}>
       {/* h-screen first: a browser without svh units would otherwise let the shell grow
           to the page's height, pushing the sidebar's Settings link off screen. */}
-      <div className="flex h-screen overflow-hidden supports-[height:100svh]:h-svh">
+      <div className="flex h-screen overflow-hidden supports-[height:100svh]:h-svh max-md:pr-[env(safe-area-inset-right)] max-md:pl-[env(safe-area-inset-left)]">
         <Sidebar showAssistant={showAssistant} showHealth={features.health} intakeCount={sidebarIntake} initialCollapsed={sidebarCollapsed} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-card/80 backdrop-blur-sm px-4">
-            <MobileSidebarTrigger showAssistant={showAssistant} showHealth={features.health} intakeCount={sidebarIntake} />
+            {/* Phones only: the mark (or Back on an asset's page). Navigation is the bottom tab bar. */}
+            <MobileHeaderLead />
             {propertyChoices && (propertyChoices.length >= 2 || scope) && (
               <PropertyFilter properties={propertyChoices} selectedId={scope?.propertyId ?? null} />
             )}
@@ -106,9 +117,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               {/* Extra bottom room so the floating assistant button never hides the end of a page. */}
-              <main className={cn("flex-1 overflow-y-auto p-6", floatingAssistant && "pb-20")}>{children}</main>
+              <MainScroll className={cn("flex-1 overflow-y-auto p-6 max-md:p-4", floatingAssistant && "pb-20")}>{children}</MainScroll>
               {/* Name and version centred; the empty first column balances the coffee link on the right. */}
-              <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
+              <footer className="grid shrink-0 grid-cols-[1fr_auto_1fr] max-md:hidden items-center gap-2 border-t border-border/60 px-4 py-2 text-xs text-muted-foreground">
                 <span />
                 <span>
                   <a
@@ -131,6 +142,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   Buy me a coffee
                 </a>
               </footer>
+              <MobileQuickAdd showIntake={showIntake} />
+              <MobileTabBar
+                moreDot={inbox + notificationItems.length > 0}
+                showAssistant={showAssistant}
+                showHealth={features.health}
+                intakeCount={sidebarIntake}
+                footer={
+                  <span className="flex items-center justify-between gap-3">
+                    <a href="https://github.com/yatzin/home-center" target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:underline">
+                      HomeCenter &middot; v{packageJson.version}
+                    </a>
+                    <a href="https://buymeacoffee.com/yatzin" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+                      <Coffee className="h-3 w-3" aria-hidden="true" />
+                      Buy me a coffee
+                    </a>
+                  </span>
+                }
+              />
             </div>
             {showAssistant && <ChatDock />}
             {floatingAssistant && <ChatLauncher />}
@@ -140,6 +169,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </DropProvider>
     </ChatProvider>
     </PaperlessProvider>
+    </CategoryProvider>
+    </ViewerProvider>
     </RegionalProvider>
   )
 }

@@ -5,6 +5,9 @@ import { RankedBars, type RankedRow } from "@/components/charts/ranked-bars"
 import { TrendChart } from "@/components/charts/trend-chart"
 import { CompositionBar } from "@/components/charts/composition-bar"
 import { TileChart, type TilePoint } from "@/components/charts/tile-chart"
+import type { CategoryDef } from "@/lib/categories"
+import { CategoryIcon } from "@/components/category-icon"
+import { loadCategories } from "@/lib/categories-server"
 import { loadCostRecords, loadPlannedSchedules } from "@/lib/costs-server"
 import { loadFeatures } from "@/lib/features-server"
 import { loadAssetIndex } from "@/lib/assets-server"
@@ -15,7 +18,7 @@ import { cn } from "@/lib/utils"
 import { withParams } from "@/lib/table-params"
 import type { AssetType } from "@/app/generated/prisma/client"
 import {
-  CATEGORY_ORDER, assetKey, averagePerMonth, monthsBack, dailyTotals, lastYearMonthly, yearlyBars, nestedByAsset, bucketed, byAsset, byCategory, byVendor, categoryColor,
+  categoryOrder, assetKey, averagePerMonth, monthsBack, dailyTotals, lastYearMonthly, yearlyBars, nestedByAsset, bucketed, byAsset, byCategory, byVendor, categoryColor, categoryIcon,
   categoryLabel, costRange, inYear, isGranularity, parseAssetKey, ranked,
   rollingAverage, stackedBuckets, sum, yearToDate, type CategoryKey, type CostRow,
   type Granularity,
@@ -102,6 +105,7 @@ export default async function CostsPage({
     )
   }
 
+  const categoryDefs = await loadCategories()
   const yearRaw = typeof params.year === "string" ? params.year : undefined
   const yearParam = Number(yearRaw ?? NaN)
   // The page opens on the current year, monthly, across all assets. "all" is an
@@ -121,7 +125,7 @@ export default async function CostsPage({
   const bucketParam = typeof params.bucket === "string" ? params.bucket : undefined
   const granularity: Granularity = isGranularity(bucketParam) ? bucketParam : "month"
   const categoryParam = typeof params.category === "string" ? params.category : undefined
-  const category = (CATEGORY_ORDER as string[]).includes(categoryParam ?? "")
+  const category = categoryOrder(categoryDefs).includes(categoryParam ?? "")
     ? (categoryParam as CategoryKey)
     : undefined
 
@@ -137,6 +141,7 @@ export default async function CostsPage({
 
   const filters = (
     <FilterRow
+      categoryDefs={categoryDefs}
       params={params}
       years={years}
       types={typeFilters}
@@ -162,7 +167,7 @@ export default async function CostsPage({
   }
 
   const range = costRange(typeRows, now, year)
-  const buckets = stackedBuckets(rows, granularity, range)
+  const buckets = stackedBuckets(rows, granularity, range, categoryDefs)
   const trend = rollingAverage(buckets, TREND_WINDOW)
 
   // Year-to-date against the same point last year, not against all of last year —
@@ -230,11 +235,12 @@ export default async function CostsPage({
   // No cast needed: Map's methods are bivariant in TypeScript, so a
   // Map<CategoryKey, Bucket> is assignable to the Map<string, Bucket> ranked takes.
   const categoryEntries = ranked(byCategory(yearRows), {
-    label: (key) => categoryLabel(key as CategoryKey),
+    label: (key) => categoryLabel(key, categoryDefs),
   })
   const categorySlices = categoryEntries.map((entry) => ({
     ...entry,
-    color: categoryColor(entry.key as CategoryKey),
+    color: categoryColor(entry.key, categoryDefs),
+    icon: categoryIcon(entry.key, categoryDefs),
     // Clicking the active category clears it, so the bar toggles rather than
     // trapping the reader in a filter they set by clicking a chart.
     href: `/costs${withParams(params, {
@@ -518,6 +524,7 @@ function FilterRow({
   year,
   granularity,
   category,
+  categoryDefs,
 }: {
   params: Record<string, string | string[] | undefined>
   years: number[]
@@ -526,6 +533,7 @@ function FilterRow({
   year?: number
   granularity: Granularity
   category?: CategoryKey
+  categoryDefs: CategoryDef[]
 }) {
   return (
     // One filter row above everything it scopes, rather than a control tucked
@@ -579,9 +587,10 @@ function FilterRow({
             <span
               aria-hidden="true"
               className="h-2 w-2 rounded-sm"
-              style={{ backgroundColor: categoryColor(category) }}
+              style={{ backgroundColor: categoryColor(category, categoryDefs) }}
             />
-            {categoryLabel(category)}
+            <CategoryIcon name={categoryIcon(category, categoryDefs)} className="h-3 w-3" />
+            {categoryLabel(category, categoryDefs)}
             <X className="h-3 w-3" aria-hidden="true" />
             <span className="sr-only">Clear category filter</span>
           </Link>
@@ -593,7 +602,8 @@ function FilterRow({
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    // Phones: each group is one swipeable row instead of wrapping onto several lines.
+    <div className="flex flex-wrap items-center gap-1 max-md:-mx-4 max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:[scrollbar-width:none] max-md:[&>*]:shrink-0">
       <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </span>

@@ -147,7 +147,7 @@ export function InsuranceFormDialog({ open, onClose, policy, health, people, pro
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1 max-sm:[&>*]:col-span-full">
               <FormField control={form.control} name="carrier" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="policy.carrier">Carrier *</FormLabel>
@@ -194,7 +194,7 @@ export function InsuranceFormDialog({ open, onClose, policy, health, people, pro
               <FormField control={form.control} name="deductible" render={({ field }) => (
                 <FormItem>
                   <FormLabel help="policy.deductible">{`Deductible (${fmt.currencySymbol})`}</FormLabel>
-                  <FormControl><Input type="number" step="any" min="0" {...field} /></FormControl>
+                  <FormControl><Input type="number" inputMode="decimal" step="any" min="0" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -233,7 +233,7 @@ export function InsuranceFormDialog({ open, onClose, policy, health, people, pro
                   <FormField control={form.control} name="outOfPocketMax" render={({ field }) => (
                     <FormItem>
                       <FormLabel help="policy.oop-max">{`Out-of-pocket max (${fmt.currencySymbol})`}</FormLabel>
-                      <FormControl><Input type="number" step="any" min="0" {...field} /></FormControl>
+                      <FormControl><Input type="number" inputMode="decimal" step="any" min="0" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -272,8 +272,8 @@ export function InsuranceFormDialog({ open, onClose, policy, health, people, pro
                       className="min-w-0 flex-1"
                       {...form.register(`coverages.${i}.label`)}
                     />
-                    <Input type="number" step="any" min="0" placeholder="Limit" aria-label="Limit" className="w-28" {...form.register(`coverages.${i}.limit`)} />
-                    <Input type="number" step="any" min="0" placeholder="Deductible" aria-label="Deductible" className="w-28" {...form.register(`coverages.${i}.deductible`)} />
+                    <Input type="number" inputMode="decimal" step="any" min="0" placeholder="Limit" aria-label="Limit" className="w-28" {...form.register(`coverages.${i}.limit`)} />
+                    <Input type="number" inputMode="decimal" step="any" min="0" placeholder="Deductible" aria-label="Deductible" className="w-28" {...form.register(`coverages.${i}.deductible`)} />
                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label="Move up" disabled={i === 0} onClick={() => coverages.move(i, i - 1)}>
                       <ArrowUp className="h-3.5 w-3.5" />
                     </Button>

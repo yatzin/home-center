@@ -1,6 +1,41 @@
 import type { FieldHelpMap } from "./types"
 
 export const SETTINGS_HELP: FieldHelpMap = {
+  // Settings → Categories
+  "categories.spending": {
+    title: "Spending categories",
+    what: "The kinds of spending on a service record or visit, like Repair or Dental. Costs, reports and search group by them.",
+    use: "Renaming changes the label everywhere and leaves records alone. Hide one to stop offering it on new records. Delete is only for custom categories no record uses.",
+  },
+  "categories.equipment": {
+    title: "Equipment categories",
+    what: "The kinds of equipment, like Appliance or Tools. They group the equipment lists.",
+    use: "A custom category gets the Other category's default reminders. Hiding one keeps it on the items that already use it.",
+  },
+  "categories.name": {
+    title: "Name",
+    what: "What the category is called. Any language works, and emoji too.",
+    use: "Names must be different within a list. The name can change later without touching records.",
+  },
+  "categories.icon": {
+    title: "Icon",
+    what: "A small picture shown beside the name in forms, lists and chart legends.",
+    use: "None leaves the name on its own.",
+  },
+  "categories.audience": {
+    title: "Offered for",
+    what: "Which records can pick this spending category.",
+    values: [
+      { label: "Everything", effect: "Offered on houses, vehicles, equipment and people." },
+      { label: "Houses, vehicles, equipment", effect: "Offered on service records for those assets." },
+      { label: "People", effect: "Offered on visits and medical expenses." },
+    ],
+  },
+  "categories.color": {
+    title: "Colour",
+    what: "The colour this category wears in charts and the report.",
+    use: "Automatic keeps the built-in colour, or picks a steady one for a custom category. Pick a colour that stands apart from the others in the same list.",
+  },
   // Settings → Assistant
   "llm.enabled": {
     title: "Turn on the assistant",

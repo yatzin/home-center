@@ -938,8 +938,9 @@ export const PHONE_WIDTH_SCALE = 2
  * Index of the tier a card shows at `size` in the given layout.
  *
  * A type with looks first asks its look function: assetLook (asset cards)
- * with the raw size (no phone scaling: a 2-wide phone card is 2 wide, and its
- * avatars are sized in cells), datedLook (the dated lists) with the width
+ * with the raw size (no phone scaling: a half-width phone card is 1 wide, and
+ * its avatars are sized in cells; a full-width one counts as 3 wide so it gets
+ * the photo mosaic), datedLook (the dated lists) with the width
  * scaled like any sized tier (their looks are text densities, which follow the
  * card's real width: a full-width phone card has room for full rows). A look
  * other than "rich" picks that look's tier.
@@ -953,7 +954,10 @@ export function tierOf(def: CardTypeDef, size: Size, mode: "large" | "phone" = "
   const w = mode === "phone" ? size.w * PHONE_WIDTH_SCALE : size.w
   const first = def.tiers.find((t) => t.look)?.look
   if (first) {
-    const look = DATED_LOOKS.has(first) ? datedLook({ w, h: size.h }) : assetLook(size)
+    // On a phone a full-width asset card has room for the photo mosaic, as a wide card does on a
+    // large screen, so it counts as one column wider (the avatar looks are for thin cards).
+    const assetSize = mode === "phone" && size.w >= PHONE_COLS ? { w: size.w + 1, h: size.h } : size
+    const look = DATED_LOOKS.has(first) ? datedLook({ w, h: size.h }) : assetLook(assetSize)
     const i = look === "rich" ? -1 : def.tiers.findIndex((t) => t.look === look)
     if (i >= 0) return i
   }

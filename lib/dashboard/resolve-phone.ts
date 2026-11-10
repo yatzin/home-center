@@ -3,8 +3,17 @@
 // Pure TS, so the server component and the tests share it.
 import type { Features } from "@/lib/features"
 import { cardType } from "./card-types"
-import { deriveRowMajor, PHONE_COLS, type Placement, type Size } from "./grid"
+import { collapseHidden, compact, deriveRowMajor, PHONE_COLS, type Placement, type Size } from "./grid"
 import type { DashboardLayout } from "./layout"
+
+/**
+ * The phone placements as displayed: rows taken by cards that are not shown are closed, and so
+ * are empty rows left between cards (a phone layout arranged in the editor can hold them; on a
+ * phone they only read as gaps). Display only: the stored layout keeps them.
+ */
+export function phoneDisplayPlacements(phone: readonly Placement[], shown: ReadonlySet<string>): Placement[] {
+  return compact(collapseHidden(phone, shown, PHONE_COLS), PHONE_COLS)
+}
 
 const bottomOf = (ps: readonly Placement[]): number => ps.reduce((max, p) => Math.max(max, p.y + p.h), 0)
 

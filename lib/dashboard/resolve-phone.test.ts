@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { Features } from "@/lib/features"
 import { cardType, defaultLayout, limitsMap } from "./card-types"
 import { LAYOUT_FORMAT, PHONE_COLS, validateLayout, type DashboardLayout, type Placement } from "./layout"
-import { resolvePhoneLayout } from "./resolve-phone"
+import { phoneDisplayPlacements, resolvePhoneLayout } from "./resolve-phone"
 
 const ALL_ON: Features = { health: true, rooms: true, equipmentTab: true }
 const NO_HEALTH: Features = { ...ALL_ON, health: false }
@@ -149,5 +149,30 @@ describe("resolvePhoneLayout: the default greeting", () => {
     expect(phone.find((p) => p.id === "greeting")).toEqual({ id: "greeting", x: 0, y: 0, w: PHONE_COLS, h: 1 })
     expect(phone.filter((p) => p.id !== "greeting").every((p) => p.y >= 1)).toBe(true)
     expect(isValidPhone(layout, phone)).toBeNull()
+  })
+})
+
+describe("phoneDisplayPlacements", () => {
+  const card = (id: string, y: number, h: number): Placement => ({ id, x: 0, y, w: PHONE_COLS, h })
+
+  it("closes empty rows left between cards, keeping their order and sizes", () => {
+    // a, then 2 empty rows, b, then 5 empty rows, c.
+    const shown = phoneDisplayPlacements([card("a", 0, 3), card("b", 5, 3), card("c", 13, 2)], new Set(["a", "b", "c"]))
+    expect(shown.map((p) => [p.id, p.y, p.h])).toEqual([["a", 0, 3], ["b", 3, 3], ["c", 6, 2]])
+  })
+
+  it("closes the rows of cards that are not shown, and leaves a gap-free layout as it is", () => {
+    const stored = [card("a", 0, 3), card("hidden", 3, 4), card("c", 7, 2)]
+    const shown = phoneDisplayPlacements(stored, new Set(["a", "c"]))
+    expect(shown.filter((p) => p.id !== "hidden").map((p) => [p.id, p.y])).toEqual([["a", 0], ["c", 3]])
+    const tight = [card("a", 0, 3), card("b", 3, 3)]
+    expect(phoneDisplayPlacements(tight, new Set(["a", "b"]))).toEqual(tight)
+  })
+
+  it("does not change the stored placements it is given", () => {
+    const stored = [card("a", 0, 3), card("b", 6, 3)]
+    const copy = JSON.parse(JSON.stringify(stored))
+    phoneDisplayPlacements(stored, new Set(["a", "b"]))
+    expect(stored).toEqual(copy)
   })
 })
