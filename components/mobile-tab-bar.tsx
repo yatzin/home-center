@@ -23,7 +23,9 @@ const tabClass = "relative flex min-h-14 flex-1 flex-col items-center justify-ce
 export function MobileTabBar({ footer, moreDot = false, ...nav }: NavProps & { footer?: React.ReactNode; /** Something waiting in a screen under More (Intake files, notifications). */ moreDot?: boolean }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href))
+  // The Assets tab also covers the pages its hub links to that live outside /assets.
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : href === "/assets" ? ["/assets", "/insurance", "/providers"].some((p) => pathname.startsWith(p)) : pathname.startsWith(href)
   // "More" is lit when the page is somewhere the four tabs don't cover.
   const inMore = !TABS.some((t) => isActive(t.href))
 
