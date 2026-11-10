@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".superpowers/**",
+    // Vendored pdf.js data files (minified third-party code), copied by scripts/copy-pdfjs-assets.mjs.
+    "public/pdfjs/**",
   ]),
   {
     // Money, units and dates go through lib/regional.ts so they follow Settings → Regional.
