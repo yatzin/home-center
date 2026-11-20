@@ -613,13 +613,13 @@ describe("defaultLayout", () => {
 })
 
 describe("configFieldsFor", () => {
-  const shapeOf = (d: CardTypeDef): Record<string, z.ZodTypeAny> => {
+  const shapeOf = (d: CardTypeDef): Record<string, z.ZodType> => {
     expect(d.configSchema).toBeInstanceOf(z.ZodObject)
-    return (d.configSchema as unknown as z.ZodObject<z.ZodRawShape>).shape
+    return (d.configSchema as unknown as z.ZodObject<z.ZodRawShape>).shape as unknown as Record<string, z.ZodType>
   }
   /** The schema under ZodOptional/ZodDefault wrappers. */
-  const inner = (s: z.ZodTypeAny): z.ZodTypeAny =>
-    s instanceof z.ZodOptional ? inner(s.unwrap()) : s instanceof z.ZodDefault ? inner(s.removeDefault()) : s
+  const inner = (s: z.ZodType): z.ZodType =>
+    s instanceof z.ZodOptional ? inner(s.unwrap() as z.ZodType) : s instanceof z.ZodDefault ? inner(s.removeDefault() as z.ZodType) : s
 
   const LEGACY_KEYS: Record<string, string[]> = {
     "planned-spend": ["horizon"],
@@ -673,7 +673,7 @@ describe("configFieldsFor", () => {
       } else {
         expect(s).toBeInstanceOf(z.ZodEnum)
         // Every option is a schema value, and every schema value is offered.
-        expect(f.options.map((o) => o.value).sort()).toEqual([...(s as z.ZodEnum<[string, ...string[]]>).options].sort())
+        expect(f.options.map((o) => o.value).sort()).toEqual([...(s as unknown as { options: string[] }).options].sort())
       }
     }
   })

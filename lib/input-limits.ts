@@ -68,6 +68,20 @@ export function boundedNumber(min: number, max: number, { whole = false, message
   })
 }
 
+/**
+ * A blank field, or whatever `inner` accepts, with `inner`'s own message when it refuses. A
+ * `z.literal("").or(inner)` union would report a bare "Invalid input" in zod 4.
+ */
+export function blankOr<T extends z.ZodType>(inner: T) {
+  return z.unknown().transform((v, ctx): "" | z.output<T> => {
+    if (v === "") return ""
+    const r = inner.safeParse(v)
+    if (r.success) return r.data
+    for (const i of r.error.issues) ctx.addIssue({ code: "custom", message: i.message })
+    return z.NEVER
+  })
+}
+
 /** Money: 0 up to MAX_MONEY. A negative amount is only allowed where `negative` is set (a refund on a service record). */
 export const moneyAmount = ({ negative = false } = {}) =>
   boundedNumber(negative ? -MAX_MONEY : 0, MAX_MONEY, { message: `Enter an amount from ${negative ? "-" : ""}${grouped(negative ? MAX_MONEY : 0)} to ${grouped(MAX_MONEY)}.` })
