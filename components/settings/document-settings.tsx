@@ -14,7 +14,7 @@ import {
 import type { ModelRow, ModelStatus } from "@/lib/documents/embed/server"
 import { modelRowState } from "@/lib/documents/embed/model-row"
 
-type Values = { indexingEnabled: boolean; ocrEnabled: boolean; semanticEnabled: boolean }
+type Values = { indexingEnabled: boolean; ocrEnabled: boolean; semanticEnabled: boolean; lowMemoryMode: boolean }
 
 export function DocumentSettings({
   initial,
@@ -156,6 +156,24 @@ export function DocumentSettings({
           <p className="ml-6 text-xs text-muted-foreground">
             Runs a small AI model on this server. Nothing leaves it. The model loads when needed and unloads when idle.
           </p>
+          <div className="ml-6 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={values.lowMemoryMode}
+                  disabled={pending || !on || !values.semanticEnabled}
+                  onChange={(e) => save({ ...values, lowMemoryMode: e.target.checked })}
+                />
+                Low memory mode
+              </label>
+              <FieldHelp id="documents.low-memory" />
+            </div>
+            <p className="ml-6 text-xs text-muted-foreground">
+              Uses about 280 MB less while indexing, but indexing takes longer. The model unloads 2 minutes after a search instead of 10.
+            </p>
+          </div>
           <div className="divide-y rounded-md border text-sm">
             {models.models.map((m) => {
               const isDownloading = models.download?.modelId === m.id

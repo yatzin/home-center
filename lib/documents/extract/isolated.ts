@@ -1,13 +1,14 @@
 import path from "path"
-import { Worker } from "worker_threads"
 import { EXTRACT_HEAP_MB, EXTRACT_TIMEOUT_MS, EXTRACT_WORKER_GRACE_MS, OCR_TIMEOUT_MS } from "../limits"
+import { forkScript, killProcess } from "../fork"
 import { ExtractError, type Extracted } from "../types"
 import { kindFor } from "./kinds"
 
-// extractFile, run in workers/extract-worker.mjs. In-process, a zip bomb could
-// exhaust the server's memory, and a synchronous parser blocked the event loop
-// so withTimeout never fired. In a worker the heap is capped and a timeout
-// terminates the thread, whatever it is doing.
+// extractFile, run in workers/extract-worker.mjs as its own process. In the
+// server, a zip bomb could exhaust its memory, and a synchronous parser blocked
+// the event loop so withTimeout never fired. In a child process the heap is
+// capped, a timeout kills it whatever it is doing, and its memory (parsers,
+// OCR) goes back to the OS when it ends.
 
 type Reply = { ok: true; result: Extracted } | { ok: false; name: string; message?: string }
 
@@ -35,9 +36,16 @@ export function extractInWorker(
   const limitMs = (slow ? OCR_TIMEOUT_MS : EXTRACT_TIMEOUT_MS) + o.graceMs
 
   return new Promise<Extracted>((resolve, reject) => {
-    const worker = new Worker(o.workerPath, {
-      workerData: { entry: o.entry },
-      resourceLimits: { maxOldGenerationSizeMb: o.heapMb },
+    const worker = forkScript(o.workerPath, {
+      args: [JSON.stringify({ entry: o.entry })],
+      execArgv: [`--max-old-space-size=${o.heapMb}`],
+      pipeStderr: true,
+    })
+    // V8 reports a full heap on stderr and aborts; the exit code alone differs by platform.
+    let outOfMemory = false
+    worker.stderr?.on("data", (chunk: Buffer) => {
+      if (/heap out of memory|allocation failed/i.test(chunk.toString())) outOfMemory = true
+      process.stderr.write(chunk)
     })
     let settled = false
     const finish = (fn: () => void) => {
@@ -45,7 +53,7 @@ export function extractInWorker(
       settled = true
       clearTimeout(timer)
       fn()
-      void worker.terminate()
+      killProcess(worker)
     }
     const timer = setTimeout(
       () => finish(() => reject(new ExtractError(`Timed out after ${Math.round(limitMs / 1000)}s`))),
@@ -58,12 +66,14 @@ export function extractInWorker(
         else reject(Object.assign(new Error("Extraction failed"), { name: reply.name }))
       })
     )
-    worker.on("error", (error: NodeJS.ErrnoException) =>
+    worker.on("error", (error) => finish(() => reject(error)))
+    // "close" rather than "exit": it fires after stderr is drained, so outOfMemory is settled.
+    worker.on("close", (code, signal) =>
       finish(() =>
-        reject(error.code === "ERR_WORKER_OUT_OF_MEMORY" ? new ExtractError("Too large to read") : error)
+        reject(outOfMemory ? new ExtractError("Too large to read") : new ExtractError(`Reader stopped (exit ${code ?? signal})`))
       )
     )
-    worker.on("exit", (code) => finish(() => reject(new ExtractError(`Reader stopped (exit ${code})`))))
-    worker.postMessage({ filePath, ext, opts })
+    // A failed send means the process already died; "close" reports why.
+    worker.send({ filePath, ext, opts }, () => {})
   })
 }

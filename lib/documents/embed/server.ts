@@ -19,6 +19,8 @@ export function workerPath(): string {
 }
 
 const DEFAULT_IDLE_MINUTES = 10
+// Low memory mode keeps the model after a search for this long at most.
+const LOW_MEMORY_IDLE_MINUTES = 2
 
 export function embeddingIdleMs(): number {
   const raw = process.env.EMBEDDING_IDLE_MINUTES
@@ -34,7 +36,14 @@ export function embeddingIdleMs(): number {
 export function embedderFor(m: EmbeddingModel): Embedder {
   if (state.embedder?.model.id !== m.id) {
     void state.embedder?.unload()
-    state.embedder = createEmbedder({ model: m, modelsRoot: modelRoot(m), workerPath: workerPath(), idleMs: embeddingIdleMs() })
+    state.embedder = createEmbedder({
+      model: m,
+      modelsRoot: modelRoot(m),
+      workerPath: workerPath(),
+      idleMs: embeddingIdleMs(),
+      lowMemory: async () => (await loadDocumentSettings()).lowMemoryMode,
+      lowMemoryIdleMs: LOW_MEMORY_IDLE_MINUTES * 60_000,
+    })
   }
   return state.embedder
 }

@@ -4,7 +4,8 @@
 // know whether another is coming, so they keep the model for idleMs.
 
 export type LifecycleDeps = {
-  idleMs: number
+  /** A getter when the idle time can change between loads (low memory mode). */
+  idleMs: number | (() => number)
   now(): number
   setTimer(fn: () => void, ms: number): unknown
   clearTimer(handle: unknown): void
@@ -27,7 +28,8 @@ export function createLifecycle(d: LifecycleDeps): Lifecycle {
     if (timer !== null) d.clearTimer(timer)
     timer = null
   }
-  const searchedRecently = () => lastSearch !== null && d.now() - lastSearch < d.idleMs
+  const idleMs = () => (typeof d.idleMs === "function" ? d.idleMs() : d.idleMs)
+  const searchedRecently = () => lastSearch !== null && d.now() - lastSearch < idleMs()
 
   return {
     indexingStarted() {
@@ -46,7 +48,7 @@ export function createLifecycle(d: LifecycleDeps): Lifecycle {
       timer = d.setTimer(() => {
         timer = null
         if (!indexing) d.unload()
-      }, d.idleMs)
+      }, idleMs())
     },
     cancel: clear,
   }

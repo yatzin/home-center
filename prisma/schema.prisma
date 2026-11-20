@@ -898,6 +898,8 @@ model DocumentSettings {
   semanticEnabled Boolean       @default(true)
   /// Vetted model id (lib/documents/embed/models.ts). Default is the built-in one.
   embeddingModel  String        @default("bge-small-en-v1.5")
+  /// Trade embedding speed for a lower memory peak and unload the model sooner.
+  lowMemoryMode   Boolean       @default(false)
   /// How the capture inbox reads receipts. LLM falls back to BASIC when the assistant is off.
   captureParser   CaptureParser @default(BASIC)
   updatedAt       DateTime      @updatedAt

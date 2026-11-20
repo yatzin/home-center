@@ -43,5 +43,17 @@ describe("embedder", () => {
       expect(e.loaded()).toBe(false)
       expect(await e.embedQuery("again")).toHaveLength(384)
     }, 60_000)
+
+    it("gives the same vectors in low memory mode", async () => {
+      const low = createEmbedder({ model: builtin, modelsRoot: builtinRoot(), workerPath, idleMs: 60_000, lowMemory: async () => true })
+      try {
+        const text = "Replace the furnace filter every 90 days."
+        const [a] = await e.embedPassages([text])
+        const [b] = await low.embedPassages([text])
+        expect(dot(a, b)).toBeCloseTo(1, 4)
+      } finally {
+        await low.unload()
+      }
+    }, 60_000)
   })
 })

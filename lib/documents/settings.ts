@@ -7,6 +7,7 @@ export type DocumentSettingsValue = {
   ocrEnabled: boolean
   semanticEnabled: boolean
   embeddingModel: string
+  lowMemoryMode: boolean
 }
 
 /** The singleton row, or the defaults when nobody has saved it yet. */
@@ -17,5 +18,6 @@ export async function loadDocumentSettings(): Promise<DocumentSettingsValue> {
     ocrEnabled: row?.ocrEnabled ?? true,
     semanticEnabled: row?.semanticEnabled ?? true,
     embeddingModel: row?.embeddingModel ?? "bge-small-en-v1.5",
+    lowMemoryMode: row?.lowMemoryMode ?? false,
   }
 }
