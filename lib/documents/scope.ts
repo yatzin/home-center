@@ -95,10 +95,12 @@ export async function loadDocumentRefs(ids: string[]): Promise<Map<string, Loade
  * health records and the insurance policies they're a member of.
  */
 export async function attachmentIdsForAsset(type: AssetType, id: string): Promise<string[]> {
-  const owners: { assetType: AssetType; assetId: string }[] = [{ assetType: type, assetId: id }]
+  // Equipment ids go in one list: a clause per item joins three tables each, and
+  // SQLite stops at 64 tables in a join.
+  const owners: { assetType: AssetType; assetId: string | { in: string[] } }[] = [{ assetType: type, assetId: id }]
   if (type === "PROPERTY") {
     const equipment = await prisma.equipment.findMany({ where: { propertyId: id }, select: { id: true } })
-    owners.push(...equipment.map((e) => ({ assetType: "EQUIPMENT" as const, assetId: e.id })))
+    if (equipment.length) owners.push({ assetType: "EQUIPMENT", assetId: { in: equipment.map((e) => e.id) } })
   }
   const OR: Prisma.AttachmentWhereInput[] = owners.flatMap((o) => [
     { serviceRecord: { is: o } },

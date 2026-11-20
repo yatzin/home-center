@@ -8,11 +8,15 @@ export async function loadManualOptions(targets: { assetType: AssetType; assetId
   const features = await loadFeatures()
   const wanted = targets.filter((t) => features.health || t.assetType !== "PERSON")
   if (wanted.length === 0) return []
+  // One clause per asset type, ids in a list: a per-asset clause joins the schedule
+  // table once each, and SQLite stops at 64 tables (a property with many equipment).
+  const idsByType = new Map<AssetType, string[]>()
+  for (const t of wanted) idsByType.set(t.assetType, [...(idsByType.get(t.assetType) ?? []), t.assetId])
   const rows = await prisma.attachment.findMany({
     where: {
-      OR: wanted.flatMap((t) => [
-        { recordType: "DOCUMENT" as const, assetType: t.assetType, assetId: t.assetId },
-        { recordType: "MAINTENANCE" as const, maintenanceSchedule: { assetType: t.assetType, assetId: t.assetId } },
+      OR: [...idsByType].flatMap(([assetType, ids]) => [
+        { recordType: "DOCUMENT" as const, assetType, assetId: { in: ids } },
+        { recordType: "MAINTENANCE" as const, maintenanceSchedule: { assetType, assetId: { in: ids } } },
       ]),
     },
     select: {
