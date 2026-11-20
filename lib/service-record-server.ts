@@ -6,7 +6,7 @@ import type { MaintenanceSchedule } from "@/app/generated/prisma/client"
 import { scheduleCompletionWrites } from "@/lib/maintenance-complete-server"
 import { checkRoom } from "@/lib/rooms-server"
 import { z } from "zod"
-import { RANGE_DATE_MESSAGE, dateInRange, meterReading, moneyAmount, nameText, optionalNameText, parseDateOnly, requiredDateText } from "@/lib/input-limits"
+import { RANGE_DATE_MESSAGE, blankOr, dateInRange, meterReading, moneyAmount, nameText, optionalNameText, parseDateOnly, requiredDateText } from "@/lib/input-limits"
 import { completeSchedule } from "@/lib/maintenance-complete"
 
 // Shared by the service record actions and the capture inbox, which files a
@@ -21,9 +21,9 @@ export const serviceRecordSchema = z.object({
   description: z.string().optional(),
   vendor: optionalNameText,
   // "" is tried first: coerce would turn a blank field into 0. Negative is how a refund is entered.
-  cost: z.literal("").or(moneyAmount({ negative: true })).optional(),
+  cost: blankOr(moneyAmount({ negative: true })).optional(),
   category: z.string().max(60).optional(),
-  mileageAtService: z.literal("").or(meterReading()).optional(),
+  mileageAtService: blankOr(meterReading()).optional(),
   providerId: z.string().optional(),
   conditionId: z.string().optional(),
   /// Must be a room on the target's property; checked with `checkRoom` before saving.

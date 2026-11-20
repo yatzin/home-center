@@ -80,7 +80,7 @@ export function configFormSchema(
   typeId: string,
   ctx: ConfigFormContext,
   original: Record<string, unknown>,
-): z.ZodType<Record<string, unknown>, z.ZodTypeDef, ConfigFormValues> {
+): z.ZodType<Record<string, unknown>, ConfigFormValues> {
   const def = cardType(typeId)
   const fields = configFieldsFor(typeId)
   const shape = Object.fromEntries(fields.map((f) => [f.key, z.string().optional().default("")]))
@@ -135,5 +135,5 @@ export function configFormSchema(
       }
       return config
     })
-    .pipe(strict) as z.ZodType<Record<string, unknown>, z.ZodTypeDef, ConfigFormValues>
+    .pipe(strict as z.ZodType<Record<string, unknown>, Record<string, unknown>>) as z.ZodType<Record<string, unknown>, ConfigFormValues>
 }

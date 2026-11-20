@@ -84,3 +84,21 @@ describe("templatePicksSchema limits", () => {
     expect(pick({ intervalDays: "" }).success).toBe(true)
   })
 })
+
+describe("scheduleSchema messages", () => {
+  const messageFor = (extra: Record<string, unknown>, key: string) => {
+    const r = schedule(extra)
+    return r.success ? null : r.error.issues.find((i) => i.path[0] === key)?.message
+  }
+
+  it("says why a number field refuses, not a bare Invalid input", () => {
+    expect(messageFor({ estimatedCost: "1e21" }, "estimatedCost")).toBe("Enter a number, like 89.99.")
+    expect(messageFor({ intervalDays: "3651" }, "intervalDays")).toBe("Enter a whole number from 1 to 3,650.")
+    expect(messageFor({ nextDueMileage: "abc" }, "nextDueMileage")).toBe("Enter a whole number.")
+  })
+
+  it("keeps a blank as blank", () => {
+    const r = schedule({ estimatedCost: "", intervalDays: "" })
+    expect(r.success && [r.data.estimatedCost, r.data.intervalDays]).toEqual(["", ""])
+  })
+})
