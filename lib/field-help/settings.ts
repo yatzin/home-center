@@ -285,6 +285,11 @@ export const SETTINGS_HELP: FieldHelpMap = {
     what: "Adds search by meaning, so \"boiler service\" can find a file that says \"furnace maintenance\".",
     use: "Runs the small AI model picked in the list below, on this server. Nothing leaves it. Intake also uses it to guess which asset a receipt belongs to. Off means keyword search only.",
   },
+  "documents.low-memory": {
+    title: "Low memory mode",
+    what: "Runs the search model with a smaller memory budget and unloads it sooner. With the built-in model, memory while indexing drops from about 450 MB to about 170 MB.",
+    use: "For a NAS or small host where RAM is tight. Indexing takes about 1.6 times as long, and the model unloads after 2 idle minutes instead of 10, so the next search waits a moment while it loads. Results are the same.",
+  },
 
   // Settings → Assistant → Run model tests
   "modeltest.model": {

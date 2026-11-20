@@ -22,7 +22,12 @@ async function requireAdmin() {
   return session
 }
 
-const schema = z.object({ indexingEnabled: z.boolean(), ocrEnabled: z.boolean(), semanticEnabled: z.boolean() })
+const schema = z.object({
+  indexingEnabled: z.boolean(),
+  ocrEnabled: z.boolean(),
+  semanticEnabled: z.boolean(),
+  lowMemoryMode: z.boolean(),
+})
 
 export async function updateDocumentSettings(data: z.infer<typeof schema>): Promise<DocumentActionResult> {
   await requireAdmin()
@@ -34,7 +39,8 @@ export async function updateDocumentSettings(data: z.infer<typeof schema>): Prom
     create: { id: DOCUMENT_SETTINGS_ID, ...parsed.data },
     update: parsed.data,
   })
-  if (!parsed.data.semanticEnabled) await unloadEmbedder()
+  // The memory mode is fixed when the model process starts, so a change takes effect on the next load.
+  if (!parsed.data.semanticEnabled || parsed.data.lowMemoryMode !== before.lowMemoryMode) await unloadEmbedder()
   if (parsed.data.ocrEnabled && !before.ocrEnabled) await requeueEmptyForOcr()
   // Switching on (or OCR on) starts work straight away instead of at the next timer.
   if (parsed.data.indexingEnabled) void documentIndexer().reconcile()

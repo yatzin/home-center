@@ -1,11 +1,13 @@
-import { Worker } from "worker_threads"
+import type { ChildProcess } from "child_process"
+import { forkScript, killProcess } from "../fork"
 import { createLifecycle } from "./lifecycle"
 import type { EmbeddingModel } from "./models"
 
-// Main-thread side of the embedding worker. Starts the worker on first use,
-// sends batches, and terminates it when the lifecycle says so — but never
-// while a request is in flight. Prefixes are applied here; pooling and
-// normalisation happen in the worker.
+// Server side of the embedding process (workers/embed-worker.mjs). Starts it
+// on first use, sends batches, and kills it when the lifecycle says so — but
+// never while a request is in flight. Prefixes are applied here; pooling and
+// normalisation happen in the process. Low memory mode is read each time the
+// process starts, so a change applies from the next load.
 
 export class EmbedderError extends Error {
   override name = "EmbedderError"
@@ -38,16 +40,29 @@ type WorkerMessage =
   | { type: "error"; name: string }
   | { type: "result"; id: number; vectors?: number[][]; error?: string }
 
-export function createEmbedder(o: { model: EmbeddingModel; modelsRoot: string; workerPath: string; idleMs: number; timers?: Timers }): Embedder {
-  let worker: Worker | null = null
+export type EmbedderOptions = {
+  model: EmbeddingModel
+  modelsRoot: string
+  workerPath: string
+  idleMs: number
+  /** Whether to start the process in low memory mode. Default: off. */
+  lowMemory?: () => Promise<boolean>
+  /** Idle time used instead of idleMs while in low memory mode. */
+  lowMemoryIdleMs?: number
+  timers?: Timers
+}
+
+export function createEmbedder(o: EmbedderOptions): Embedder {
+  let worker: ChildProcess | null = null
   let ready: Promise<void> | null = null
   const pending = new Map<number, Pending>()
   let nextId = 0
   let inFlight = 0
   let unloadWanted = false
+  let lowMemory = false
 
   const lifecycle = createLifecycle({
-    idleMs: o.idleMs,
+    idleMs: () => (lowMemory && o.lowMemoryIdleMs !== undefined ? Math.min(o.idleMs, o.lowMemoryIdleMs) : o.idleMs),
     ...(o.timers ?? realTimers),
     unload: () => {
       unloadWanted = true
@@ -68,16 +83,16 @@ export function createEmbedder(o: { model: EmbeddingModel; modelsRoot: string; w
     worker = null
     ready = null
     unloadWanted = false
-    void w.terminate()
+    killProcess(w)
   }
 
-  function start(): Promise<void> {
-    if (ready) return ready
-    const w = new Worker(o.workerPath, {
-      workerData: { modelsRoot: o.modelsRoot, repo: o.model.repo, pooling: o.model.pooling },
+  function spawn(low: boolean): Promise<void> {
+    lowMemory = low
+    const w = forkScript(o.workerPath, {
+      args: [JSON.stringify({ modelsRoot: o.modelsRoot, repo: o.model.repo, pooling: o.model.pooling, lowMemory: low })],
     })
     worker = w
-    ready = new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       w.on("message", (msg: WorkerMessage) => {
         if (msg.type === "ready") resolve()
         else if (msg.type === "error") {
@@ -96,18 +111,27 @@ export function createEmbedder(o: { model: EmbeddingModel; modelsRoot: string; w
         }
       })
       w.on("error", (e) => {
-        const error = new EmbedderError(`Model worker crashed (${e.name})`)
+        const error = new EmbedderError(`Model process crashed (${e.name})`)
         reject(error)
         if (worker === w) reset(error)
+        killProcess(w)
       })
       w.on("exit", () => {
-        const error = new EmbedderError("Model worker stopped")
+        const error = new EmbedderError("Model process stopped")
         reject(error)
         if (worker === w) reset(error)
       })
     })
-    ready.catch(() => {})
-    return ready
+  }
+
+  function start(): Promise<void> {
+    if (ready) return ready
+    const p = (async () => spawn((await o.lowMemory?.().catch(() => false)) ?? false))()
+    ready = p
+    p.catch(() => {
+      if (ready === p) ready = null
+    })
+    return p
   }
 
   async function run(texts: string[]): Promise<number[][]> {
@@ -116,11 +140,11 @@ export function createEmbedder(o: { model: EmbeddingModel; modelsRoot: string; w
     try {
       await start()
       const w = worker
-      if (!w) throw new EmbedderError("Model worker stopped")
+      if (!w) throw new EmbedderError("Model process stopped")
       const id = nextId++
       return await new Promise<number[][]>((resolve, reject) => {
         pending.set(id, { resolve, reject })
-        w.postMessage({ id, texts })
+        w.send({ id, texts })
       })
     } finally {
       inFlight--

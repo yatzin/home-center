@@ -252,6 +252,7 @@ export default async function SettingsPage({
                   indexingEnabled: docs[0].indexingEnabled,
                   ocrEnabled: docs[0].ocrEnabled,
                   semanticEnabled: docs[0].semanticEnabled,
+                  lowMemoryMode: docs[0].lowMemoryMode,
                 }}
                 stats={docs[1]}
                 models={docs[2]}
